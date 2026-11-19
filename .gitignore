@@ -1,0 +1,39 @@
+# --- 비밀정보 / 로컬 환경 (절대 커밋 금지) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# --- 실행 산출물 (실제 API 응답·제3자 기사 발췌·기자 이메일 등 포함 가능) ---
+results/*
+!results/.gitkeep
+logs/
+*.log
+
+# --- Streamlit / 로컬 도구 ---
+.streamlit/secrets.toml
+.claude/settings.local.json
+
+# --- OS / 에디터 ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# --- 향후 웹 프론트엔드(Next.js) 대비 ---
+node_modules/
+.next/
