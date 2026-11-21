@@ -20,6 +20,8 @@
 
 html {
   background: var(--color-paper);
+  /* 스크롤 막대 자리를 늘 비워 둔다. 긴 화면과 짧은 화면을 오갈 때 막대가 생겼다 사라지며 내용이 좌우로 밀리지 않게 한다 */
+  scrollbar-gutter: stable;
 }
 
 body {
