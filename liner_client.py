@@ -82,9 +82,10 @@ class LinerClient:
         self._sleep = sleep
         self._http = httpx.Client(base_url=base_url, transport=transport)
         self._limits = {"search": config.MAX_SEARCH_CALLS, "model": config.MAX_MODEL_CALLS,
-                        "agent": config.MAX_AGENT_CALLS, "premium": config.MAX_PREMIUM_CALLS}
+                        "agent": config.MAX_AGENT_CALLS, "premium": config.MAX_PREMIUM_CALLS,
+                        "scholar": config.MAX_SCHOLAR_CALLS}
         self._limits.update(limits or {})
-        self._counts = {"search": 0, "model": 0, "agent": 0, "premium": 0}
+        self._counts = {"search": 0, "model": 0, "agent": 0, "premium": 0, "scholar": 0}
         self._lock = threading.Lock()
         self.calls: list[dict[str, Any]] = []
 
@@ -197,6 +198,18 @@ class LinerClient:
         if isinstance(data, dict):
             rec["result_count"] = len(data.get("results") or [])
             rec["knowledge_count"] = len(data.get("knowledge") or [])
+        return data, rec
+
+    def search_scholar(self, query: str, *, lang: str = "en", max_results: int = 10, date_range: str | None = None,
+                       label: str = "scholar") -> tuple[dict, dict]:
+        """Liner 학술 검색. 요청 형식은 261117_Liner/05_scholar_api_benchmark 에서 실제 호출로 확인한 것과 같다."""
+        payload: dict[str, Any] = {"query": query, "max_results": max(1, min(int(max_results), 20)), "lang": lang}
+        if date_range:
+            payload["date_range"] = date_range
+        data, rec = self._request("scholar", config.SEARCH_SCHOLAR_PATH, payload, config.SEARCH_TIMEOUT, label,
+                                  meta={"query": query})
+        if isinstance(data, dict):
+            rec["result_count"] = len(data.get("results") or [])
         return data, rec
 
     def responses(self, instructions: str, user_input: str, *, model: str = config.DEFAULT_MODEL,

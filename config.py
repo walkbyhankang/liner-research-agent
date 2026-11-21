@@ -20,6 +20,7 @@ SEARCH_WEB_PATH = "/api/v1/tools/search/web"
 RESPONSES_PATH = "/api/v1/responses"
 CHAT_COMPLETIONS_PATH = "/api/v1/chat/completions"  # 게이트웨이: 공급사/모델 형식 ID 직접 지정 가능
 SEARCH_AGENT_PATH = "/api/v1/agents/search"
+SEARCH_SCHOLAR_PATH = "/api/v1/tools/search/scholar"  # 261117_Liner/05 에서 실제 호출로 확인
 CREDITS_BALANCE_PATH = "/api/v1/credits/balance"
 CREDITS_USAGE_PATH = "/api/v1/credits/usage"
 
@@ -30,6 +31,7 @@ SEARCH_LIMIT_CHOICES = (12, 20, 50)
 MAX_MODEL_CALLS = 6              # 카테고리별 1회
 MAX_AGENT_CALLS = 1
 MAX_PREMIUM_CALLS = 1            # Premium 비교 (검색 호출 한도에도 포함)
+MAX_SCHOLAR_CALLS = 0            # 학술 검색. 기본은 사용 안 함(통합 분석 research/ 에서만 한도를 열어 쓴다)
 SEARCH_MAX_RESULTS = 15          # 기본 결과 수
 SEARCH_RESULT_CHOICES = (5, 10, 15, 20)
 API_MAX_RESULTS = 20             # 공식 OpenAPI: max_results 1~20

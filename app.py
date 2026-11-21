@@ -1,358 +1,347 @@
-"""Streamlit 대시보드: Liner API 기업정보 수집 성능 검증."""
-from __future__ import annotations
+"""Streamlit: 6개 탭 통합 기업분석 프로토타입.
 
-import io
-import json
-import zipfile
+첫 탭의 '전체 분석 시작' 버튼 한 번으로 research/controller.run 이 6단계를 순서대로 수행하고,
+결과는 st.session_state 에 보관한다. 탭 이동·화면 갱신 때는 API 를 다시 부르지 않는다.
+(이전 8탭 검증 화면은 app_legacy.py)
+"""
+from __future__ import annotations
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-import analysis as an
-import config
-import pipeline as pl
-from liner_client import LinerClient
+from research import controller, papers
 
-st.set_page_config(page_title="Liner API 기업분석 검증", layout="wide")
-NA = an.UNKNOWN
+st.set_page_config(page_title="통합 기업분석", layout="wide")
+NA = "자료 확보 불가"
 
 
-def get_client() -> LinerClient | None:
-    key, source = config.resolve_api_key()
-    if not key:
-        return None
-    if st.session_state.get("client_source") != source or "client" not in st.session_state:
-        st.session_state["client"] = LinerClient(key, source)
-        st.session_state["client_source"] = source
-    return st.session_state["client"]
-
-
-def link(url: str | None) -> str:
-    return f"[링크]({url})" if url else "-"
-
-
-def df_or_info(rows: list[dict], cols: list[str], empty: str = NA) -> None:
+def table(rows: list[dict], cols: list[str] | None = None, *, links: tuple[str, ...] = ("링크", "url"), height: int | str = "auto") -> None:
     if not rows:
-        st.info(empty)
+        st.info(NA)
         return
     df = pd.DataFrame(rows)
-    df = df[[c for c in cols if c in df.columns]].copy()
-    for c in df.columns:  # 숫자/빈 문자열/리스트 혼합 컬럼은 pyarrow 변환 오류가 나므로 문자열로 통일
-        df[c] = df[c].map(lambda v: "; ".join(map(str, v)) if isinstance(v, list) else ("" if v is None else str(v)))
-    st.dataframe(df, width="stretch", hide_index=True)
+    if cols:
+        df = df[[c for c in cols if c in df.columns]]
+    for c in df.columns:
+        if c not in links:
+            col = df[c].map(lambda v: "; ".join(map(str, v)) if isinstance(v, list) else ("" if v is None else v))
+            # 숫자와 '-' 가 섞인 열은 Arrow 변환이 실패하므로 문자열로 통일한다(순수 숫자 열은 정렬을 위해 유지)
+            if col.map(lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)).all():
+                df[c] = col
+            else:
+                df[c] = col.map(lambda v: "" if v is None or (isinstance(v, float) and v != v) else str(v))
+    cfg = {c: st.column_config.LinkColumn(c, display_text="열기") for c in df.columns if c in links}
+    st.dataframe(df, width="stretch", hide_index=True, column_config=cfg, height=height)
 
 
-def persist(run: dict) -> None:
-    client = st.session_state.get("client")
-    out = pl.save_results(run, client.secrets if client else [])
-    st.session_state["out_dir"] = str(out)
+def won(v) -> str:
+    if v is None:
+        return "-"
+    return f"{v / 1e8:,.1f}억원"
 
 
-# ---------------- 사이드바 ----------------
-st.title("Liner API 기반 스타트업 기업분석 — 정보 수집 성능 검증")
-client = get_client()
-with st.sidebar:
-    st.header("설정")
-    if client:
-        st.success(f"API 키 확인됨 ({config.KEY_SOURCE_LABELS.get(client.key_source)})")
+def fin_view(pub: dict | None, key: str) -> None:
+    if not pub:
+        st.info("국내 공공 API 대상이 아니거나 조회하지 않았습니다.")
+        return
+    rows = pub.get("financials") or []
+    if rows:
+        disp = [{"연도": r["연도"], "구분": r["구분"], **{k: won(r.get(k)) for k in ("매출액", "영업이익", "당기순이익", "자산총계", "부채총계", "자본총계")},
+                 "매출액 증가율(%)": r.get("매출액 증가율(%)"), "영업이익률(%)": r.get("영업이익률(%)"), "부채비율(%)": r.get("부채비율(%)")} for r in rows]
+        table(disp)
+        long = [{"연도": r["연도"], "항목": k, "억원": (r.get(k) or 0) / 1e8} for r in rows for k in ("매출액", "영업이익", "당기순이익") if r.get(k) is not None]
+        if long:
+            st.plotly_chart(px.bar(long, x="연도", y="억원", color="항목", barmode="group", height=320), width="stretch", key=f"fin_{key}")
+        st.caption("출처: 금융위원회 기업재무정보(요약재무제표). 금액 단위 원(KRW)을 억원으로 환산. 같은 연도에 연결·별도가 모두 있으면 연결 기준.")
+        if len(pub.get("financials_all") or []) > len(rows):
+            with st.expander(f"전체 연도 재무 ({len(pub['financials_all'])}행)"):
+                table(pub["financials_all"])
     else:
-        st.error("API 키가 없습니다. LINER_API_KEY 환경변수 또는 .env 파일에 설정하세요.")
-    mode = st.radio("검색 모드", ["기본 검색 (최대 12회)", "확장 검색 (최대 20회)", "최대 검색 (최대 50회)"], index=2)
-    search_budget = 50 if "50" in mode else 20 if "20" in mode else 12
-    max_results = st.select_slider("검색 결과 수 (호출당)", options=list(config.SEARCH_RESULT_CHOICES),
-                                   value=config.SEARCH_MAX_RESULTS)
-    use_agent = st.checkbox("Search Agent 통합 (1회, 유료)", value=True)
-    with st.expander("고급 검색 옵션"):
-        model = st.selectbox("분석 모델", list(config.MODEL_CHOICES), index=0,
-                             help="가격표에 있는 모델만 표시. 공식 지원 모델 목록은 확인하지 못했습니다.")
-        fetch_pages = st.slider("원문 확인 최대 페이지", 0, 60, config.FETCH_MAX_PAGES)
-        st.caption("기업 식별 힌트 (선택)")
-        h_home = st.text_input("공식 홈페이지 도메인", "")
-        h_alias = st.text_input("별칭/브랜드명 (쉼표 구분)", "당근" if st.session_state.get("company") == "당근마켓" else "")
-        h_excl = st.text_input("제외할 유사 상호 (쉼표 구분)", "")
-        h_ind = st.text_input("업종", "")
-        h_tech = st.text_input("핵심 기술", "")
-        h_year = st.number_input("설립연도 (0=미상)", 0, 2100, 0)
-        h_comp = st.text_input("알고 있는 경쟁사 (쉼표 구분)", "")
-    options = pl.default_options(
-        search_budget=search_budget, max_results=max_results, use_agent=use_agent, model=model, fetch_pages=fetch_pages,
-        hints={"homepage": h_home, "aliases": h_alias, "exclude": h_excl, "industry": h_ind, "tech": h_tech,
-               "founded_year": int(h_year) or None, "competitors": h_comp})
-    st.divider()
-    st.subheader("API 사용량")
-    if client:
-        u = client.usage()
-        st.caption(f"Search {u['search']['used']}/{u['search']['limit']} (남음 {u['search']['remaining']}) · "
-                   f"Model {u['model']['used']}/{u['model']['limit']} · Agent {u['agent']['used']}/{u['agent']['limit']} · "
-                   f"Premium {u['premium']['used']}/{u['premium']['limit']}")
-    st.caption("새 분석을 실행하면 호출 카운터가 초기화됩니다(새 클라이언트). 호출 한도는 실행 1회 기준입니다.")
+        st.info("재무실적: " + NA)
 
-run = st.session_state.get("run")
-tabs = st.tabs(["1. 검색·실행", "2. 기업 개요", "3. 재무·투자", "4. 경쟁사", "5. 뉴스·타임라인",
-                "6. VC·투자자", "7. 정부지원·사업기회", "8. API 성능·품질"])
 
-# ---------------- 1. 검색 ----------------
+def nps_view(pub: dict | None, key: str) -> None:
+    nps = (pub or {}).get("nps") or {}
+    m = nps.get("monthly") or []
+    if not m:
+        st.info("고용현황(국민연금): " + (nps.get("note") or NA))
+        return
+    s = nps.get("summary") or {}
+    if s:
+        c = st.columns(5)
+        c[0].metric("최근 가입자", f"{s['최근']}명", f"{s['증감']:+d}명")
+        c[1].metric("기간 증가율", f"{s['증가율(%)']}%")
+        c[2].metric("신규 취득 합계", s["신규 취득 합계"])
+        c[3].metric("상실 합계", s["상실 합계"])
+        c[4].metric("기간", s["기간"])
+    st.plotly_chart(px.line(m, x="월", y="가입자 수", markers=True, height=280), width="stretch", key=f"nps_{key}")
+    table(m, ["월", "가입자 수", "전월 대비", "신규 취득", "상실", "업종"])
+    st.caption(nps.get("note", ""))
+
+
+def news_view(nw: dict | None, key: str, limit: int = 300) -> None:
+    arts = (nw or {}).get("articles") or []
+    if not arts:
+        st.info("뉴스: " + NA)
+        return
+    cats = sorted({t for a in arts for t in a["분류"]})
+    pick = st.multiselect("분류", cats, key=f"cat_{key}")
+    shown = [a for a in arts if not pick or set(pick) & set(a["분류"])]
+    st.caption(f"중복 정리 후 {len(arts)}건 (수집 {nw.get('raw_count')}건, NAVER {nw['api_counts']['naver']} · Liner {nw['api_counts']['liner']}) · 기간 {nw.get('period')}")
+    table([{"날짜": a["date"], "제목": a["title"], "분류": a["분류"], "관련 기사 수": a["관련 기사 수"], "매체": a["매체"],
+            "요약": a["description"][:200], "출처": a["source_api"], "링크": a["url"]} for a in shown[:limit]], height=420)
+
+
+# ---------------- 세션 상태 ----------------
+R = st.session_state.get("R")
+st.title("통합 기업분석")
+tabs = st.tabs(["1. 기업 검색", "2. 기업 세부정보", "3. 경쟁사 동향", "4. 기술동향", "5. 정부사업·입찰공고", "6. 펀딩"])
+
+# ---------------- 1. 기업 검색 ----------------
 with tabs[0]:
     c1, c2 = st.columns([3, 1])
-    company = c1.text_input("회사명 (국내/해외 스타트업)", value=st.session_state.get("company", ""))
-    country = c2.selectbox("기업 소재국", list(config.COUNTRIES))
-    key_now = pl.cache_key(company.strip(), country, options)
-    cached = bool(run and run["company"] == company.strip() and run["country"] == country
-                  and run["status"]["search"] != "not_run" and run.get("cache_key") == key_now)
-    if run and run["company"] == company.strip() and run.get("cache_key") != key_now:
-        st.warning("검색 설정이 이전 결과와 다릅니다. 실행하면 새 결과로 구분되어 저장됩니다(이전 결과 폴더는 유지).")
-    if run:
-        st.caption(f"마지막 검색 시각: {run.get('last_search_at') or '없음'} · 로직 버전 {run.get('logic_version')} · 실행 ID {run['run_id']}")
-    if cached:
-        st.caption("동일한 입력·설정의 기존 결과가 있어 재사용합니다. 다시 조회하려면 '강제 재검색'을 누르세요(비용 발생).")
-    cb1, cb2 = st.columns(2)
-    go = cb1.button("분석 실행", type="primary", disabled=not company.strip() or client is None)
-    force = cb2.button("강제 재검색 (유료)", disabled=not company.strip() or client is None)
-    if go or force:
-        if cached and not force:
-            st.info("기존 결과를 재사용했습니다. API를 호출하지 않았습니다.")
-        else:
-            st.session_state["company"] = company
-            client.close()
-            st.session_state.pop("client", None)
-            client = get_client()
-            with st.status("분석 진행 중...", expanded=True) as status:
-                run = pl.run_analysis(company.strip(), country, client, progress=lambda m: st.write(m), options=options)
-                st.session_state["run"] = run
-                persist(run)
-                status.update(label="완료 (일부 오류 있음)" if run["errors"] else "완료", state="complete")
-    if run:
-        st.divider()
-        st.subheader("실행 상태")
-        s = run["status"]
-        cols = st.columns(4)
-        cols[0].metric("Search API", s["search"])
-        cols[1].metric("Model API", s["model"])
-        cols[2].metric("Search Agent", s["agent"])
-        cols[3].metric("Premium 비교", s.get("premium", "not_run"))
-        for e in run["errors"]:
-            st.error(f"[{e['stage']}] {e['message']}")
-        if run.get("unsearched"):
-            with st.expander(f"호출 한도로 미조사된 항목 {len(run['unsearched'])}건"):
-                df_or_info(run["unsearched"], ["key", "category", "query", "reason"])
-        st.markdown("**수집된 검색 결과 (원본 요약/출처)**")
-        for key, resp in run["searches"].items():
-            with st.expander(f"{key} — {len((resp or {}).get('results') or [])}건"):
-                for r in (resp or {}).get("results") or []:
-                    st.markdown(f"- **{r.get('title')}** ({r.get('date') or '날짜 없음'}) {link(r.get('url'))}\n\n"
-                                f"  {r.get('description') or ''}")
-        st.divider()
-        if st.button("Search Agent 실행 (1회, 유료)", disabled=client is None or s["agent"] in ("success", "failed")):
-            with st.status("Search Agent 실행 중...", expanded=True):
-                pl.run_agent(run, client, progress=lambda m: st.write(m))
-                pl.rebuild_sources(run)
-                persist(run)
-            st.rerun()
-        if s["agent"] in ("success", "failed"):
-            st.caption("Search Agent는 이미 실행되었습니다(중복 호출 방지). 사실 통합은 분석 실행 시 반영됩니다.")
-        if run["agent"]["status"] == "success":
-            st.markdown("**Search Agent 답변**")
-            st.write(run["agent"]["answer"] or NA)
-            df_or_info([{"title": r.get("title"), "url": r.get("url"), "date": r.get("date")}
-                        for r in run["agent"]["references"] if isinstance(r, dict)], ["title", "url", "date"], "참고 출처 없음")
-        st.divider()
-        st.markdown("**Premium Data 비교 (일반 1회 재사용 + Premium 1회)**")
-        if st.button("Premium Data 비교 실행 (유료 1회)", disabled=client is None or s.get("premium") in ("success", "failed")
-                     or not run["search_plan"]):
-            with st.status("Premium Data 비교 실행 중...", expanded=True):
-                pl.run_premium_compare(run, client, progress=lambda m: st.write(m))
-                persist(run)
-            st.rerun()
-        pc = (run.get("premium") or {}).get("comparison")
-        if pc:
-            st.info(pc["verdict"])
-            st.table(pd.DataFrame([{"항목": k, "값": str(v)} for k, v in pc.items() if k not in ("knowledge", "knowledge_providers")]))
-            if pc["knowledge"]:
-                df_or_info(pc["knowledge"], ["title", "description", "sources", "data_as_of", "row_count", "company_related"])
-        elif (run.get("premium") or {}).get("status") == "failed":
-            st.error(run["premium"].get("error"))
+    name = c1.text_input("기업명", value=(R or {}).get("company", ""), placeholder="예: 기준 기업")
+    c2.write("")
+    go = c2.button("전체 분석 시작", type="primary", disabled=not name.strip(), width="stretch")
+    if go:
+        bar = st.progress(0.0, text="분석 준비 중...")
+        step_box = st.empty()
+        state = {k: "대기" for k, _ in controller.STEPS}
 
-if not run:
+        def render_steps():
+            step_box.markdown("\n".join(f"- {'✅' if state[k] == '완료' else '⚠️' if state[k] == '실패' else '⏳' if state[k] == '진행 중' else '▫️'} {lbl} — {state[k]}"
+                                        for k, lbl in controller.STEPS))
+        render_steps()
+        with st.status("분석 진행 중...", expanded=True) as status:
+            def on_step(key, s, idx):
+                state[key] = s
+                if idx + 1 < len(controller.STEPS):
+                    state[controller.STEPS[idx + 1][0]] = "진행 중"
+                bar.progress((idx + 1) / len(controller.STEPS), text=f"{idx + 1}/{len(controller.STEPS)} 단계 완료")
+                render_steps()
+            state[controller.STEPS[0][0]] = "진행 중"
+            render_steps()
+            R = controller.run(name.strip(), progress=lambda m: st.write(m), step_done=on_step)
+            try:
+                R["saved_to"] = str(controller.save(R))
+            except Exception as e:
+                R["errors"].append(f"결과 저장 실패: {e}")
+            st.session_state["R"] = R
+            status.update(label="전체 분석 완료" + (" (일부 미확보)" if R["errors"] else ""), state="complete", expanded=False)
+    if R:
+        st.divider()
+        cols = st.columns(6)
+        for i, (k, lbl) in enumerate(controller.STEPS):
+            s = R["steps"].get(k, {})
+            cols[i].metric(lbl[:1] + " " + lbl[2:12], s.get("status", "-"), f"{s.get('sec', 0)}초", delta_color="off")
+        u = R.get("liner_usage") or {}
+        st.caption(f"소요 {R.get('elapsed_sec')}초 · Liner 호출: 검색 {u.get('search', {}).get('used', 0)}, 모델 {u.get('model', {}).get('used', 0)}, "
+                   f"학술 {u.get('scholar', {}).get('used', 0)} (캐시 재사용 {R.get('liner_cache_hits', 0)}회) · 저장: {R.get('saved_to', '-')}")
+        missing = [k for k, v in (R.get("keys") or {}).items() if not v and k not in ("BIZINFO_API_KEY", "KVIC_API_KEY")]
+        if missing:
+            st.warning(f".env 에 없는 키: {', '.join(missing)} — 해당 API 는 건너뛰었습니다.")
+        if R["errors"]:
+            with st.expander(f"미확보·오류 {len(R['errors'])}건 (나머지 분석은 계속 진행됨)"):
+                for e in R["errors"]:
+                    st.write("- " + e)
+        P = R.get("profile") or {}
+        prof, corp = P.get("profile") or {}, P.get("corp")
+        st.subheader(f"{(corp or {}).get('name') or prof.get('name_ko') or R['company']}")
+        g = st.columns(3)
+        basic = [("정확한 기업명", (corp or {}).get("name") or prof.get("name_ko")), ("영문 기업명", (corp or {}).get("name_en") or prof.get("name_en")),
+                 ("사업자등록번호", (corp or {}).get("bzno")), ("법인등록번호", (corp or {}).get("crno")), ("설립일", (corp or {}).get("founded")),
+                 ("대표자", (corp or {}).get("ceo")), ("대표자·창업자(검색)", prof.get("founders")), ("업종", (corp or {}).get("industry") or prof.get("industry")),
+                 ("주소", (corp or {}).get("address")), ("홈페이지", (corp or {}).get("homepage")), ("기업 단계(추정)", prof.get("stage")),
+                 ("공공 API 주요사업", (corp or {}).get("main_biz"))]
+        for i, (k, v) in enumerate(basic):
+            g[i % 3].markdown(f"**{k}**  \n{v or NA}")
+        st.caption("식별번호·설립일·대표자·주소: 금융위 기업기본정보 API. 사업·제품·기술·경쟁사: Liner 웹 검색 + 모델 정리(검색 자료 기반).")
+        if len(P.get("corp_candidates") or []) > 1:
+            with st.expander(f"동일·유사 상호 법인 {len(P['corp_candidates'])}건 (금융위)"):
+                table(P["corp_candidates"], ["name", "name_en", "crno", "bzno", "ceo", "founded", "address", "updated", "exact"])
+        st.markdown("#### 주요 사업내용")
+        st.write(prof.get("business") or NA)
+        a, b = st.columns(2)
+        with a:
+            st.markdown("#### 제품·서비스")
+            table(prof.get("products") or [])
+            st.markdown("#### 핵심 기술")
+            st.write(", ".join(prof.get("core_tech") or []) or NA)
+        with b:
+            st.markdown("#### 기타 중요한 기업 현황")
+            for s in prof.get("status_notes") or []:
+                st.write("- " + s)
+        st.markdown("#### 주요 경쟁기업 (5개)")
+        table(prof.get("competitors") or [], ["name", "name_en", "country", "relation", "reason"])
+        st.markdown("#### 기술 키워드 (논문·정부사업·나라장터 검색에 공통 사용)")
+        table(prof.get("tech_keywords") or [])
+        with st.expander(f"프로필 분석에 쓴 검색 자료 {len(P.get('sources') or [])}건"):
+            table(P.get("sources") or [], links=("url",))
+
+if not R:
     for t in tabs[1:]:
         with t:
-            st.info("먼저 '검색·실행' 탭에서 분석을 실행하세요.")
+            st.info("먼저 '1. 기업 검색' 탭에서 '전체 분석 시작'을 누르세요.")
     st.stop()
 
-a = run["analysis"]
-facts = a["facts"]
-BASIS = {"consolidated": "연결", "standalone": "별도", "unknown": "기준 미상"}
+prof = ((R.get("profile") or {}).get("profile")) or {}
+T = R.get("target") or {}
 
-
-def show_facts(cat_filter):
-    rows = [f for f in facts if cat_filter(f)]
-    df_or_info(rows, ["item", "value", "unit", "currency", "as_of", "basis", "source_url", "source_type", "status",
-                      "evidence", "missing_reason"], "해당 항목의 자료를 확보하지 못했습니다(추가 조사 필요).")
-
-
-def notes_box():
-    for n in a.get("notes", []):
-        if "추가 조사" in n or "자료 확보 불가" in n or "결과 없음" in n:
-            st.caption(f"ℹ️ {n}")
-
-
-# ---------------- 2. 개요 ----------------
+# ---------------- 2. 기업 세부정보 ----------------
 with tabs[1]:
-    st.subheader(a["company_name"] or run["company"])
-    if run["status"]["model"] not in ("success", "partial"):
-        st.warning("Model API 분석이 없어 구조화된 개요를 제공할 수 없습니다. 1번 탭의 검색 원본을 참고하세요.")
-    ident = run.get("identity") or {}
-    if ident:
-        st.caption(f"식별: 이름 후보 {ident.get('names')} · 제외 상호 {ident.get('exclude_names') or '-'} · 공식 도메인 {ident.get('official_hosts') or '-'}")
-    show_facts(lambda f: f["category"] == "profile")
-    notes_box()
-    st.caption("상태: confirmed 원문 본문에서 값 확인 / reported 발표·보도 / inferred AI 해석·근거 부족 / conflicting 불일치 / unavailable 확보 불가.")
+    st.subheader("A. 재무실적 (최근 3개 사업연도)")
+    fin_view(T.get("public"), "target")
+    st.subheader("B. 고용현황 (국민연금, 최근 12개월)")
+    nps_view(T.get("public"), "target")
+    st.subheader("C. 주요 뉴스 (최근 12개월)")
+    sm = T.get("news_summary")
+    if sm:
+        st.markdown("**최근 기업 동향 (Liner 요약)**")
+        st.write(sm["summary"])
+        for t in sm.get("trends") or []:
+            st.write("- " + t)
+        st.markdown("**중요 사건**")
+        table(sm.get("events") or [], ["date", "category", "title", "detail", "기사 제목", "url"], links=("url",))
+    news_view(T.get("news"), "target")
 
-# ---------------- 3. 재무 ----------------
+# ---------------- 3. 경쟁사 동향 ----------------
 with tabs[2]:
-    show_facts(lambda f: f["category"] in ("finance", "funding", "employees"))
-    fin = pd.DataFrame(a["financials"])
-    st.markdown("**확보된 재무 수치 (연결/별도·연도·단위 구분)**")
-    if fin.empty:
-        st.info(f"{NA} — 검증 가능한 수치가 없어 표·그래프를 생성하지 않습니다.")
+    rivals = R.get("rivals") or []
+    if not rivals:
+        st.info("경쟁사 자료: " + NA)
     else:
-        fin["basis"] = fin["basis"].map(lambda b: BASIS.get(b, b)) if "basis" in fin else "기준 미상"
-        st.dataframe(fin.sort_values(["metric", "year"]), width="stretch", hide_index=True)
-        for metric, title in (("revenue", "연도별 매출"), ("operating_profit", "연도별 영업이익"), ("employees", "직원수")):
-            d = fin[fin["metric"] == metric]
-            if d.empty:
-                st.info(f"{title}: {NA}")
-                continue
-            d = d.sort_values("year")
-            d["series"] = d["basis"] + " / " + d["unit"].astype(str) + " " + d["currency"].fillna("").astype(str)
-            st.plotly_chart(px.bar(d, x="year", y="value", color="series", barmode="group",
-                                   hover_data=["source_url", "status"], title=f"{title} (출처 있는 수치만)"),
-                            width="stretch")
-        st.caption(f"확보 연도 수(매출): {len(set(fin[fin['metric'] == 'revenue']['year']))}개년. 3개년 미만이면 해당 연도는 자료 확보 불가입니다.")
-    notes_box()
+        st.subheader("대상기업·경쟁사 비교")
+        comp_rows, fin_long, nps_long = [], [], []
+        all_cos = [(R["company"], T.get("public"), T.get("news"))] + [(r["info"]["name"], r.get("public"), r.get("news")) for r in rivals]
+        for nm, pub, nw in all_cos:
+            fin = (pub or {}).get("financials") or []
+            last = fin[-1] if fin else {}
+            s = ((pub or {}).get("nps") or {}).get("summary") or {}
+            comp_rows.append({"기업": nm, "최근 재무연도": last.get("연도", "-"), "매출액": won(last.get("매출액")) if last else "-",
+                              "영업이익": won(last.get("영업이익")) if last else "-", "자산총계": won(last.get("자산총계")) if last else "-",
+                              "국민연금 가입자(최근)": s.get("최근", "-"), "12개월 증가율(%)": s.get("증가율(%)", "-"),
+                              "뉴스 건수": len((nw or {}).get("articles") or [])})
+            for r in fin:
+                if r.get("매출액") is not None:
+                    fin_long.append({"기업": nm, "연도": r["연도"], "매출액(억원)": r["매출액"] / 1e8})
+            for m in ((pub or {}).get("nps") or {}).get("monthly") or []:
+                nps_long.append({"기업": nm, "월": m["월"], "가입자 수": m["가입자 수"]})
+        table(comp_rows)
+        c1, c2 = st.columns(2)
+        if fin_long:
+            c1.plotly_chart(px.bar(fin_long, x="연도", y="매출액(억원)", color="기업", barmode="group", height=320, title="매출액 비교"), width="stretch")
+        if nps_long:
+            c2.plotly_chart(px.line(nps_long, x="월", y="가입자 수", color="기업", markers=True, height=320, title="국민연금 가입자 비교"), width="stretch")
+        st.caption("국내 기업만 금융위·국민연금 API로 조회합니다. 해외 기업은 뉴스·검색 자료만 표시합니다.")
+        summ = R.get("rivals_summary") or {}
+        for i, r in enumerate(rivals):
+            c = r["info"]
+            with st.expander(f"{c.get('name')} ({c.get('country')}) — {c.get('relation')}", expanded=i == 0):
+                st.write(c.get("reason") or "")
+                s = summ.get(c.get("name")) or {}
+                if s:
+                    st.markdown(f"**주요 사업** {s.get('business')}")
+                    st.markdown(f"**주요 제품·기술** {s.get('products_tech')}")
+                    if s.get("recent_changes"):
+                        st.markdown("**최근 사업 변화**")
+                        for x in s["recent_changes"]:
+                            st.write("- " + x)
+                for e in (r.get("errors") or []) + ((r.get("public") or {}).get("errors") or []):
+                    st.caption("미확보: " + e)
+                if r.get("public"):
+                    corp = r["public"].get("corp")
+                    if corp:
+                        st.caption(f"법인: {corp['name']} · 법인등록번호 {corp['crno']} · 설립 {corp['founded']} · 대표 {corp['ceo']}")
+                    st.markdown("**재무실적**")
+                    fin_view(r["public"], f"r{i}")
+                    st.markdown("**고용현황**")
+                    nps_view(r["public"], f"r{i}")
+                st.markdown("**최근 12개월 뉴스**")
+                news_view(r.get("news"), f"r{i}", limit=100)
 
-# ---------------- 4. 경쟁사 ----------------
+# ---------------- 4. 기술동향 ----------------
 with tabs[3]:
-    df_or_info(a["competitors"], ["name", "relation", "products", "revenue", "employees", "funding", "as_of",
-                                  "source_urls", "status", "missing_reason"], "경쟁사 정보를 확보하지 못했습니다.")
-    q = [c for c in a["competitors"] if c.get("revenue") or c.get("employees") or c.get("funding")]
-    st.caption(f"경쟁사 정량정보 확보: {len(q)}/{len(a['competitors'])}곳. 값이 없는 경쟁사는 그래프에서 제외합니다.")
-    if run.get("competitor_names"):
-        st.caption(f"후속 검색 대상 경쟁사(Agent·힌트에서 추출): {', '.join(run['competitor_names'])}")
-    notes_box()
-
-# ---------------- 5. 뉴스 ----------------
-with tabs[4]:
-    news = a["news"]
-    st.caption("최신 사건일(없으면 발행일) 순 정렬. 중복 보도는 한 사건으로 묶고 원본 기사 목록(source_urls)을 유지합니다.")
-    df_or_info(news, ["event_date", "published_date", "title", "event_type", "commitment_level", "summary",
-                      "source_urls", "status"], "뉴스 정보를 확보하지 못했습니다.")
-    dated = [dict(n, when=pd.to_datetime(n.get("event_date") or n.get("published_date"), errors="coerce")) for n in news]
-    dated = [n for n in dated if pd.notna(n["when"])]
-    if dated:
-        fig = px.scatter(pd.DataFrame(dated), x="when", y="event_type", color="commitment_level",
-                         hover_data=["title", "published_date", "event_date"], title="기업 활동 타임라인")
-        fig.update_traces(marker_size=14)
-        st.plotly_chart(fig, width="stretch")
+    tech = R.get("tech") or {}
+    topics = tech.get("topics") or []
+    if not topics:
+        st.info("기술동향: " + NA)
     else:
-        st.info(f"기업 활동 타임라인: {NA}")
+        long = [{"기술": t["name"], "연도": y, "논문 수": n} for t in topics for y, n in sorted((t["trend"].get("by_year") or {}).items())
+                if int(y) <= __import__("datetime").date.today().year]
+        if long:
+            st.plotly_chart(px.line(long, x="연도", y="논문 수", color="기술", markers=True, height=380,
+                                    title="기술 분야별 연도별 논문 발표량 (OpenAlex, 올해는 진행 중)"), width="stretch")
+        table([{"기술": t["name"], "검색어": t["en"], "추세": papers.trend_label({int(k): v for k, v in (t["trend"].get("by_year") or {}).items()}),
+                "최근 2년 상위 기관": ", ".join(x["기관"] for x in t["trend"].get("institutions", [])[:5]), "논문 수(목록)": len(t["papers"])} for t in topics])
+        cp = tech.get("company_papers") or []
+        direct = [w for c in cp for w in c.get("works") or []]
+        st.subheader(f"⭐ 경쟁기업·대상기업 직접 참여 논문 ({len(direct)}건, 저자 소속 확인)")
+        if direct:
+            table([{"기업": w["경쟁사"], "제목": w["제목"], "연도": w["연도"], "저자": w["저자"], "소속": w["소속"], "피인용": w["피인용"], "링크": w["링크"]} for w in direct], height=360)
+        st.caption(" · ".join(f"{c['company']}: {len(c.get('works') or [])}건({c.get('mode') or '-'})" + (f" 오류 {c['error']}" if c.get("error") else "") for c in cp))
+        summary = tech.get("summary") or {}
+        for t in topics:
+            with st.expander(f"{t['name']} — 논문 {len(t['papers'])}건"):
+                s = summary.get(t["name"]) or next((v for k, v in summary.items() if k and (k in t["name"] or t["name"] in k)), None)
+                if s:
+                    st.markdown(f"**연구 흐름** {s['summary']}")
+                    st.markdown(f"**대상기업 기술과의 관련성** {s['relevance']}")
+                    for kp in s.get("key_papers") or []:
+                        st.markdown(f"- [{kp['제목']}]({kp['링크']}) — {kp['요지']}")
+                inst = t["trend"].get("institutions") or []
+                if inst:
+                    st.markdown("**주요 연구기관 (최근 2년)**")
+                    table(inst)
+                st.markdown("**최근·주요 논문**")
+                for p in t["papers"]:
+                    st.markdown(f"**[{p['제목']}]({p['링크']})** ({p['연도']}, {p['출처']}, 피인용 {p['피인용']})  \n"
+                                f"<small>{p['저자']} · {p['소속'] or p['학술지·학회']}</small>", unsafe_allow_html=True)
+                    if p["초록"]:
+                        st.caption(p["초록"][:600] + ("…" if len(p["초록"]) > 600 else ""))
 
-# ---------------- 6. VC ----------------
+# ---------------- 5. 정부사업·입찰공고 ----------------
+with tabs[4]:
+    G = R.get("gov") or {}
+    items = G.get("items") or []
+    st.caption(f"정부지원사업(기업마당 스냅샷 {G.get('bizinfo_as_of', '-')}) {G.get('programs_count', 0)}건 · 나라장터 {G.get('g2b_count', 0)}건 "
+               f"(기간 {(G.get('g2b') or {}).get('period', '-')}, 호출 {(G.get('g2b') or {}).get('calls', 0)}회) · 통합 {len(items)}건")
+    st.caption(f"검색어: 정부사업 {', '.join(G.get('gov_keywords') or [])} / 나라장터 {', '.join(G.get('bid_keywords') or [])}")
+    if (G.get("g2b") or {}).get("error_count"):
+        st.warning(f"나라장터 일부 구간 실패 {G['g2b']['error_count']}건: {'; '.join(G['g2b']['errors'][:3])}")
+    if not items:
+        st.info(NA)
+    else:
+        c1, c2, c3 = st.columns(3)
+        kinds = c1.multiselect("구분", sorted({i["구분"].split(" ")[0] for i in items}))
+        sts = c2.multiselect("상태", sorted({i["상태"] for i in items}))
+        rels = c3.multiselect("관련성", ["높음", "보통", "참고"])
+        shown = [i for i in items if (not kinds or i["구분"].split(" ")[0] in kinds) and (not sts or i["상태"] in sts) and (not rels or i["관련성"] in rels)]
+        table(shown, ["구분", "상태", "관련성", "공고명", "기관", "사업 내용", "금액", "기간", "신청조건", "관련 키워드", "링크"], height=560)
+        st.caption("정렬: 모집·입찰 진행 중 → 관련성 → 마감 임박. 관련성은 정렬·분류용이며 공고를 제외하지 않습니다. 기업마당 공고 금액은 API에 없어 공고문 확인이 필요합니다.")
+
+# ---------------- 6. 펀딩 ----------------
 with tabs[5]:
-    st.markdown("**A. 기존 투자자** (이미 투자한 VC — 신규 후보로 추천하지 않음)")
-    df_or_info(a.get("existing_investors", []), ["name", "date", "round", "amount", "fund", "source_urls", "status"],
-               "기존 투자자 정보를 확보하지 못했습니다.")
-    st.markdown("**B. 신규 투자 후보** (적합성 근거가 있는 경우만 표시)")
-    cands = a.get("vc_candidates", [])
-    df_or_info(cands, ["name", "focus", "fund", "fund_purpose", "similar_investments", "stage", "recent_activity", "fit",
-                       "competitor_investment", "competitor_investment_detail", "remaining_capital",
-                       "new_investment_status", "source_urls", "status"], "신규 투자 후보를 확보하지 못했습니다(근거 부족 시 추천하지 않음).")
-    comp_vc = [c for c in cands if c.get("competitor_investment")]
-    if comp_vc:
-        st.markdown("**경쟁사 투자 이력 VC** — 투자 경험(장점)과 이해상충 가능성을 함께 검토하세요. 경쟁사 투자만으로 가능성이 높다고 판단하지 않습니다.")
-        df_or_info(comp_vc, ["name", "competitor_investment_detail", "source_urls"])
-    st.caption("투자 확률·점수는 근거 자료가 없어 산출하지 않습니다. 잔여 투자재원은 공개 확인이 불가하면 미확인입니다.")
-    notes_box()
-
-# ---------------- 7. 지원사업 ----------------
-with tabs[6]:
-    st.markdown("**현재 활용 가능한 정부지원·R&D·정책금융** (공고 원문 조건 우선, 정보가 없으면 확정하지 않음)")
-    progs = a.get("programs", [])
-    if progs:
-        order = {"신청 가능 확인": 0, "조건부 가능": 1, "자격 확인 필요": 2, "자격 미충족": 3, "모집 종료": 4}
-        progs = sorted(progs, key=lambda p: order.get(p.get("eligibility"), 9))
-    df_or_info(progs, ["eligibility", "name", "agency", "purpose", "target", "amount", "self_burden", "start_date", "end_date",
-                       "max_company_age_years", "region_restriction", "industry_restriction", "size_restriction",
-                       "eligibility_reasons", "url", "status"], "현재 신청 가능한 지원사업이 검색되지 않았습니다(결과 없음).")
-    st.markdown("**공공입찰·조달 (잠재 매출기회 — 정부지원금 아님)**")
-    df_or_info(a.get("procurement", []), ["name", "agency", "budget", "deadline", "url", "status"], "공공입찰 정보를 확보하지 못했습니다.")
-    st.caption("종료된 사업은 추천하지 않고 '모집 종료'로 표시됩니다. 공공 API는 연동하지 않았습니다.")
-    notes_box()
-
-# ---------------- 8. 성능 ----------------
-with tabs[7]:
-    m = pl.quality_metrics(run)
-    c = st.columns(5)
-    c[0].metric("검색 결과(고유 URL)", f"{m['search_result_count']} ({m['unique_urls']})")
-    c[1].metric("관련 자료 비율", m["relevant_ratio"] if m["relevant_ratio"] is not None else "-")
-    c[2].metric("추출 사실 / 원문확인", f"{m['facts_total']} / {m['facts_confirmed']}")
-    c[3].metric("총 소요(초)", m["total_elapsed_sec"])
-    c[4].metric("추정 비용(USD)", m["total_est_cost_usd"])
-    st.caption("비용은 공식 단가 기반 추정치이며 실제 청구액은 크레딧 잔액 변화로 확인해야 합니다. "
-               f"분석 시작·종료: {run['started_at']} ~ {run['finished_at']}")
-    c = st.columns(5)
-    c[0].metric("재무 확보 연도 수", m["financial_year_count"])
-    c[1].metric("최근 1년 뉴스", m["recent_news_count"])
-    c[2].metric("신규 VC 후보", m["new_vc_candidates"])
-    c[3].metric("신청 가능 지원사업", m["open_support_programs"])
-    c[4].metric("출처 불일치", m["conflict_count"])
-    st.markdown("**카테고리별 정보 확보율**")
-    st.dataframe(pd.DataFrame(m["category_coverage"].values()), width="stretch", hide_index=True)
-    st.markdown("**원문 검증**")
-    st.write(f"원문 접근 {m['fetch_ok']}/{m['fetch_attempted']}건 성공 · 검증 대상 {m['verification_items']}건 중 원문 확인 {m['verified_items']}건 (검증률 {m['verified_ratio']})")
-    df_or_info(run.get("verification", []), ["category", "item", "value", "url", "source_type", "fetch_status", "verified",
-                                              "evidence_text", "failure_reason"], "원문 검증 기록 없음")
-    st.markdown("**API 호출 기록 (검색어별)**")
-    df_or_info(run["calls"], ["call_no", "kind", "label", "query", "max_results", "include_knowledge", "result_count",
-                              "knowledge_count", "attempt", "started_at", "finished_at", "http_status", "ok", "elapsed_sec",
-                              "input_tokens", "output_tokens", "est_cost_usd", "error"], "호출 기록 없음")
-    st.markdown("**카테고리별 Model 호출**")
-    df_or_info([{"category": k, **{kk: vv for kk, vv in v.items() if kk != "usage"}} for k, v in run.get("category_runs", {}).items()],
-               ["category", "status", "model_id", "sources_used", "elapsed_sec", "est_cost_usd", "reason", "error"], "모델 호출 없음")
-    st.markdown("**확인 상태 분포**")
-    st.json(m["facts_by_status"])
-    st.markdown("**API별 정보 확보 성능 비교 (Search API vs Search Agent vs Premium)**")
-    ig = m["integration"]
-    st.table(pd.DataFrame([
-        {"항목": "출처 수", "Search API": m["search_result_count"], "Search Agent": m["agent_reference_count"]},
-        {"항목": "고유 도메인", "Search API": m["search_unique_hosts"], "Search Agent": m["agent_unique_hosts"]},
-        {"항목": "고유 사실 수", "Search API": ig["search_unique_facts"], "Search Agent": ig["agent_unique_facts"]},
-        {"항목": "공통 확인 / Agent 단독 추가", "Search API": ig["common_facts"], "Search Agent": ig["agent_only_facts"]},
-        {"항목": "출처 충돌 사실 / 최종 반영 사실", "Search API": ig["conflicting_facts"], "Search Agent": ig["final_facts"]},
-    ]).astype(str))
-    df_or_info(pl.search_comparison_rows(run), ["topic", "category", "api", "result_count", "relevant_count", "relevance_ratio",
-                                                 "new_urls", "agent_overlap_urls", "premium_knowledge_tables", "premium_verdict"])
-    with st.expander("제외된 검색 결과 (유사 상호·무관·중복) 사유"):
-        df_or_info(m["excluded_sources"], ["url", "reason"], "제외된 자료 없음")
-    with st.expander("출처 목록 (검색어별 출처·관련성·신뢰도 보존)"):
-        df_or_info(run.get("sources", []), ["title", "url", "source_type", "trust", "relevance", "use", "excluded_reason",
-                                             "origins", "categories", "date"])
-
-    st.divider()
-    st.subheader("다운로드")
-    out = st.session_state.get("out_dir")
-    if out:
-        from pathlib import Path
-        base = Path(out)
-        st.caption(f"저장 위치: {base}")
-        if run.get("secret_leaks"):
-            st.error(f"인증정보 노출 의심: {run['secret_leaks']}")
-        else:
-            st.caption("인증정보 노출 검사: 이상 없음")
-        for name, mime in (("extracted_facts.csv", "text/csv"), ("company_profile.json", "application/json"),
-                           ("source_verification.csv", "text/csv"), ("search_comparison.csv", "text/csv"),
-                           ("coverage_report.json", "application/json"), ("improvement_comparison.md", "text/markdown"),
-                           ("api_calls.csv", "text/csv"), ("analysis_bundle.zip", "application/zip")):
-            p = base / name
-            if p.exists():
-                st.download_button(f"{name} 다운로드", p.read_bytes(), file_name=name, mime=mime, key=f"dl_{name}")
+    F = R.get("funding") or {}
+    if not F:
+        st.info("펀딩: " + NA)
+    else:
+        inp = F.get("inputs") or {}
+        st.caption(f"펀딩노트 입력값(①단계 결과 연결): 지역 {inp.get('region')}, 기업 유형 {inp.get('biz')}, 관심 투자 분야 {inp.get('field_label')}, 단계 {inp.get('stage')}")
+        for e in F.get("errors") or []:
+            st.warning(e)
+        lk = F.get("lookup") or {}
+        st.subheader("기존 투자자 (펀딩노트 회사 조회)")
+        table(lk.get("investors") or [], ["name", "round", "date", "status", "sourceUrl"], links=("sourceUrl",))
+        if lk.get("rivalFunding"):
+            st.subheader("경쟁사 투자 이력 (펀딩노트)")
+            table(lk["rivalFunding"])
+        st.subheader(f"VC 후보: 모태펀드 자펀드 운용사 ({inp.get('field_label')}) — 신규 {len(F.get('vc_new') or [])}곳")
+        st.caption("펀딩노트 '자금 찾기'와 같은 규칙(만기 전 펀드, 출자분야 낱말 일치, 최근 결성 순). 이미 투자한 운용사는 신규 후보에서 뺐습니다. 투자 가능성 판단이 아닙니다.")
+        table(F.get("vc_new") or [], height=380)
+        if F.get("vc_existing"):
+            st.markdown("**이미 투자한 운용사(신규 후보 제외)**")
+            table(F["vc_existing"])
+        st.subheader(f"정책융자·보증 후보 — {len(F.get('policy') or [])}건")
+        st.caption("펀딩노트 '자금 찾기'의 융자·보증 대조 규칙(지역·지원대상)을 그대로 적용했습니다. 세부 자격은 공고문에서 확인하세요.")
+        table(F.get("policy") or [], height=380)
