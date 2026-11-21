@@ -19,7 +19,7 @@ Liner API(Search / Model / Search Agent)로 스타트업 기업정보를 수집�
 ### 실행
 ```bash
 # 1) 키: 저장소 루트 .env 에 LINER_API_KEY, BIZINFO_API_KEY, KVIC_API_KEY
-# 2) Python 환경
+# 2) Python 환경. 예전에 만든 .venv 가 있으면 뒤의 pip install 만 다시 실행한다(pypdf, fastapi, uvicorn 이 추가됐다)
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 # 3) 공공 데이터 스냅샷(무료 API). web/public/data/ 에 저장소에 포함된 스냅샷이 있어 생략할 수 있다
 .venv/bin/python scripts/fetch_public_data.py
@@ -36,7 +36,7 @@ scripts/run_local.sh fundingnote   # 펀딩노트만: 화면 3100, 분석 서버
 scripts/run_local.sh streamlit     # 기존 Streamlit 프로토타입만: 8501
 scripts/run_local.sh               # 둘 다(비교용)
 ```
-포트는 `FUNDING_WEB_PORT`, `FUNDING_API_PORT`, `STREAMLIT_PORT`로 바꿉니다. 두 화면은 서로 독립이라 한쪽만 띄워도 되고, 같은 `.env`와 `results/`를 씁니다.
+스크립트는 필요한 Python 패키지가 빠져 있으면 서버를 띄우기 전에 무엇을 설치하라고 알리고 멈춥니다. 포트는 `FUNDING_WEB_PORT`, `FUNDING_API_PORT`, `STREAMLIT_PORT`로 바꿉니다. 두 화면은 서로 독립이라 한쪽만 띄워도 되고, 같은 `.env`와 `results/`를 씁니다.
 
 회사명 조회는 2분 넘게 걸리고 실행마다 결과가 달라집니다. 그래서 미리 조회해 저장해 둔 결과를 `web/public/data/sample-company.json`에 두면 "우리 회사 정보"에 **예시 회사로 체험** 단추가 나오고, 누르면 그 결과가 바로 채워집니다(화면에 조회한 날짜를 표시). 이 파일은 실제 기업의 조회 결과라 **저장소에 넣지 않았습니다**(`.gitignore`). 파일이 없으면 단추가 보이지 않고, 나머지 기능은 그대로 동작합니다. 파일을 새로 두었으면 화면 서버를 다시 실행해야 보입니다.
 

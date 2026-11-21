@@ -33,6 +33,16 @@ if [ ! -x "$PY" ]; then
   echo ".venv 가 없습니다. 먼저 실행: python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt" >&2
   exit 1
 fi
+# 띄울 화면에 필요한 Python 패키지가 있는지 먼저 본다. 예전에 만든 .venv 를 그대로 쓰면 나중에 추가된 패키지가 빠져 있을 수 있다
+need=()
+[ "$MODE" != "streamlit" ] && need+=(fastapi uvicorn pypdf httpx pydantic)
+[ "$MODE" != "fundingnote" ] && need+=(streamlit plotly pandas httpx)
+missing=$("$PY" -c 'import importlib.util, sys; print(" ".join(m for m in dict.fromkeys(sys.argv[1:]) if importlib.util.find_spec(m) is None))' "${need[@]}")
+if [ -n "$missing" ]; then
+  echo "Python 패키지가 설치돼 있지 않습니다: $missing" >&2
+  echo "먼저 실행: .venv/bin/pip install -r requirements.txt" >&2
+  exit 1
+fi
 
 pids=()
 cleanup() {
