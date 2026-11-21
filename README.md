@@ -30,6 +30,16 @@ npm --prefix web install && npm --prefix web run build && npm --prefix web run s
 ```
 `http://localhost:3100` 에서 엽니다. 분석 서버 없이도 자금 찾기(목록·필터·저장)는 동작합니다.
 
+위 4)·5)는 스크립트 하나로 할 수 있습니다.
+```bash
+scripts/run_local.sh fundingnote   # 펀딩노트만: 화면 3100, 분석 서버 8000
+scripts/run_local.sh streamlit     # 기존 Streamlit 프로토타입만: 8501
+scripts/run_local.sh               # 둘 다(비교용)
+```
+포트는 `FUNDING_WEB_PORT`, `FUNDING_API_PORT`, `STREAMLIT_PORT`로 바꿉니다. 두 화면은 서로 독립이라 한쪽만 띄워도 되고, 같은 `.env`와 `results/`를 씁니다.
+
+회사명 조회는 2분 넘게 걸리고 실행마다 결과가 달라집니다. 그래서 미리 조회해 저장해 둔 결과를 `web/public/data/sample-company.json`에 두면 "우리 회사 정보"에 **예시 회사로 체험** 단추가 나오고, 누르면 그 결과가 바로 채워집니다(화면에 조회한 날짜를 표시). 이 파일은 실제 기업의 조회 결과라 **저장소에 넣지 않았습니다**(`.gitignore`). 파일이 없으면 단추가 보이지 않고, 나머지 기능은 그대로 동작합니다. 파일을 새로 두었으면 화면 서버를 다시 실행해야 보입니다.
+
 ### 테스트
 ```bash
 .venv/bin/python -m pytest -q tests   # 실제 API 를 호출하지 않는다
@@ -46,7 +56,7 @@ npm --prefix web test
 | 신규 | `web/` | Next.js 화면 |
 | 신규 | `scripts/` | 공공 데이터 수집, 공고문 대조 실험 |
 | 신규 | `tests/test_fetch_public_data.py`, `tests/test_funding_*.py`, `web/lib/*.test.mjs` | 테스트 |
-| 신규 | `docs/` (`architecture.md` 제외) | 계획, API 조사, 실험 결과, 사용자 경험 체크리스트 |
+| 신규 | `docs/` (`architecture.md` 제외) | 계획, API 조사, 실험 결과, 사용자 경험 체크리스트, 제출물 초안(`docs/submission/`) |
 
 ### 알아 둘 한계
 - 자금 찾기 목록은 공공 API 의 분류값으로만 거른다. 세부 자격은 공고문 자격 대조로 확인한다.

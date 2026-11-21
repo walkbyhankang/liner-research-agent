@@ -144,7 +144,7 @@ class LookupRequest(BaseModel):
     homepage: str = Field("", max_length=100, pattern=r"^[A-Za-z0-9.\-]*$")
 
 
-LOOKUP_SEARCHES, LOOKUP_MODELS = 7, 5  # 엔진 검색 4·모델 4, 경쟁사 투자 조회 검색 3(경쟁사별)·모델 1
+LOOKUP_SEARCHES, LOOKUP_MODELS = 10, 5  # 엔진 검색 4·모델 4, 경쟁사 조사 검색 6(경쟁사 3곳 × 투자·규모)·모델 1
 
 
 # 회사 조회는 2분 넘게 걸린다. 요청을 붙잡아 두지 않고 작업을 시작해 번호를 돌려준 뒤, 화면이 진행 상황을 묻게 한다.
@@ -163,7 +163,7 @@ def stage_label(message: str) -> str:
     if message.startswith("Model API"):
         return "회사 정보·기존 투자자·경쟁사 추출"
     if message.startswith("경쟁사 투자"):
-        return "경쟁사 투자 이력 조회"
+        return "경쟁사 투자 이력·규모 조회"
     return "조회 중"
 
 

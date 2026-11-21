@@ -2,7 +2,7 @@
 
 전체 분석은 검색 18회·모델 6회·3~5분이 걸리므로, 필요한 네 주제만 쓴다:
   identity(개요) → profile, headcount_funding(직원·투자) → finance, vc_existing(기존 투자자) → vc, competitors(경쟁사) → competitors
-그 뒤 경쟁사가 받은 투자를 따로 찾는다(funding/rivals.py, 경쟁사별 검색 최대 3회·모델 1회).
+그 뒤 경쟁사가 받은 투자와 규모를 따로 찾는다(funding/rivals.py, 경쟁사별 검색 2회씩 최대 6회·모델 1회).
 결과는 초안이다. 값마다 상태와 출처를 붙여 사용자가 확인한 뒤 쓰게 한다.
 """
 from __future__ import annotations
@@ -129,6 +129,10 @@ def _field(key: str, label: str, value: str, fact: dict | None, note: str = "") 
             "sourceUrl": (fact or {}).get("source_url") or "", "evidence": str((fact or {}).get("evidence") or "")[:200], "note": note}
 
 
+# 엔진이 쓰는 경쟁 관계 코드를 화면에 보일 말로 바꾼다
+RELATION_LABEL = {"direct": "직접 경쟁", "similar_tech": "유사 기술", "same_market": "같은 시장", "global": "해외 경쟁사"}
+
+
 def to_draft(run: dict) -> dict:
     """엔진 실행 결과를 화면의 회사 정보 형식으로 바꾼다."""
     analysis = run.get("analysis") or {}
@@ -182,7 +186,7 @@ def to_draft(run: dict) -> dict:
             continue
         urls = c.get("source_urls") or []
         text = lambda k, n: str(c.get(k) or "").strip()[:n]  # noqa: E731
-        competitors.append({"name": nm[:60], "relation": text("relation", 60), "products": text("products", 120),
+        competitors.append({"name": nm[:60], "relation": RELATION_LABEL.get(text("relation", 60), text("relation", 60)), "products": text("products", 120),
                             "revenue": text("revenue", 60), "employees": text("employees", 40), "funding": text("funding", 120),
                             "asOf": text("as_of", 20), "status": c.get("status") or "", "sourceUrl": urls[0] if urls else ""})
 
@@ -213,7 +217,7 @@ def search_plan(name: str) -> list[dict]:
 
 
 def lookup(name: str, client, *, homepage: str = "", fetcher: fetcher_mod.Fetcher | None = None, progress=None) -> dict:
-    """유료 호출: 검색 최대 7회, 모델 최대 5회. 인증·크레딧 오류는 LinerAPIError 로 올라온다."""
+    """유료 호출: 검색 최대 10회, 모델 최대 5회. 인증·크레딧 오류는 LinerAPIError 로 올라온다."""
     say = progress or (lambda m: None)
     opts = pl.default_options(use_agent=False, fetch_pages=FETCH_PAGES, reserve_premium=False,
                               hints={"homepage": homepage, "aliases": "", "exclude": ""})
@@ -247,9 +251,11 @@ def lookup(name: str, client, *, homepage: str = "", fetcher: fetcher_mod.Fetche
         raise ProfileError(f"회사 정보를 추출하지 못했습니다(모델 호출 실패). {first[:120]}".strip())
     out = to_draft(run)
     rival_error = ""
-    say("경쟁사 투자 이력 조회")
+    say("경쟁사 투자 이력 조회")  # 경쟁사 규모(직원 수·매출)도 이 단계에서 함께 찾는다
     try:
-        out["rivalFunding"] = rivals.find_funding([c["name"] for c in out["competitors"]], client)
+        found = rivals.research([c["name"] for c in out["competitors"]], client)
+        out["rivalFunding"] = found["rounds"]
+        rivals.apply_figures(out["competitors"], found)
     except LinerAPIError as e:  # 회사 정보는 얻었으므로 경쟁사 투자 조회 실패는 알리기만 한다
         rival_error = str(e)[:120]
     out["meta"] = {"searches": len(run["searches"]), "pagesRead": len(run["fetched"]), "aliases": aliases,

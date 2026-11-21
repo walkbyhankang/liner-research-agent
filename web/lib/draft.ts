@@ -85,3 +85,6 @@ export function draftPatch(current: CompanyValues, draft: Draft, requestedName: 
 
 /** 조회 결과가 지금 입력된 회사의 것인지. 회사명을 바꾸면 이전 회사의 조회 결과(기존 투자자 등)를 쓰지 않는다. */
 export const sameCompany = (lookupQuery: string, currentName: string) => currentName.trim() !== "" && lookupQuery.trim() === currentName.trim();
+
+/** 회사 정보를 아무것도 적지 않은 상태인지. 예시 회사를 불러와도 잃을 값이 없을 때만 참이다. */
+export const isBlankCompany = (c: CompanyValues) => Object.values(c).every((v) => !v.trim());

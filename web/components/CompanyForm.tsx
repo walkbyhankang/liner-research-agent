@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { Spinner, Working } from "@/components/Working";
+import { isBlankCompany } from "@/lib/draft";
 import { splitInvestors } from "@/lib/finder";
-import { API_BASE, applyDraft, companyFilled, isLookupResponse, removeLookup, resetCompany, useLeftover, setCompany, setLookup, statusLabel, useCompany, useHealth, useLookup, type Company } from "@/lib/company";
+import { API_BASE, applyDraft, companyFilled, isLookupResponse, loadSample, removeLookup, resetCompany, useLeftover, setCompany, setLookup, statusLabel, useCompany, useHealth, useLookup, useSampleName, type Company } from "@/lib/company";
 
 const fields: { key: keyof Company; label: string; placeholder: string; type?: string; wide?: boolean }[] = [
   { key: "founded", label: "설립 연월", placeholder: "", type: "month" },
@@ -81,6 +82,18 @@ export function CompanyForm() {
     }
   };
 
+  // 예시 회사 파일이 있고 아무것도 적지 않았을 때만 예시 회사를 권한다. 적어 둔 값이 있으면 덮어쓰지 않도록 숨긴다
+  const sampleName = useSampleName();
+  const blank = isBlankCompany(company);
+  const runSample = async () => {
+    try {
+      await loadSample();
+      setState({ status: "idle" });
+    } catch (e) {
+      setState({ status: "error", error: e instanceof Error ? e.message : "요청 실패" });
+    }
+  };
+
   return (
     <details className="mt-3 rounded-lg border border-line bg-paper px-3">
       <summary className="flex min-h-10 cursor-pointer items-center gap-2 text-sm font-semibold">
@@ -118,7 +131,7 @@ export function CompanyForm() {
                 expected="2~3분"
                 slowAfter={240}
                 current={state.stage}
-                steps={["보도·공식 자료 검색", "원문 확인", "회사 정보·기존 투자자·경쟁사 추출", "경쟁사 투자 이력 조회"]}
+                steps={["보도·공식 자료 검색", "원문 확인", "회사 정보·기존 투자자·경쟁사 추출", "경쟁사 투자 이력·규모 조회"]}
               />
             </div>
           )}
@@ -131,6 +144,14 @@ export function CompanyForm() {
                   ? "회사명을 넣고 누르면 설립일·사업·직원 수·기존 투자자와 경쟁사를 공개자료에서 찾고, 회사 정보는 빈칸에 채웁니다."
                   : "공개자료 조회는 분석 서버가 켜져 있을 때 쓸 수 있습니다."}
           </p>
+          {sampleName && blank && state.status !== "loading" && (
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-xs font-normal text-muted">
+              <button type="button" onClick={runSample} className="inline-flex min-h-10 items-center rounded-lg border border-line bg-card px-3 text-xs font-semibold text-ink hover:border-ink/40">
+                예시 회사({sampleName})로 체험
+              </button>
+              <span>미리 조회해 저장해 둔 결과를 불러옵니다. 기다리지 않고 바로 볼 수 있습니다.</span>
+            </p>
+          )}
         </div>
 
         {leftover && (
@@ -154,6 +175,11 @@ export function CompanyForm() {
                 조회 결과와 채운 값 지우기
               </button>
             </div>
+            {found.savedAt && (
+              <p className="mt-1 rounded bg-warn-soft px-2 py-1 text-xs text-warn">
+                {found.savedAt}에 조회해 저장해 둔 예시입니다. 지금 다시 조회한 값이 아닙니다. ‘필요한 자금’은 예시로 넣은 값이고, 인증·체납·대출 같은 내부 정보는 비워 두었습니다.
+              </p>
+            )}
             {found.fields.length === 0 && <p className="mt-1 text-muted">공개자료에서 회사 정보를 찾지 못했습니다.</p>}
             <ul className="mt-1 divide-y divide-line">
               {found.fields.map((f) => (
@@ -188,7 +214,12 @@ export function CompanyForm() {
                         )}
                       </p>
                       <p className="text-xs text-muted">
-                        {[c.products, c.employees && `직원 ${c.employees}`, c.revenue && `매출 ${c.revenue}`, c.funding && `투자 ${c.funding}`].filter(Boolean).join(" · ") || "공개된 수치 없음"}
+                        {[c.products, c.founded && `설립 ${c.founded}`, c.employees && `직원 ${c.employees}`, c.revenue && `매출 ${c.revenue}`, c.funding && `투자 ${c.funding}`].filter(Boolean).join(" · ") || "공개된 수치 없음"}
+                        {c.figuresStatus === "reported" && /^https?:\/\//.test(c.figuresUrl ?? "") && (
+                          <a href={c.figuresUrl} target="_blank" rel="noreferrer" className="ml-1.5 font-semibold text-accent hover:underline">
+                            수치 출처 ↗
+                          </a>
+                        )}
                       </p>
                     </li>
                   ))}

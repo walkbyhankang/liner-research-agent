@@ -155,3 +155,11 @@ test("사용자가 이미 적어 둔 설립 메모가 있으면 연도 메모를
   assert.equal(patch.notes, undefined);
   assert.equal(appliedFrom(patch, yearOnly).foundedYear, "");
 });
+
+test("예시 회사는 아무것도 적지 않았을 때만 불러온다", async () => {
+  const { isBlankCompany } = await import("./draft.ts");
+  const blank = { name: "", founded: "", industry: "", employees: "", revenue: "", need: "", notes: "" };
+  assert.equal(isBlankCompany(blank), true);
+  assert.equal(isBlankCompany({ ...blank, name: "  " }), true);
+  for (const key of Object.keys(blank)) assert.equal(isBlankCompany({ ...blank, [key]: "값" }), false, key);
+});

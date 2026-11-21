@@ -11,7 +11,7 @@ const rowKey = (r: { field: string; quote: string }) => `${r.field}|${r.quote}`;
 
 /**
  * 같은 공고를 경쟁사 조건으로 다시 대조해, 지금은 충족하지 못하지만 경쟁사 수준이면 충족되는 조건을 보여준다.
- * 지역·기업 유형·필요 자금은 우리 회사 값을 그대로 쓰고, 업종·직원 수·매출·투자 이력만 경쟁사 값으로 바꾼다.
+ * 지역·기업 유형·필요 자금은 우리 회사 값을 그대로 쓰고, 업종·설립 시기·직원 수·매출·투자 이력만 경쟁사 값으로 바꾼다.
  * 경쟁사 목록은 회사명 조회 결과에서 온다. 조회 결과가 없으면 아무것도 그리지 않는다.
  */
 export function RivalCompare({ programId, region, biz, need, mine }: { programId: string; region: string; biz: string; need: string; mine: Analysis }) {
@@ -37,13 +37,15 @@ export function RivalCompare({ programId, region, biz, need, mine }: { programId
   const theirs = new Map((state.data?.match.rows ?? []).map((r) => [rowKey(r), r]));
   const pairs = mine.match.rows.filter((r) => r.verdict !== "판단 대상 아님").map((r) => ({ mine: r, theirs: theirs.get(rowKey(r)) }));
   const gained = pairs.filter((p) => p.theirs?.verdict === "충족" && p.mine.verdict !== "충족");
-  const lost = pairs.filter((p) => p.mine.verdict === "충족" && p.theirs && p.theirs.verdict !== "충족");
+  // 경쟁사가 분명히 못 미치는 조건과, 경쟁사 정보가 없어 판단하지 못한 조건은 다른 이야기라 따로 센다
+  const lost = pairs.filter((p) => p.mine.verdict === "충족" && p.theirs?.verdict === "미충족");
+  const unknown = pairs.filter((p) => p.mine.verdict === "충족" && p.theirs && p.theirs.verdict !== "충족" && p.theirs.verdict !== "미충족");
 
   return (
     <div className="rounded-lg border border-line bg-paper p-3">
       <p className="text-sm font-semibold">경쟁사 조건이라면?</p>
       <p className="mt-0.5 text-xs text-muted">
-        우리 회사의 지역·기업 유형·필요 자금은 그대로 두고, 업종·직원 수·매출·투자 이력만 경쟁사 값으로 바꿔 같은 공고를 대조합니다. 지금 부족한 요건이 무엇인지 볼 수 있습니다.
+        우리 회사의 지역·기업 유형·필요 자금은 그대로 두고, 업종·설립 시기·직원 수·매출·투자 이력만 경쟁사 값으로 바꿔 같은 공고를 대조합니다. 지금 부족한 요건이 무엇인지 볼 수 있습니다.
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <select
@@ -101,9 +103,12 @@ export function RivalCompare({ programId, region, biz, need, mine }: { programId
           ) : (
             <p className="text-xs text-muted">경쟁사 조건으로 바꿔도 새로 충족되는 조건이 없습니다. 공개된 경쟁사 정보가 적으면 차이가 드러나지 않습니다.</p>
           )}
-          {lost.length > 0 && <p className="text-xs text-muted">반대로 우리 회사만 충족하는 조건이 {lost.length}건 있습니다.</p>}
+          {lost.length > 0 && <p className="text-xs text-muted">반대로 우리 회사는 충족하지만 경쟁사 조건으로는 충족하지 못하는 조건이 {lost.length}건 있습니다.</p>}
+          {unknown.length > 0 && (
+            <p className="text-xs text-muted">우리 회사는 충족하지만 경쟁사는 공개 정보가 없어 판단하지 못한 조건이 {unknown.length}건 있습니다. 경쟁사가 못 미친다는 뜻은 아닙니다.</p>
+          )}
           <p className="text-xs text-muted">
-            경쟁사의 설립일, 인증, 체납·대출 여부처럼 공개되지 않은 값은 ‘확인 필요’로 남습니다. 경쟁사가 이 자금을 실제로 받았다는 뜻이 아닙니다.
+            경쟁사의 인증, 체납·대출 여부처럼 공개 자료에서 확인하지 못한 값은 ‘확인 필요’로 남습니다. 경쟁사가 이 자금을 실제로 받았다는 뜻이 아닙니다.
           </p>
         </div>
       )}

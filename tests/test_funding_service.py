@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import api.main as api_main  # noqa: E402
-from funding import company, service  # noqa: E402
+from funding import company, notice, service  # noqa: E402
 from liner_client import LinerClient  # noqa: E402
 from tests.test_funding_notice import make_hwpx  # noqa: E402
 
@@ -302,7 +302,7 @@ def test_api_lookup_job_reports_failures_and_limits_concurrency(api, monkeypatch
 def test_stage_label_maps_engine_messages():
     assert api_main.stage_label("Search API [identity] 가나다 회사 개요") == "보도·공식 자료 검색"
     assert api_main.stage_label("원문 확인") == "원문 확인"
-    assert api_main.stage_label("경쟁사 투자 이력 조회") == "경쟁사 투자 이력 조회"
+    assert api_main.stage_label("경쟁사 투자 이력 조회") == "경쟁사 투자 이력·규모 조회"
     assert api_main.stage_label("알 수 없는 문구") == "조회 중"
 
 
@@ -754,3 +754,249 @@ def test_rival_funding_searches_each_competitor_and_merges_results():
     assert len(prompts) == 1 and prompts[0].count("AI 검색 시장 정리") == 1 and "[3] 사아자, 시리즈 B" in prompts[0]
     assert out == [{"company": "라마바", "round": "시리즈 B", "amount": "100억 원", "date": "", "investors": ["케이비인베스트먼트"],
                     "quote": "라마바는 케이비인베스트먼트로부터 100억 원을 투자받았다", "sourceUrl": "https://news.kr/2"}]
+
+
+METRIC_RESULTS = [
+    {"title": "나다라, 직원 188명으로 늘어", "description": "나다라는 2025년 매출 248억 원을 기록했고 직원은 188명이다.", "url": "https://news.kr/m1"},
+    {"title": "마바사 기업가치 1조", "description": "마바사는 기업가치 1조 원을 인정받았다.", "url": "https://news.kr/m2"},
+]
+
+
+def test_rival_metrics_require_the_number_in_the_quoted_sentence():
+    raw = {"metrics": [
+        {"company": "나다라", "kind": "직원 수", "value": "188명", "as_of": "", "source": 0, "quote": "직원은 188명이다"},
+        {"company": "나다라", "kind": "매출", "value": "248억 원", "as_of": "2025년", "source": 0, "quote": "2025년 매출 248억 원을 기록했고"},
+        {"company": "나다라", "kind": "매출", "value": "300억 원", "as_of": "", "source": 0, "quote": "2025년 매출 248억 원을 기록했고"},   # 같은 종류는 하나만
+        {"company": "나다라", "kind": "누적 투자", "value": "500억 원", "as_of": "", "source": 0, "quote": "나다라는 2025년 매출 248억 원을 기록했고"},  # 숫자가 문장에 없음
+        {"company": "마바사", "kind": "매출", "value": "1조 원", "as_of": "", "source": 0, "quote": "직원은 188명이다"},        # 그 자료가 마바사를 다루지 않음
+        {"company": "마바사", "kind": "기업가치", "value": "1조 원", "as_of": "", "source": 1, "quote": "기업가치 1조 원을 인정받았다"},  # 허용하지 않는 종류
+        {"company": "마바사", "kind": "직원 수", "value": "많음", "as_of": "", "source": 1, "quote": "마바사는 기업가치 1조 원을 인정받았다"},  # 숫자 없음
+    ]}
+    out = rivals.clean_metrics(raw, ["나다라", "마바사"], METRIC_RESULTS)
+    assert [(m["company"], m["kind"], m["value"], m["asOf"]) for m in out] == [("나다라", "직원 수", "188명", ""), ("나다라", "매출", "248억 원", "2025년")]
+    assert out[0]["sourceUrl"] == "https://news.kr/m1"
+    assert rivals.clean_metrics(None, ["나다라"], METRIC_RESULTS) == []
+
+
+def test_apply_figures_replaces_unverified_numbers_and_marks_provenance():
+    competitors = [
+        {"name": "나다라", "status": "inferred", "employees": "약 50명(추정)", "revenue": "", "funding": "추정 100억"},
+        {"name": "마바사", "status": "reported", "employees": "30명", "revenue": "", "funding": ""},
+        {"name": "사아자", "status": "inferred", "employees": "", "revenue": "", "funding": ""},
+    ]
+    found = {"metrics": [{"company": "나다라", "kind": "직원 수", "value": "188명", "asOf": "2025", "quote": "q", "sourceUrl": "https://news.kr/m1"}],
+             "rounds": [{"company": "마바사", "round": "시리즈 B", "amount": "300억 원", "date": "2025년", "investors": [], "quote": "q", "sourceUrl": "https://news.kr/r"}]}
+    rivals.apply_figures(competitors, found)
+    # 추정 기록이던 경쟁사: 엔진의 추정 수치는 지우고 확인된 것만 남긴다
+    assert competitors[0] == {"name": "나다라", "status": "inferred", "employees": "188명 (2025)", "revenue": "", "funding": "",
+                              "figuresStatus": "reported", "figuresUrl": "https://news.kr/m1"}
+    # 보도 기록이던 경쟁사: 기존 값은 두고, 누적 투자액이 없으면 확인된 라운드로 적는다
+    assert competitors[1]["employees"] == "30명" and competitors[1]["funding"] == "시리즈 B 300억 원 (2025년)" and competitors[1]["figuresStatus"] == "reported"
+    # 찾지 못한 경쟁사는 그대로
+    assert "figuresStatus" not in competitors[2]
+
+
+def test_rival_research_runs_two_searches_per_competitor_and_one_model_call():
+    queries, schemas = [], []
+
+    def handler(req):
+        body = json.loads(req.content)
+        if req.url.path.endswith("/search/web"):
+            queries.append(body["query"])
+            return httpx.Response(200, json={"results": [{"title": f"자료 {len(queries)}", "description": "나다라는 직원이 188명이다.", "url": f"https://news.kr/{len(queries)}"}]})
+        schemas.append(body["response_format"]["json_schema"]["name"])
+        answer = {"rounds": [], "metrics": [{"company": "나다라", "kind": "직원 수", "value": "188명", "as_of": "", "source": 0, "quote": "나다라는 직원이 188명이다"}]}
+        return httpx.Response(200, json={"model": "m", "choices": [{"message": {"content": json.dumps(answer, ensure_ascii=False)}}], "usage": {}})
+
+    client = LinerClient("k", transport=httpx.MockTransport(handler))
+    out = rivals.research(["나다라", "라마바"], client)
+    assert queries == ["나다라 투자 유치 투자사 시리즈", "나다라 설립 매출 직원수 현황", "라마바 투자 유치 투자사 시리즈", "라마바 설립 매출 직원수 현황"]
+    assert schemas == ["rival_research"] and out["rounds"] == [] and out["metrics"][0]["value"] == "188명"
+    assert rivals.research([], client) == {"rounds": [], "metrics": []} and len(queries) == 4
+
+
+def test_rival_metrics_keep_as_of_only_with_a_year_and_founding_needs_a_year():
+    results = [{"title": "나다라 소개", "description": "나다라는 2015년 설립됐다. 누적 투자금은 440억원이다. 설립 10주년을 맞았다.", "url": "https://news.kr/f"}]
+    raw = {"metrics": [
+        {"company": "나다라", "kind": "누적 투자", "value": "440억원", "as_of": "시리즈 B2", "source": 0, "quote": "누적 투자금은 440억원이다"},
+        {"company": "나다라", "kind": "설립 시기", "value": "2015년", "as_of": "2015년", "source": 0, "quote": "나다라는 2015년 설립됐다"},
+    ]}
+    out = rivals.clean_metrics(raw, ["나다라"], results)
+    assert [(m["kind"], m["value"], m["asOf"]) for m in out] == [("누적 투자", "440억원", ""), ("설립 시기", "2015년", "")]
+    no_year = {"metrics": [{"company": "나다라", "kind": "설립 시기", "value": "10주년", "as_of": "", "source": 0, "quote": "설립 10주년을 맞았다"}]}
+    assert rivals.clean_metrics(no_year, ["나다라"], results) == []
+    competitors = [{"name": "나다라", "status": "reported", "employees": "", "revenue": "", "funding": ""}]
+    rivals.apply_figures(competitors, {"metrics": out, "rounds": []})
+    assert competitors[0]["founded"] == "2015년" and competitors[0]["funding"] == "누적 440억원"
+
+
+def test_competitor_relation_codes_are_shown_in_korean():
+    assert profile.RELATION_LABEL == {"direct": "직접 경쟁", "similar_tech": "유사 기술", "same_market": "같은 시장", "global": "해외 경쟁사"}
+
+
+def test_rival_metric_value_must_appear_whole_in_the_quote():
+    ok = rivals.quantity_in_quote
+    q = ("나다라는 2025년 매출 248억 원을 기록했다")
+    assert ok("248억 원", q) and ok("248억원", q) and ok("2025년", q)
+    # 숫자 조각만 맞는 값, 단위나 통화가 바뀐 값은 통과하지 못한다
+    for bad in ("24억 원", "48억 원", "248조 원", "248억 달러", "248만 원", "248억", "248", "약 248억 원", ""):
+        assert not ok(bad, q), bad
+    # 쉼표와 공백만 무시한다
+    assert ok("32억 6,456만원", ("매출액. 32억 6,456만 원")) and ok("1300억 원", ("누적 1,300억 원 유치"))
+    # 수량의 앞부분만 옮기거나 통화를 뺀 값도 받지 않는다
+    assert not ok("32억", ("매출 32억 6천만 원")) and not ok("15억", ("총 15억 달러를 조달")) and not ok("5억 달러", ("총 15억 달러를 조달"))
+    assert ok("15억 달러", ("총 15억 달러를 조달")) and ok("77명", ("임직원 수는 77명입니다")) and ok("2012-09-27", ("설립일자2012-09-27"))
+    # 같은 숫자가 앞에서 잘린 꼴로 먼저 나와도, 뒤에 온전한 표기가 있으면 인정한다
+    assert ok("48억 원", ("248억 원에서 48억 원으로 줄었다"))
+
+
+def test_rival_metrics_reject_changed_units_and_unsupported_as_of():
+    results = [{"title": "나다라 실적", "description": "나다라는 2025년 매출 248억 원을 기록했고 직원은 188명이다.", "url": "https://news.kr/q"}]
+    row = lambda kind, value, as_of, quote: {"company": "나다라", "kind": kind, "value": value, "as_of": as_of, "source": 0, "quote": quote}  # noqa: E731
+    quote = "2025년 매출 248억 원을 기록했고"
+    for bad in ("24억 원", "248조 원", "248억 달러"):
+        assert rivals.clean_metrics({"metrics": [row("매출", bad, "", quote)]}, ["나다라"], results) == [], bad
+    out = rivals.clean_metrics({"metrics": [row("매출", "248억 원", "2025년", quote), row("직원 수", "188명", "2024년 말", "직원은 188명이다")]}, ["나다라"], results)
+    # 자료에 적힌 기준 시점은 남기고, 자료에 없는 기준 시점은 비운다
+    assert [(m["value"], m["asOf"]) for m in out] == [("248억 원", "2025년"), ("188명", "")]
+
+
+def test_rival_round_amount_name_and_date_must_be_written_in_the_source():
+    results = [{"title": "나다라, 시리즈 B 투자 유치", "description": "나다라는 2025년 3월 케이비인베스트먼트로부터 300억 원을 투자받았다.", "url": "https://news.kr/r"}]
+    row = lambda rnd, amount, when: {"company": "나다라", "round": rnd, "amount": amount, "date": when, "investors": ["케이비인베스트먼트"], "source": 0,  # noqa: E731
+                                     "quote": "케이비인베스트먼트로부터 300억 원을 투자받았다"}
+    good = rivals.clean_rounds({"rounds": [row("시리즈 B", "300억 원", "2025년 3월")]}, ["나다라"], results)[0]
+    assert (good["round"], good["amount"], good["date"]) == ("시리즈 B", "300억 원", "2025년 3월")
+    # 자료와 다른 금액·단위·라운드·시기는 비운다. 근거가 확인된 투자 사실과 투자사는 남는다
+    for amount in ("30억 원", "300조 원", "300억 달러", "300억"):
+        bad = rivals.clean_rounds({"rounds": [row("시리즈 C", amount, "2024년")]}, ["나다라"], results)[0]
+        assert (bad["round"], bad["amount"], bad["date"], bad["investors"]) == ("", "", "", ["케이비인베스트먼트"]), amount
+
+
+def test_rival_metric_boundaries_are_checked_in_the_source_not_only_the_quote():
+    ok = rivals.quantity_in_quote
+    # 인용문이 통화 앞에서 끊겨도, 자료에서 뒤에 통화가 이어지면 받지 않는다
+    src = ("나다라는 매출 248억 달러를 기록했다")
+    assert ok("248억", ("나다라는 매출 248억")) and not ok("248억", ("나다라는 매출 248억"), src)
+    assert ok("248억 달러", ("나다라는 매출 248억 달러"), src)
+    # 인용문이 복합 금액의 앞부분에서 끊긴 경우
+    src = ("나다라의 매출은 32억 6,456만 원이다")
+    assert not ok("32억", ("나다라의 매출은 32억"), src) and ok("32억 6,456만 원", ("매출은 32억 6,456만 원"), src)
+    # 인용문이 숫자 중간에서 시작한 경우
+    src = ("나다라의 직원은 1,188명이다")
+    assert not ok("188명", ("188명이다"), src) and ok("1,188명", ("직원은 1,188명"), src)
+    # 인용문이 자료에 두 번 나오면 온전한 쪽이 하나라도 있을 때 인정한다. 자료에 없는 인용문은 인정하지 않는다
+    assert ok("48억 원", ("48억 원"), ("매출 248억 원, 영업이익 48억 원")) and not ok("48억 원", ("48억 원"), ("매출 248억 원"))
+    assert not ok("248억 원", ("매출 248억 원"), ("다른 글"))
+
+
+def test_rival_metrics_reject_a_quote_cut_before_the_currency():
+    results = [{"title": "나다라 실적", "description": "나다라는 매출 248억 달러를 기록했다. 누적 투자는 32억 6,456만 원이다.", "url": "https://news.kr/c"}]
+    row = lambda kind, value, quote: {"company": "나다라", "kind": kind, "value": value, "as_of": "", "source": 0, "quote": quote}  # noqa: E731
+    assert rivals.clean_metrics({"metrics": [row("매출", "248억", "나다라는 매출 248억"), row("누적 투자", "32억", "누적 투자는 32억")]}, ["나다라"], results) == []
+    out = rivals.clean_metrics({"metrics": [row("매출", "248억 달러", "나다라는 매출 248억 달러를 기록했다")]}, ["나다라"], results)
+    assert [m["value"] for m in out] == ["248억 달러"]
+
+
+def test_rival_round_name_must_not_be_part_of_another_round_name():
+    def name_of(title, rnd):
+        results = [{"title": title, "description": "나다라는 케이비인베스트먼트로부터 300억 원을 투자받았다.", "url": "https://news.kr/n"}]
+        raw = {"rounds": [{"company": "나다라", "round": rnd, "amount": "300억 원", "date": "", "investors": [], "source": 0, "quote": "케이비인베스트먼트로부터 300억 원을 투자받았다"}]}
+        return rivals.clean_rounds(raw, ["나다라"], results)[0]["round"]
+
+    assert name_of("나다라, 시리즈 B2 투자 유치", "시리즈 B") == "" and name_of("나다라, 시리즈 B2 투자 유치", "시리즈 B2") == "시리즈 B2"
+    assert name_of("나다라, 프리 시리즈 A 투자 유치", "시리즈 A") == "" and name_of("나다라, 프리 시리즈 A 투자 유치", "프리 시리즈 A") == "프리 시리즈 A"
+    assert name_of("나다라, Pre-Series A 유치", "Series A") == "" and name_of("나다라, 시리즈 B 투자 유치", "시리즈 B") == "시리즈 B"
+
+
+def test_apply_figures_keeps_trusted_funding_and_ignores_rounds_with_nothing_to_show():
+    rnd = lambda company, name, amount: {"company": company, "round": name, "amount": amount, "date": "", "investors": [], "quote": "q", "sourceUrl": "https://news.kr/r"}  # noqa: E731
+    competitors = [
+        {"name": "나다라", "status": "reported", "employees": "", "revenue": "", "funding": "누적 940억원"},   # 이미 보도된 누적 금액이 있다
+        {"name": "마바사", "status": "reported", "employees": "", "revenue": "", "funding": ""},              # 이름·금액 없는 라운드뿐
+        {"name": "사아자", "status": "inferred", "employees": "약 50명(추정)", "revenue": "", "funding": "추정 100억"},  # 추정 기록 + 내용 없는 라운드
+        {"name": "차카타", "status": "inferred", "employees": "", "revenue": "", "funding": "추정 100억"},     # 추정 기록 + 확인된 라운드
+    ]
+    found = {"metrics": [], "rounds": [rnd("나다라", "시리즈 C", "500억 원"), rnd("마바사", "", ""), rnd("사아자", "", ""), rnd("차카타", "", ""), rnd("차카타", "시리즈 A", "50억 원")]}
+    rivals.apply_figures(competitors, found)
+    # 알려진 누적 금액을 라운드 한 건으로 바꾸지 않는다. 넣은 값이 없으므로 표시도 붙지 않는다
+    assert competitors[0] == {"name": "나다라", "status": "reported", "employees": "", "revenue": "", "funding": "누적 940억원"}
+    # 적을 내용이 없는 라운드는 값을 지우지도, 확인 표시를 붙이지도 않는다
+    assert competitors[1] == {"name": "마바사", "status": "reported", "employees": "", "revenue": "", "funding": ""}
+    assert competitors[2] == {"name": "사아자", "status": "inferred", "employees": "약 50명(추정)", "revenue": "", "funding": "추정 100억"}
+    # 추정 기록은 확인된 라운드가 있으면 추정 수치를 지우고 그 라운드로 적는다(내용 없는 라운드는 건너뛴다)
+    assert competitors[3] == {"name": "차카타", "status": "inferred", "employees": "", "revenue": "", "funding": "시리즈 A 50억 원",
+                              "figuresStatus": "reported", "figuresUrl": "https://news.kr/r"}
+    # 누적 투자액을 새로 찾았으면 그 값으로 갱신한다
+    metric = {"company": "나다라", "kind": "누적 투자", "value": "1,440억 원", "asOf": "2026년", "quote": "q", "sourceUrl": "https://news.kr/m"}
+    rivals.apply_figures(competitors, {"metrics": [metric], "rounds": []})
+    assert competitors[0]["funding"] == "누적 1,440억 원 (2026년)" and competitors[0]["figuresUrl"] == "https://news.kr/m"
+
+
+def test_rival_metric_rejects_the_tail_of_a_compound_amount_and_other_fragments():
+    ok = rivals.quantity_in_quote
+    # 복합 금액의 뒷부분만 옮긴 값
+    assert not ok("500만 원", ("누적 투자는 3억 500만 원이다")) and ok("3억 500만 원", ("누적 투자는 3억 500만 원이다"))
+    assert not ok("248억 원", ("매출은 1조 248억 원이다")) and ok("1조 248억 원", ("매출은 1조 248억 원이다"))
+    assert not ok("500원", ("단가는 3천만 500원이다")) and not ok("6,456만원", ("매출액. 32억 6,456만원"))
+    # 통화 기호·코드가 앞에 붙은 금액에서 통화를 뺀 값
+    assert not ok("15억", ("US$ 15억을 조달")) and not ok("15억", ("USD 15억 조달")) and not ok("15억", ("총 15억 불을 조달")) and not ok("15억", ("총 15억 USD 조달"))
+    assert ok("USD 15억", ("USD 15억 조달")) and ok("$15억", "미화 $15억을 조달")
+    # 범위의 한쪽 끝, 한계를 뜻하는 표현, 어림 표현에서 잘라 낸 값
+    assert not ok("200명", ("직원은 100~200명이다")) and not ok("100명", ("직원은 100명~200명이다")) and not ok("09-27", ("설립일자2012-09-27"))
+    assert not ok("100억 원", ("매출 100억 원 미만 기업")) and not ok("50명", ("상시근로자 50명 이상")) and not ok("248억", ("매출 248억여 원"))
+    # 라운드 이름이나 문장부호 뒤에 온 온전한 값은 그대로 인정한다
+    assert ok("300억 원", ("시리즈 B 300억 원 투자 유치")) and ok("300억 원", ("Series B 300억 원 투자")) and ok("32억 6천만 원", ("매출. 32억 6천만 원 (2025)"))
+    assert ok("32억 원", ("매출 - 32억 원")) and ok("77명", ("2026년 9월 기준 임직원 수는 77명입니다")) and ok("15억 달러", ("2022년 창업 이후 총 15억 달러를 조달했다"))
+
+
+def test_rival_metrics_and_rounds_reject_the_tail_of_a_compound_amount():
+    results = [{"title": "나다라 실적", "description": "나다라의 누적 투자는 3억 500만 원이다. 매출은 1조 248억 원이다.", "url": "https://news.kr/t"}]
+    row = lambda kind, value, quote: {"company": "나다라", "kind": kind, "value": value, "as_of": "", "source": 0, "quote": quote}  # noqa: E731
+    raw = {"metrics": [row("누적 투자", "500만 원", "누적 투자는 3억 500만 원이다"), row("매출", "248억 원", "매출은 1조 248억 원이다")],
+           "rounds": [{"company": "나다라", "round": "", "amount": "500만 원", "date": "", "investors": [], "source": 0, "quote": "누적 투자는 3억 500만 원이다"}]}
+    assert rivals.clean_metrics(raw, ["나다라"], results) == []
+    assert rivals.clean_rounds(raw, ["나다라"], results)[0]["amount"] == ""
+    good = {"metrics": [row("누적 투자", "3억 500만 원", "누적 투자는 3억 500만 원이다"), row("매출", "1조 248억 원", "매출은 1조 248억 원이다")]}
+    assert [m["value"] for m in rivals.clean_metrics(good, ["나다라"], results)] == ["3억 500만 원", "1조 248억 원"]
+
+
+def test_rival_metric_spacing_decides_whether_a_leading_digit_belongs_to_the_number():
+    ok = rivals.quantity_in_quote
+    # 띄어 쓴 앞 낱말의 숫자는 값의 일부가 아니다
+    assert ok("270억원", "라이너는 시리즈 B2 270억원을 유치했다") and ok("32억 원", "2025 매출 32억 원")
+    # 붙여 쓴 숫자는 같은 숫자다
+    assert not ok("270억원", "매출 1270억원") and not ok("5억 원", "매출 1.5억 원") and not ok("188명", "직원 1,188명")
+    # 복합 금액·통화·범위는 띄어 써도 한 수량이다
+    assert not ok("500만 원", "3억 500만 원") and not ok("15억", "USD 15억") and not ok("200명", "100 ~ 200명") and not ok("32억", "32억 6천만 원")
+    results = [{"title": "라마바, 시리즈 B2 270억원 유치", "description": "라마바는 케이비인베스트먼트로부터 투자를 받았다.", "url": "https://news.kr/s"}]
+    raw = {"rounds": [{"company": "라마바", "round": "시리즈 B2", "amount": "270억원", "date": "", "investors": [], "source": 0, "quote": "라마바, 시리즈 B2 270억원 유치"}]}
+    got = rivals.clean_rounds(raw, ["라마바"], results)[0]
+    assert (got["round"], got["amount"]) == ("시리즈 B2", "270억원")
+
+
+def test_rival_metric_rejects_range_endpoints_even_when_both_ends_carry_units():
+    ok = rivals.quantity_in_quote
+    for value, text in (("200명", "직원은 100명~200명이다"), ("100명", "직원은 100명~200명이다"), ("200억 원", "매출 100억 원~200억 원"),
+                        ("200억 원", "매출 100억 원 ~ 200억 원"), ("100억 원", "매출 100억 원~200억 원"), ("200명", "직원 100명-200명"), ("200명", "직원 100~200명")):
+        assert not ok(value, text), (value, text)
+    # 구분 기호로 쓴 줄표 뒤의 값, 범위가 아닌 값은 그대로 인정한다
+    assert ok("32억 원", "매출 - 32억 원") and ok("200명", "직원은 200명이다") and ok("2012-09-27", "설립일자 2012-09-27")
+    results = [{"title": "나다라 현황", "description": "나다라의 직원은 100명~200명이다. 매출은 100억 원~200억 원이다.", "url": "https://news.kr/g"}]
+    row = lambda kind, value, quote: {"company": "나다라", "kind": kind, "value": value, "as_of": "", "source": 0, "quote": quote}  # noqa: E731
+    raw = {"metrics": [row("직원 수", "200명", "직원은 100명~200명이다"), row("매출", "200억 원", "매출은 100억 원~200억 원이다")]}
+    assert rivals.clean_metrics(raw, ["나다라"], results) == []
+
+
+def test_rival_metric_rejects_both_ends_of_a_hyphenated_range():
+    ok = rivals.quantity_in_quote
+    for value, text in (("100명", "직원 100명-200명"), ("200명", "직원 100명-200명"), ("100명", "직원 100명 - 200명"), ("200명", "직원 100명 - 200명"),
+                        ("100억 원", "매출 100억 원 - 200억 원"), ("200억 원", "매출 100억 원 - 200억 원"), ("200억 원", "매출 100억-200억 원"),
+                        ("200명", "직원 100 - 200명"), ("2012", "설립일자 2012-09-27"), ("27", "설립일자 2012-09-27")):
+        assert not ok(value, text), (value, text)
+    # 낱말 뒤의 줄표는 구분 기호다. 온전한 날짜와 범위가 아닌 값은 그대로 인정한다
+    assert ok("32억 원", "매출 - 32억 원") and ok("32억 원", "2025년 매출 - 32억 원") and ok("2012-09-27", "설립일자 2012-09-27")
+    assert ok("77명", "직원 수 - 77명 (2026년 9월 기준)") and ok("300억 원", "시리즈 B 300억 원 투자 유치")
+    results = [{"title": "나다라 현황", "description": "나다라의 직원은 100명 - 200명이다.", "url": "https://news.kr/h"}]
+    raw = {"metrics": [{"company": "나다라", "kind": "직원 수", "value": v, "as_of": "", "source": 0, "quote": "직원은 100명 - 200명이다"} for v in ("100명", "200명")]}
+    assert rivals.clean_metrics(raw, ["나다라"], results) == []

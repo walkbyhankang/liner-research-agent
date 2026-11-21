@@ -24,6 +24,9 @@ results/*
 logs/
 *.log
 
+# --- 예시 회사 파일 (실제 기업의 공개자료 조회 결과라 저장소에 넣지 않는다. 이 파일이 있을 때만 화면에 "예시 회사로 체험" 단추가 나온다) ---
+web/public/data/sample-company.json
+
 # --- Streamlit / 로컬 도구 ---
 .streamlit/secrets.toml
 .claude/settings.local.json
