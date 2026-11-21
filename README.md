@@ -4,6 +4,56 @@ Liner API(Search / Model / Search Agent)로 스타트업 기업정보를 수집�
 
 > 현재 상태: 프로토타입. 대규모 수집·DB 구축·Deep Research는 하지 않습니다.
 
+## 펀딩노트: 중소·벤처기업 자금 찾기 (라이너 해커톤 출품작)
+
+중소·벤처기업이 신청할 수 있는 정책자금 공고와 접촉할 벤처캐피탈 운용사를 한곳에서 찾고, 공고문을 읽어 우리 회사 조건과 대조해 주는 웹 서비스입니다.
+
+| 기능 | 하는 일 | 쓰는 것 |
+|---|---|---|
+| 자금 찾기 | 지역·기업 유형·지원 종류로 공고와 운용사를 거르고, 제외 사유와 확인할 점을 보여준다 | 기업마당 지원사업정보 API, 한국벤처투자 펀드현황 API |
+| 공고문 자격 대조 | 공고문(PDF·HWPX)에서 조건을 근거 문장과 함께 뽑고, 근거가 원문에 있는 것만 남겨 회사 조건과 견준다 | Liner 게이트웨이(Model API) |
+| 회사명으로 채우기 | 공개자료에서 설립일·사업·직원 수·기존 투자자·경쟁사를 찾아 출처와 함께 보여준다 | Liner Search API, Liner Model API, 기존 기업분석 엔진 |
+| 경쟁사 조건이라면? | 같은 공고를 경쟁사 조건으로 다시 대조해 갖추면 열리는 요건을 보여준다 | Liner 게이트웨이 |
+| 운용사 요약 | 운용사를 대신 검색해 확인되는 사실과 회사와 맞닿는 점을 한 줄씩 정리한다 | Liner Search API, Liner 게이트웨이 |
+
+### 실행
+```bash
+# 1) 키: 저장소 루트 .env 에 LINER_API_KEY, BIZINFO_API_KEY, KVIC_API_KEY
+# 2) Python 환경
+python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+# 3) 공공 데이터 스냅샷(무료 API). web/public/data/ 에 저장소에 포함된 스냅샷이 있어 생략할 수 있다
+.venv/bin/python scripts/fetch_public_data.py
+# 4) 분석 서버(자격 대조·회사 조회·운용사 요약). 유료 호출은 서버 실행당 FUNDING_MAX_PAID_CALLS(기본 60)회까지
+.venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+# 5) 화면
+npm --prefix web install && npm --prefix web run build && npm --prefix web run start -- -p 3100
+```
+`http://localhost:3100` 에서 엽니다. 분석 서버 없이도 자금 찾기(목록·필터·저장)는 동작합니다.
+
+### 테스트
+```bash
+.venv/bin/python -m pytest -q tests   # 실제 API 를 호출하지 않는다
+npm --prefix web test
+```
+
+### 기존 코드와 해커톤 기간에 새로 만든 것
+| 구분 | 경로 | 내용 |
+|---|---|---|
+| 기존(해커톤 이전 프로토타입) | `app.py`, `pipeline.py`, `planner.py`, `sources.py`, `fetcher.py`, `categories.py`, `integrate.py`, `analysis.py`, `run_probe.py`, `tests/test_core.py`, `tests/test_v2.py` | 회사명으로 기업 정보를 수집·검증하는 Streamlit 프로토타입. 변경 없음 |
+| 기존 파일에 추가 | `liner_client.py`, `config.py`, `requirements.txt` | 게이트웨이 JSON 호출(`chat_json`), 경로 상수, 의존성(`pypdf`, `fastapi`, `uvicorn`) |
+| 신규 | `funding/` | 공고문 추출·검증·대조, 회사 조회(기존 엔진 재사용), 경쟁사 투자 이력, 운용사 요약 |
+| 신규 | `api/` | FastAPI 분석 서버 |
+| 신규 | `web/` | Next.js 화면 |
+| 신규 | `scripts/` | 공공 데이터 수집, 공고문 대조 실험 |
+| 신규 | `tests/test_fetch_public_data.py`, `tests/test_funding_*.py`, `web/lib/*.test.mjs` | 테스트 |
+| 신규 | `docs/` (`architecture.md` 제외) | 계획, API 조사, 실험 결과, 사용자 경험 체크리스트 |
+
+### 알아 둘 한계
+- 자금 찾기 목록은 공공 API 의 분류값으로만 거른다. 세부 자격은 공고문 자격 대조로 확인한다.
+- 회사 조회와 운용사 요약은 초안이다. 값마다 출처와 확인 상태를 붙이고, 출처가 엇갈리거나 추정인 값은 자동으로 채우지 않는다.
+- 점수나 선정 확률은 계산하지 않는다.
+- 자세한 내용: `docs/public-data-notes.md`, `docs/notice-analysis-results.md`, `docs/streamlit-intent-and-integration.md`, `docs/ux-checklist.md`
+
 ## 구성
 | 파일 | 역할 |
 |---|---|

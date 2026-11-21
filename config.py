@@ -18,6 +18,7 @@ ENV_FILE = BASE_DIR / ".env"
 LINER_BASE_URL = "https://platform.liner.com"
 SEARCH_WEB_PATH = "/api/v1/tools/search/web"
 RESPONSES_PATH = "/api/v1/responses"
+CHAT_COMPLETIONS_PATH = "/api/v1/chat/completions"  # 게이트웨이: 공급사/모델 형식 ID 직접 지정 가능
 SEARCH_AGENT_PATH = "/api/v1/agents/search"
 CREDITS_BALANCE_PATH = "/api/v1/credits/balance"
 CREDITS_USAGE_PATH = "/api/v1/credits/usage"

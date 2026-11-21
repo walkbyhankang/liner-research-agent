@@ -213,6 +213,31 @@ class LinerClient:
         }
         return self._request("model", config.RESPONSES_PATH, payload, config.MODEL_TIMEOUT, label)
 
+    def chat_json(self, model: str, system: str, user: str, *, schema: dict, schema_name: str = "result",
+                  reasoning_effort: str = config.MODEL_REASONING_EFFORT, max_tokens: int = 4000,
+                  label: str = "chat") -> tuple[dict, dict]:
+        """게이트웨이 Chat Completions 로 JSON 스키마를 지키는 답을 받는다. model 은 'anthropic/claude-opus-5.5' 같은 직접 지정 ID 도 된다.
+
+        호출 기록에는 응답의 실제 청구액(usage.cost)과 응답한 모델을 남긴다.
+        """
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "response_format": {"type": "json_schema",
+                                "json_schema": {"name": schema_name, "strict": True, "schema": schema}},
+            "reasoning_effort": reasoning_effort,
+            "max_tokens": max_tokens,
+        }
+        data, rec = self._request("model", config.CHAT_COMPLETIONS_PATH, payload, config.MODEL_TIMEOUT, label,
+                                  meta={"model": model})
+        usage = (data.get("usage") or {}) if isinstance(data, dict) else {}
+        rec["input_tokens"] = usage.get("prompt_tokens")
+        rec["output_tokens"] = usage.get("completion_tokens")
+        rec["total_tokens"] = usage.get("total_tokens")
+        rec["cost_usd"] = usage.get("cost")
+        rec["response_model"] = data.get("model") if isinstance(data, dict) else None
+        return data, rec
+
     def agent_search(self, question: str, *, lang: str = "ko", label: str = "search_agent") -> tuple[dict, dict]:
         payload = {
             "messages": [{"role": "user", "content": question}],
@@ -230,3 +255,11 @@ def extract_output_text(response: dict) -> str:
                 if isinstance(c, dict) and c.get("type") == "output_text":
                     parts.append(str(c.get("text") or ""))
     return "".join(parts)
+
+
+def extract_chat_text(response: dict) -> str:
+    """Chat Completions 응답에서 첫 번째 답의 텍스트를 꺼낸다."""
+    choices = response.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return ""
+    return str((choices[0].get("message") or {}).get("content") or "")

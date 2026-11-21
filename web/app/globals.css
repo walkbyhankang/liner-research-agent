@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f6f4ee;
+  --color-card: #ffffff;
+  --color-ink: #171b24;
+  --color-muted: #646b78;
+  --color-line: #e3dfd4;
+  --color-accent: #0f5c4d;
+  --color-accent-soft: #e3f0ec;
+  --color-debt: #8a5310;
+  --color-debt-soft: #f8eeda;
+  --color-equity: #2447b8;
+  --color-equity-soft: #e6ecfb;
+  --color-warn: #9a3412;
+  --color-warn-soft: #fdeee4;
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
+}
+
+html {
+  background: var(--color-paper);
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  word-break: keep-all;
+}
+
+button {
+  cursor: pointer;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 0.35s ease both;
+}
