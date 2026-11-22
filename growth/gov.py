@@ -30,9 +30,27 @@ class MissingKey(RuntimeError):
     pass
 
 
+_ASCII_WORD = re.compile(r"[a-z0-9 .+#&/\-]+")
+
+
 def _hits(text: str, keywords: list[str]) -> list[str]:
-    low = text.lower()
-    return [k for k in keywords if k and k.lower().replace(" ", "") in low.replace(" ", "")]
+    """공고명에 핵심 낱말이 들어 있는가("핵심 낱말 일치"의 근거).
+    한글이 든 낱말은 띄어쓰기를 무시하고 견준다("문서 인식" = "문서인식").
+    영문·숫자로만 된 낱말은 공백을 지우지 않고 견준다. 지우면 낱말 경계를 넘어 엉뚱하게 걸린다
+    (실제 서버 검증에서 찾음: "single cell multiome" → "LLM", "infusion pump" → "NPU")."""
+    low = re.sub(r"\s+", " ", text.lower())
+    flat = low.replace(" ", "")
+    out = []
+    for k in keywords:
+        kl = re.sub(r"\s+", " ", (k or "").lower()).strip()
+        if not kl:
+            continue
+        if _ASCII_WORD.fullmatch(kl):
+            if kl in low:
+                out.append(k)
+        elif kl.replace(" ", "") in flat:
+            out.append(k)
+    return out
 
 
 def _windows(days: int, today: date) -> list[tuple[date, date]]:

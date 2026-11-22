@@ -38,17 +38,22 @@ export function Overview() {
   const [more, setMore] = useState(false);
   const k = (s: string) => `${c.cid}:ov:${s}`;
 
+  // 처음(법인 확인)부터 정해지는 대표·본사를 위에, facts 가 오며 바뀌는 설립(웹 값과 엇갈리면 두 값)·직원 수를 아래에 둔다.
+  // 늦게 길어지는 줄이 이미 보이던 줄을 밀지 않게(실제 서버 검증에서 설립 엇갈림이 본사 줄을 108px 밀었다)
   const facts = (
     <div className="divide-y divide-rule border-y border-rule">
       <FactRow label="대표" v={m.ceo} memoryKey={k("ceo")} />
-      <FactRow label="설립" v={m.founded} edit={e.founded?.value} onRevert={() => setEdit(c.cid, "founded", null)} memoryKey={k("founded")} />
       <FactRow label="본사" v={m.headquarters} memoryKey={k("hq")} />
+      <FactRow label="설립" v={m.founded} edit={e.founded?.value} onRevert={() => setEdit(c.cid, "founded", null)} memoryKey={k("founded")} />
       <FactRow label="직원 수" v={m.employees} edit={e.employees?.value} onRevert={() => setEdit(c.cid, "employees", null)} memoryKey={k("emp")} />
     </div>
   );
 
+  // 자리 표시는 끝난 모양과 같은 높이로 잡는다(설명 두 줄 + "더 읽기" 단추, 제품 한 줄, 기술 낱말 한 줄). 도착할 때 아래가 밀리지 않게
   const business = loading ? (
-    <Lines n={2} />
+    <div className="min-h-[99px] pt-1">
+      <Lines n={2} />
+    </div>
   ) : p?.business ? (
     <div>
       <p className={more ? "" : "clamp-2"}>{p.business}</p>
@@ -73,6 +78,7 @@ export function Overview() {
       env={env}
       envKey="profile"
       summary={summaryLine(job, "overview")}
+      twoLineSummary
       unavailableBody={<div className="max-w-[340px]">{facts}</div>}
       footer={
         p && p.sourceCount > 0 ? (
@@ -82,17 +88,25 @@ export function Overview() {
         ) : null
       }
     >
-      <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+      {/* 넓은 화면(820·1180)에서는 개요가 첫 화면 안이다. 개요·facts 가 오며 설명·기술 낱말·사실 표(직원 수, 설립 엇갈림)가 길어져도
+          아래 줄이 밀리지 않게 격자 높이를 진행 중·끝난 뒤 모두 같은 최소값으로 잡는다(실측 끝난 높이 291~327px, 2026-11-23) */}
+      <div className="grid gap-6 md:min-h-[336px] md:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
         <div className="min-w-0 space-y-4">
           {business}
           <div>
             <p className="text-sm text-sub">제품·서비스 {loading ? "" : `${products.length}개`}</p>
-            {loading ? <Lines n={1} /> : products.length ? <p className="font-medium">{products.slice(0, 3).map((x) => x.name).join(", ")}</p> : <p className="text-sub">미확보: 제품 자료 없음</p>}
+            {loading ? (
+              <div className="flex h-[27px] items-center">
+                <Placeholder h={16} w="60%" />
+              </div>
+            ) : products.length ? <p className="font-medium">{products.slice(0, 3).map((x) => x.name).join(", ")}</p> : <p className="text-sub">미확보: 제품 자료 없음</p>}
           </div>
           <div>
             <p className="text-sm text-sub">핵심 기술</p>
             {loading ? (
-              <Lines n={1} />
+              <div className="mt-1 flex h-[29px] items-center">
+                <Placeholder h={16} w="60%" />
+              </div>
             ) : tech.length ? (
               <ul className="mt-1 flex flex-wrap gap-1.5">
                 {tech.slice(0, 4).map((t) => (
@@ -109,30 +123,8 @@ export function Overview() {
         {facts}
       </div>
 
+      {/* 처음부터 있는 "기업 정보 더 보기"를 맨 앞에 둔다. 개요가 도착하며 생기는 펼치기 줄은 그 뒤에 붙어, 이미 보이던 줄을 밀지 않는다 */}
       <div className="mt-4">
-        {products.length > 3 && (
-          <Disclosure text={`제품·서비스 ${products.length}개 모두 보기`} memoryKey={k("products")}>
-            <ul className="space-y-2 py-2">
-              {products.map((x) => (
-                <li key={x.name}>
-                  <span className="font-medium">{x.name}</span>
-                  {x.desc && <span className="block text-sm text-sub">{x.desc}</span>}
-                </li>
-              ))}
-            </ul>
-          </Disclosure>
-        )}
-        {tech.length > 4 && (
-          <Disclosure text={`핵심 기술 ${tech.length}개 모두 보기`} memoryKey={k("tech")}>
-            <ul className="flex flex-wrap gap-1.5 py-2">
-              {tech.map((t) => (
-                <li key={t} className="rounded border border-rule px-2 py-0.5 text-sm">
-                  {t}
-                </li>
-              ))}
-            </ul>
-          </Disclosure>
-        )}
         <Disclosure text="기업 정보 더 보기" openText="기업 정보 접기" memoryKey={k("corp")}>
           <dl className="divide-y divide-rule text-sm">
             {corp ? (
@@ -171,6 +163,29 @@ export function Overview() {
             </Link>
           </div>
         </Disclosure>
+        {products.length > 3 && (
+          <Disclosure text={`제품·서비스 ${products.length}개 모두 보기`} memoryKey={k("products")}>
+            <ul className="space-y-2 py-2">
+              {products.map((x) => (
+                <li key={x.name}>
+                  <span className="font-medium">{x.name}</span>
+                  {x.desc && <span className="block text-sm text-sub">{x.desc}</span>}
+                </li>
+              ))}
+            </ul>
+          </Disclosure>
+        )}
+        {tech.length > 4 && (
+          <Disclosure text={`핵심 기술 ${tech.length}개 모두 보기`} memoryKey={k("tech")}>
+            <ul className="flex flex-wrap gap-1.5 py-2">
+              {tech.map((t) => (
+                <li key={t} className="rounded border border-rule px-2 py-0.5 text-sm">
+                  {t}
+                </li>
+              ))}
+            </ul>
+          </Disclosure>
+        )}
         {p && p.statusNotes.length > 0 && (
           <Disclosure text={`회사 현황 메모 ${p.statusNotes.length}개 보기`} memoryKey={k("notes")}>
             <ul className="list-disc space-y-1 py-2 pl-5">
@@ -471,7 +486,7 @@ export function Investment() {
           <div className="mt-5">
             <p className="text-sm text-sub">투자기관 {investors.length}곳</p>
             <p className="font-medium">{investors.slice(0, 5).map((i) => i.name).join(", ")}</p>
-            {pendingFacts && <p className="mt-1 text-sm text-sub">원문에서 투자자를 더 확인하고 있습니다 (보통 2분 30초 안에 끝남)</p>}
+            {pendingFacts && <p className="mt-1 text-sm text-sub">원문에서 투자자를 더 확인하고 있습니다 (보통 3분 안에 끝남)</p>}
           </div>
           <div className="mt-4">
             {rounds.length > 3 && (

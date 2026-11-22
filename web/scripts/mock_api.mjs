@@ -3,7 +3,7 @@
 //
 // 실행: node scripts/mock_api.mjs [포트, 기본 8200]
 // 조종(시험 스크립트가 쓴다):
-//   POST /__control {scenario, step, corp, example, health, delayMs, notice, noticeDelayMs, salesPartial, fail500, stagedRegionLater}
+//   POST /__control {scenario, step, corp, example, health, delayMs, notice, noticeDelayMs, gpDelayMs, salesPartial, fail500, stagedRegionLater}
 //   GET  /__log      받은 /api 요청 목록
 //   POST /__reset    상태와 기록을 처음으로
 import { createHash } from "node:crypto";
@@ -20,7 +20,7 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 const ex = (name, pred = () => true) => FIX[name].exchanges.find(pred);
 const jobOf = (name, i = 0) => clone(FIX[name].exchanges.filter((e) => e.method === "GET" && /^\/api\/(analysis\/[0-9a-f]{32}|company\/[^/]+\/analysis)$/.test(e.path))[i].response);
 
-const DEFAULT = { scenario: "F-FULL", step: 0, corp: null, example: false, health: "up", delayMs: 0, notice: "ok", noticeDelayMs: 300, salesPartial: false, fail500: false, overrides: {}, newsReruns: 0 };
+const DEFAULT = { scenario: "F-FULL", step: 0, corp: null, example: false, health: "up", delayMs: 0, notice: "ok", noticeDelayMs: 300, gpDelayMs: 200, salesPartial: false, fail500: false, overrides: {}, newsReruns: 0 };
 let st = clone(DEFAULT);
 let log = [];
 
@@ -149,7 +149,7 @@ async function api(req, res, url, body) {
     return send(res, 200, r);
   }
   if (p === "gp/brief") {
-    await sleep(200);
+    await sleep(st.gpDelayMs);
     const r = clone(ex("F-BRIEF").response);
     r.gp = body?.gp ?? r.gp;
     return send(res, 200, r);

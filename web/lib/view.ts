@@ -40,6 +40,17 @@ export const TOC_TEXT: Record<Phase, string> = { loading: "확인 중", done: "�
 export const isSlow = (env: AnyEnv | null | undefined, extra = 0) =>
   Boolean(env && env.expectedSeconds && env.seconds !== null && env.seconds + extra > env.expectedSeconds * 2);
 
+/**
+ * 경쟁사 깊이 비교 비용 줄. 서버 예상값은 5곳 기준 호출 수(liner)와 한 곳당 호출 수(perRival)다.
+ * 고른 곳 수(1~5)로 바꿔 "Liner 약 {m}회 (고른 {k}곳 기준, 한 곳당 약 {p}회)"로 쓴다. 한 곳당 값이 없으면 5곳 기준 그대로.
+ */
+export function rivalsCost(est: { liner: number; perRival: number | null }, picked: number): { liner: number; text: string } {
+  const k = Math.min(5, Math.max(1, picked));
+  if (!est.perRival) return { liner: est.liner, text: `Liner 약 ${est.liner}회 (경쟁사 5곳 기준)` };
+  const m = Math.max(0, est.liner - est.perRival * (5 - k));
+  return { liner: m, text: `Liner 약 ${m}회 (고른 ${k}곳 기준, 한 곳당 약 ${est.perRival}회)` };
+}
+
 /** 미확보 사유 문장(screens 1.5). 코드에 맞는 문장이 없을 때만 서버 문장을 쓴다 */
 export function errorSentence(err: SectionError | null | undefined): string {
   if (!err) return "";

@@ -46,7 +46,7 @@ export type PendingKey = (typeof PENDING_KEYS)[number];
 
 /** 서버가 expectedSeconds 를 주지 않을 때 쓰는 값(단락 startedAt 기준 초). null 이면 시간을 쓰지 않는다. */
 export const EXPECTED_SECONDS: Record<SectionKey, number | null> = {
-  identity: 3, official: 10, profile: 25, facts: 150, funding_history: 30, news: 45, patents: 35, papers: null, rivals_deep: null, sales: null,
+  identity: 3, official: 10, profile: 25, facts: 180, funding_history: 30, news: 45, patents: 35, papers: null, rivals_deep: null, sales: null,
 };
 
 export const JOB_ID_RE = /^[0-9a-f]{32}$/;
@@ -529,18 +529,18 @@ export type AnalysisJob = {
 
 /** 서버가 estimates 를 주지 않을 때(이 값은 growth/contract.py ESTIMATES 와 같다) */
 export const DEFAULT_ESTIMATES: AnalysisJob["estimates"] = {
-  full: { seconds: 150, liner: 19, perRival: null },
+  full: { seconds: 180, liner: 19, perRival: null },
   sections: {
     identity: { seconds: 3, liner: 0, perRival: null },
     official: { seconds: 10, liner: 0, perRival: null },
     profile: { seconds: 25, liner: 4, perRival: null },
-    facts: { seconds: 150, liner: 8, perRival: null },
+    facts: { seconds: 180, liner: 8, perRival: null },
     funding_history: { seconds: 10, liner: 2, perRival: null },
     news: { seconds: 20, liner: 3, perRival: null },
     patents: { seconds: 15, liner: 2, perRival: null },
-    papers: { seconds: null, liner: 7, perRival: null },
-    rivals_deep: { seconds: null, liner: 34, perRival: 7 },
-    sales: { seconds: null, liner: 0, perRival: null },
+    papers: { seconds: 30, liner: 7, perRival: null },
+    rivals_deep: { seconds: null, liner: 34, perRival: 6 },
+    sales: { seconds: 10, liner: 0, perRival: null },
   },
 };
 

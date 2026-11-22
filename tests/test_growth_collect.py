@@ -108,6 +108,18 @@ def test_g2b_search_marks_limit_and_converts_rows(monkeypatch):
     assert g["limit"] is not None and g["limit"].scope == "daily" and g["error_count"] >= 5
 
 
+def test_core_keyword_match_does_not_cross_word_boundaries_for_latin_keywords():
+    """'핵심 낱말 일치'는 공고명에 그 낱말이 실제로 있을 때만. 영문 낱말은 공백을 지운 채 견주지 않는다(실제 서버 검증에서 찾음)."""
+    assert gov._hits("[시험분석] single cell multiome 시험분석 용역", ["LLM"]) == []
+    assert gov._hits("INfusion PUmp 구매", ["NPU"]) == []
+    assert gov._hits("반도체 현장 특화 SLLM 개발 용역", ["LLM"]) == ["LLM"]  # 낱말 안에 그대로 있으면 일치
+    assert gov._hits("AI OCR 솔루션 도입", ["ocr"]) == ["ocr"]
+    assert gov._hits("생성형AI 플랫폼 구축", ["생성형 AI"]) == ["생성형 AI"]  # 한글이 든 낱말은 띄어쓰기를 무시
+    assert gov._hits("문서인식 시스템", ["문서 인식"]) == ["문서 인식"]
+    assert gov._hits("machine  learning 과제", ["Machine Learning"]) == ["Machine Learning"]
+    assert gov._hits("아무 공고", ["", "  "]) == []
+
+
 # ---------------------------------------------------------------- Liner 래퍼·학술 검색
 
 def test_liner_wrapper_caches_and_swallows_errors():

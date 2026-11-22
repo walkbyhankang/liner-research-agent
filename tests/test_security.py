@@ -374,10 +374,13 @@ def test_rate_limit_env_override(monkeypatch, clock):
     assert [post(client, i, "203.0.113.1").status_code == 429 for i in range(3)] == [False, False, True]
 
 
-def test_lookup_and_get_paths_are_not_rate_limited(clock, monkeypatch):
-    monkeypatch.setattr(api_main.config, "resolve_api_key", lambda: (None, None))
+def test_removed_lookup_paths_are_gone_and_other_posts_are_not_rate_limited(clock):
+    """옛 회사 조회(계약 2.13)는 지웠다. 제한 대상이 아닌 POST 는 8번 보내도 429 가 아니라 404 다."""
     client = TestClient(api_main.app)
-    assert all(client.post("/api/company/lookup", json={"name": "가나다"}).status_code == 503 for _ in range(8))
+    for _ in range(8):
+        res = client.post("/api/company/lookup", json={"name": "가나다"})
+        assert res.status_code == 404 and res.json()["code"] == "not_found"
+    assert client.get("/api/company/lookup/" + "0" * 32).status_code == 404
 
 
 # ---------------------------------------------------------------- 오류 본문

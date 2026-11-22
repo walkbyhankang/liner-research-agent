@@ -15,7 +15,6 @@ import re
 import sys
 import threading
 import time
-import uuid
 from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -33,7 +32,6 @@ sys.path.insert(0, str(ROOT))
 import config  # noqa: E402
 from funding import company as company_mod  # noqa: E402
 from funding import gp as gp_mod  # noqa: E402
-from funding import profile as profile_mod  # noqa: E402
 from funding import service  # noqa: E402
 from growth import limits  # noqa: E402
 from growth.contract import CONTRACT_VERSION  # noqa: E402
@@ -199,7 +197,6 @@ NO_LINER_KEY = "서버에 Liner 설정이 되어 있지 않습니다"
 
 # ---------------------------------------------------------------- 공고문 대조
 
-_lock = threading.Lock()
 _programs: dict[str, dict] | None = None
 _funds_by_gp: dict[str, list[dict]] | None = None
 
@@ -301,100 +298,6 @@ def analyze(req: AnalyzeRequest) -> dict | JSONResponse:
         "extraction": {k: extraction[k] for k in ("summary", "notStated", "doc", "model", "extractedAt", "dropped", "cached")},
         "match": match,
     }
-
-
-class LookupRequest(BaseModel):
-    name: str = Field(min_length=2, max_length=60)
-    homepage: str = Field("", max_length=100, pattern=r"^[A-Za-z0-9.\-]*$")
-
-
-LOOKUP_SEARCHES, LOOKUP_MODELS = 10, 5  # 엔진 검색 4·모델 4, 경쟁사 조사 검색 6(경쟁사 3곳 × 투자·규모)·모델 1
-
-
-# 회사 조회는 2분 넘게 걸린다. 요청을 붙잡아 두지 않고 작업을 시작해 번호를 돌려준 뒤, 화면이 진행 상황을 묻게 한다.
-# 연결이 끊겨도 이미 쓴 유료 호출의 결과가 버려지지 않는다. 작업 기록은 서버 메모리에만 있고 일정 시간 뒤 지운다.
-JOB_TTL_SEC = 15 * 60
-MAX_RUNNING_LOOKUPS = 2
-_jobs: dict[str, dict] = {}
-
-
-def stage_label(message: str) -> str:
-    """엔진이 알려주는 진행 문구를 화면용 단계 이름으로 바꾼다."""
-    if message.startswith("Search API"):
-        return "보도·공식 자료 검색"
-    if message.startswith("원문 확인"):
-        return "원문 확인"
-    if message.startswith("Model API"):
-        return "회사 정보·기존 투자자·경쟁사 추출"
-    if message.startswith("경쟁사 투자"):
-        return "경쟁사 투자 이력·규모 조회"
-    return "조회 중"
-
-
-def _prune_jobs(now: float) -> None:
-    for job_id in [k for k, j in _jobs.items() if j["finishedAt"] and now - j["finishedAt"] > JOB_TTL_SEC]:
-        del _jobs[job_id]
-
-
-def _run_lookup(job: dict, name: str, homepage: str, key: str, source: str | None,
-                reservation: limits.Reservation) -> None:
-    with reservation:
-        client = LinerClient(key, source, limits={"search": LOOKUP_SEARCHES, "model": LOOKUP_MODELS, "agent": 0, "premium": 0})
-        try:
-            out = profile_mod.lookup(name, client, homepage=homepage, progress=lambda msg: job.update(stage=stage_label(msg)))
-            elapsed = round(sum(c.get("elapsed_sec") or 0 for c in client.calls), 1)
-            job.update(status="done", result={**out, "query": name, "apiSeconds": elapsed})
-        except profile_mod.ProfileError as e:
-            job.update(status="error", error=str(e))
-        except LinerAPIError as e:
-            status = f"(HTTP {e.status})" if isinstance(e.status, int) else ""
-            job.update(status="error", error=f"Liner에서 응답을 받지 못했습니다{status}. 잠시 뒤 다시 시도해 주세요.")
-        except Exception:  # 작업 스레드에서 난 오류는 요청으로 올라가지 않으므로 여기서 상태로 남긴다(예외 이름·내용은 넣지 않는다)
-            _log.exception("회사 조회 작업 오류")
-            job.update(status="error", error="조회 중 오류가 발생했습니다. 잠시 뒤 다시 시도해 주세요.")
-        finally:
-            reservation.settle(paid_used(client))
-            client.close()
-            job["finishedAt"] = time.time()
-
-
-@app.post("/api/company/lookup", status_code=202, response_model=None)
-def lookup(req: LookupRequest) -> dict | JSONResponse:
-    """회사명으로 회사 정보 초안, 기존 투자자, 경쟁사를 찾는 작업을 시작한다. 결과는 GET /api/company/lookup/{jobId} 로 받는다.
-    이행 기간에만 남기는 경로(계약 2.13). 하루 상한은 검색 worst_case(10)·모델 worst_case(5)를 잡는다."""
-    key, source = config.resolve_api_key()
-    if not key:
-        return error(503, "missing_config", NO_LINER_KEY)
-    job_id = uuid.uuid4().hex
-    job = {"status": "running", "stage": "보도·공식 자료 검색", "result": None, "error": "", "startedAt": time.time(), "finishedAt": None}
-    # 동시 실행 수 확인, 호출 횟수 잡기, 작업 등록을 한 번에 한다. 나눠서 하면 동시에 들어온 요청이 모두 빈자리를 보고 통과한다
-    with _lock:
-        _prune_jobs(time.time())
-        if sum(1 for j in _jobs.values() if j["status"] == "running") >= MAX_RUNNING_LOOKUPS:
-            return error(429, "busy", "다른 회사 조회가 진행 중입니다. 잠시 뒤 다시 시도해 주세요.")
-        try:
-            reservation = limits.reserve_many({limits.LINER_SEARCH: limits.worst_case(LOOKUP_SEARCHES),
-                                               limits.LINER_MODEL: limits.worst_case(LOOKUP_MODELS)})
-        except limits.LimitReached as e:
-            return _limit_error(e)
-        _jobs[job_id] = job
-    thread = threading.Thread(target=_run_lookup, args=(job, req.name.strip(), req.homepage.strip(), key, source, reservation), daemon=True)
-    job["thread"] = thread
-    thread.start()
-    return {"jobId": job_id}
-
-
-@app.get("/api/company/lookup/{job_id}", response_model=None)
-def lookup_status(job_id: str) -> dict | JSONResponse:
-    job = _jobs.get(job_id)
-    if job is None:
-        return error(404, "not_found", "조회 작업을 찾을 수 없습니다. 서버가 다시 시작됐거나 시간이 지나 지워졌습니다.")
-    out = {"status": job["status"], "stage": job["stage"], "seconds": round((job["finishedAt"] or time.time()) - job["startedAt"])}
-    if job["status"] == "done":
-        out["result"] = job["result"]
-    if job["status"] == "error":
-        out["error"] = job["error"]
-    return out
 
 
 def funds_by_gp() -> dict[str, list[dict]]:

@@ -95,9 +95,27 @@ UNKNOWN_WORDS = {"unknown", "n/a", "na", "-", "미확인", "확인 불가", "알
 REVENUE_MAX = 60  # api.main.Company.revenue 와 web/lib/company.ts 의 길이 제한과 같다
 
 
+def _won_amount(value, unit: str) -> str | None:
+    """단위가 '원'인 큰 수(엔진이 '248억 152만원'을 24801520000.0 으로 바꿔 준 경우)를 억원·만원 글로.
+    growth.contract.won_display 와 같은 규칙(1천만 원 이상은 억원 소수 첫째 자리). 통화·값은 그대로이고 표기만 바꾼다.
+    실제 서버 검증에서 화면·노트에 '24801520000.0원'이 그대로 보여 고쳤다."""
+    if unit != "원":
+        return None
+    try:
+        n = float(str(value).replace(",", ""))
+    except ValueError:
+        return None
+    if abs(n) >= 1e7:
+        return f"{n / 1e8:,.1f}억원"
+    if abs(n) >= 1e4:
+        return f"{n / 1e4:,.0f}만원"
+    return None
+
+
 def format_revenue(row: dict) -> str:
     """매출 한 줄: 금액, 단위, 통화, 회계연도, 연결/별도 기준을 모두 남긴다. 원화는 단위에 '원'이 있으면 따로 적지 않는다."""
-    amount = f"{row.get('value')}{str(row.get('unit') or '').strip()}"
+    unit = str(row.get("unit") or "").strip()
+    amount = _won_amount(row.get("value"), unit) or f"{row.get('value')}{unit}"
     currency = str(row.get("currency") or "").strip()
     if currency and currency.upper() not in amount.upper() and not (currency.upper() in ("KRW", "원") and "원" in amount):
         amount = f"{amount} {currency}"

@@ -106,8 +106,9 @@ function GpReviewCard({ item }: { item: SavedItem }) {
       </p>
       <div className="mt-3">
         {loading ? (
-          <p className="text-sub" role="status">
-            {gp} 자료를 검색하고 있습니다 <span className="num">({elapsedText(secs)})</span>
+          // 화면 읽기 알림에는 바뀌지 않는 글만, 매초 바뀌는 경과 초는 알림 영역 밖에
+          <p className="text-sub">
+            <span role="status">{gp} 자료를 검색하고 있습니다</span> <span className="num">({elapsedText(secs)})</span>
           </p>
         ) : b ? (
           b.facts.length === 0 ? (
@@ -271,7 +272,7 @@ function EvidenceBody({ job, which }: { job: AnalysisJob; which: "finance" | "fu
     const r = s.patents.result;
     if (!r || !r.summary.total) return <p className="py-2">미확보: 출원인이 이 회사로 확인된 국내 특허를 찾지 못했습니다</p>;
     return (
-      <div className="py-2">
+      <div className="py-2" data-ev="patents">
         <div className="max-w-[420px]">
           <PatentLine series={[{ name: job.company.name, byYear: r.summary.byYear, mine: true }]} endYear={Number(todayKST().slice(0, 4))} />
         </div>

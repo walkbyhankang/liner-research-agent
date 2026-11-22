@@ -13,7 +13,7 @@ import { SectionDialog } from "@/components/company/Dialogs";
 type AnyEnv = SectionEnvelope<unknown>;
 
 export function SectionFrame({
-  id, label, env, envKey, summary, children, footer, menu, partialNote = true, unavailableBody,
+  id, label, env, envKey, summary, children, footer, menu, partialNote = true, unavailableBody, twoLineSummary = false,
 }: {
   id: ScreenKey;
   label: string;
@@ -26,7 +26,10 @@ export function SectionFrame({
   partialNote?: boolean;
   /** 미확보일 때 사유 문장 아래 더 보일 것(웹 조사 매출 등) */
   unavailableBody?: ReactNode;
+  /** 넓은 화면에서 한 줄 요약 자리를 진행 중·끝난 뒤 모두 두 줄로 잡고 두 줄로 자른다(개요: facts 가 오며 업종 글이 길어져도 아래가 밀리지 않게) */
+  twoLineSummary?: boolean;
 }) {
+  const summaryBox = twoLineSummary ? "md:min-h-[2lh]" : "";
   const c = useCompany();
   const phase = phaseOf(env);
   const refreshing = c.view?.refreshing.has(envKey) || env.rerun?.status === "running";
@@ -53,17 +56,22 @@ export function SectionFrame({
 
       {phase === "loading" ? (
         <div className="mt-1">
-          <p className="text-xl text-sub">
+          {/* 끝나면 이 자리에 한 줄 요약이 온다. "보통 n초"를 같은 줄에 두어 높이를 요약 한 줄과 같게 한다(도착할 때 아래가 밀리지 않게) */}
+          <p className={`text-xl text-sub ${summaryBox}`}>
             확인 중 <span className="num">({elapsedText((env.seconds ?? 0) + tick)})</span>
+            {env.expectedSeconds ? <span className="ml-2 text-sm">보통 {elapsedText(env.expectedSeconds)} 안에 끝납니다</span> : null}
           </p>
-          {env.expectedSeconds ? <p className="text-sm text-sub">보통 {elapsedText(env.expectedSeconds)} 안에 끝납니다</p> : null}
           {isSlow(env, tick) && <p className="text-sm font-medium text-amber">평소보다 오래 걸립니다. 다른 단락을 먼저 보셔도 됩니다.</p>}
         </div>
       ) : phase === "unavailable" ? (
         <UnavailableHead env={env} envKey={envKey} label={label} />
       ) : (
         <div className="mt-1">
-          {summary && <p className="text-xl font-medium">{nb(summary)}</p>}
+          {twoLineSummary ? (
+            <p className={`text-xl font-medium md:line-clamp-2 ${summaryBox}`}>{summary ? nb(summary) : ""}</p>
+          ) : (
+            summary && <p className="text-xl font-medium">{nb(summary)}</p>
+          )}
           {phase === "partial" && partialNote && env.error && <p className="mt-1 text-sm font-medium text-amber">일부 자료를 얻지 못했습니다: {errorSentence(env.error)}</p>}
           {refreshing && (
             <p className="mt-1 text-sm text-sub">
@@ -141,14 +149,14 @@ export function NextLine({ text, href, linkText }: { text: string; href: string;
   );
 }
 
-/** 열 때 실행 블록의 "{n}초 안팎" 등 진행 글 */
+/** 열 때 실행 블록의 진행 글. 화면 읽기 알림에는 바뀌지 않는 글만 두고, 매초 바뀌는 경과 초는 알림 영역 밖에 둔다 */
 export function RunningLine({ text, env }: { text: string; env: AnyEnv }) {
   const c = useCompany();
   const tick = useTicker(true, c.receivedAt);
   const secs = env.rerun?.status === "running" ? env.rerun.seconds ?? 0 : env.seconds ?? 0;
   return (
-    <p className="text-base text-sub" role="status">
-      {text} <span className="num">({elapsedText(secs + tick)})</span>
+    <p className="text-base text-sub">
+      <span role="status">{text}</span> <span className="num">({elapsedText(secs + tick)})</span>
     </p>
   );
 }

@@ -118,7 +118,7 @@ function NotAnalyzed() {
             {busy ? "분석을 시작하는 중" : "분석 시작"}
           </button>
           <span className="text-sm text-sub">
-            보통 {elapsedText(est.seconds ?? 150)}, Liner 약 {est.liner}회
+            보통 {elapsedText(est.seconds ?? 180)}, Liner 약 {est.liner}회
           </span>
         </div>
         {err && (
@@ -204,31 +204,60 @@ function Toc({ job }: { job: AnalysisJob }) {
 // ---------------------------------------------------------------- 진행 줄
 
 let doneLineClosed = new Set<string>();
+/** 이 방문에서 진행 중인 모습을 본 작업. 끝난 뒤에도 진행 줄 자리를 같은 높이로 남긴다 */
+const seenRunning = new Set<string>();
 
+/**
+ * 진행 줄(screens 4절). 첫 화면 맨 위라 높이가 바뀌면 아래 전체가 밀린다(실제 서버 검증에서 +22px, 끝날 때 −96px).
+ * - 진행 중: 두 줄 고정 높이. "아직 확인 중" 목록은 한 줄로 자르고(넘치면 말줄임) 줄 수가 바뀌지 않게 한다. 각 단락의 "확인 중"에 같은 내용이 있다.
+ * - 끝남: 이 방문에서 진행을 봤으면 같은 자리·같은 최소 높이에 "분석이 끝났습니다…"를 남긴다(닫기는 사용자가 누를 때만).
+ * - 화면 읽기 알림(aria-live)에는 넣지 않는다. 매초 바뀌는 경과 초를 읽지 않게 하고, 단락 준비·분석 끝 알림은 LiveRegion 이 한 번씩 한다.
+ */
 function ProgressLine({ job }: { job: AnalysisJob }) {
   const c = useCompany();
   const running = job.status === "running";
   const tick = useTicker(running, c.receivedAt);
   const [, force] = useState(0);
+  useEffect(() => {
+    if (running) seenRunning.add(job.jobId);
+  }, [running, job.jobId]);
+  // 진행 중 높이: 첫 줄(27.2px, 좁은 화면에서는 두 줄) + "아직 확인 중" 한 줄(22.4px). 끝난 줄도 같은 최소 높이
+  const slot = "mt-6 min-h-[78px] border-l-2 pl-4 sm:min-h-[50px]";
   if (running) {
     const still = stillChecking(job);
     const secs = Math.max(...Object.values(job.sections).map((s) => s.seconds ?? 0));
     return (
-      <div className="mt-6 border-l-2 border-ledger pl-4" role="status">
+      <div className={`${slot} border-ledger`} data-progress="running">
         <p>
           분석 중 <span className="num">({elapsedText(secs + tick)})</span>. 다른 화면으로 가도 분석은 계속됩니다.
         </p>
-        {still.length > 0 && <p className="text-sm text-sub">아직 확인 중: {still.join(", ")}</p>}
+        {/* p 가 아니라 div: 전역 p 규칙(text-wrap: pretty)이 truncate 의 줄바꿈 금지를 덮어써 줄 수가 바뀌었다 */}
+        <div className="truncate text-sm text-sub">{still.length ? `아직 확인 중: ${still.join(", ")}` : "마무리하는 중"}</div>
       </div>
     );
   }
-  const missing = unavailableScreens(job);
-  if (job.status === "done" && missing.length && !doneLineClosed.has(job.jobId)) {
-    return (
-      <div className="mt-6 flex flex-wrap items-center gap-2 border-l-2 border-amber pl-4">
+  const missing = job.status === "done" ? unavailableScreens(job) : [];
+  const seen = seenRunning.has(job.jobId);
+  if (doneLineClosed.has(job.jobId) || (!missing.length && !seen)) return null;
+  const close = (
+    <button
+      type="button"
+      className="btn btn-quiet"
+      onClick={() => {
+        doneLineClosed = new Set(doneLineClosed).add(job.jobId);
+        force((n) => n + 1);
+      }}
+    >
+      닫기
+    </button>
+  );
+  return (
+    <div className={`${seen ? slot : "mt-6"} flex flex-wrap content-start items-center gap-2 ${missing.length ? "border-amber" : "border-ledger"} border-l-2 pl-4`} data-progress="done">
+      {/* 글 줄 높이를 닫기 단추(44px)와 같게 해 진행 줄 자리 맨 위에 붙인다(끝날 때 글이 아래로 움직이지 않게) */}
+      {missing.length ? (
         <a
           href={`#${missing[0].key}`}
-          className="link"
+          className="link leading-[44px]"
           onClick={(e) => {
             e.preventDefault();
             goSection(missing[0].key);
@@ -236,20 +265,12 @@ function ProgressLine({ job }: { job: AnalysisJob }) {
         >
           분석이 끝났습니다. 미확보 단락 {missing.length}개
         </a>
-        <button
-          type="button"
-          className="btn btn-quiet"
-          onClick={() => {
-            doneLineClosed = new Set(doneLineClosed).add(job.jobId);
-            force((n) => n + 1);
-          }}
-        >
-          닫기
-        </button>
-      </div>
-    );
-  }
-  return null;
+      ) : (
+        <p className="leading-[44px]">{job.status === "done" ? "분석이 끝났습니다." : "분석이 중간에 멈췄습니다."}</p>
+      )}
+      {close}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------- 핵심 값 네 칸
@@ -270,6 +291,8 @@ function KeyStrip({ job }: { job: AnalysisJob }) {
 }
 
 function TileCell({ t }: { t: Tile }) {
+  // 칸 높이는 값이 다 왔을 때(기준 줄 2줄 + 나중에 오는 "웹 조사" 줄)에 맞춰 미리 잡는다. 늦게 오는 줄이 띠 높이를 바꿔 아래가 밀리지 않게.
+  // 실측(업스테이지·기준 기업, 2026-11-23): 끝난 칸 내용 높이 최대 1180 폭 167px, 820 폭 140px, 390 폭 162px
   return (
     <a
       href={`#${t.anchor}`}
@@ -278,19 +301,19 @@ function TileCell({ t }: { t: Tile }) {
         goSection(t.anchor);
       }}
       aria-busy={t.loading || undefined}
-      className="block h-full min-h-[132px] px-3 py-3 hover:bg-wash sm:px-4"
+      className="block h-full min-h-[164px] px-3 py-3 hover:bg-wash sm:min-h-[144px] sm:px-4 lg:min-h-[168px]"
     >
       <span className="flex items-start justify-between gap-2">
         <span className="text-sm text-sub">{t.label}</span>
         {t.word && <StatusWord w={t.word} />}
       </span>
       {t.loading ? (
-        <span className="mt-2 block space-y-2">
+        <span className="mt-1 block space-y-2">
           <Placeholder h={30} w="70%" />
           <span className="block text-sm text-sub">확인 중</span>
         </span>
       ) : t.missing ? (
-        <span className="mt-2 block text-base font-semibold leading-snug">{t.missing}</span>
+        <span className="mt-1 block text-base font-semibold leading-snug">{t.missing}</span>
       ) : (
         <span className="mt-1 block">
           {t.big.map((b) => (
