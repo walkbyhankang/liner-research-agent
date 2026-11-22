@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import os
 import threading
 import uuid
 from datetime import datetime
@@ -50,7 +51,7 @@ def _secs(start: str | None, end: datetime) -> float | None:
 
 def example_id() -> str:
     """예시 회사 id. 환경변수 → 저장소 루트 .env 순서로 읽는다(실제 회사 id 라 저장소에는 적지 않는다)."""
-    return common.env(EXAMPLE_ENV)
+    return (os.environ.get(EXAMPLE_ENV) or common.env(EXAMPLE_ENV) or "").strip()
 
 
 class Job:
