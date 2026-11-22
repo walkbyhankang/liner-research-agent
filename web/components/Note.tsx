@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { fmtMD, fmtTime, isStale } from "@/lib/format";
 import { replaceLocal, saveMemo } from "@/lib/local";
-import { exportFile, exportName, linerTotal, noteRows, noteText, parseImport, WORD_LEGEND, type ExportFile } from "@/lib/note";
+import { exportFile, exportName, linerTotal, NOT_EXPORT_FILE, noteRows, noteText, parseImport, WORD_LEGEND, type ExportFile } from "@/lib/note";
 import { openValues, verdictCounts } from "@/lib/review";
 import { QUESTIONS } from "@/lib/prep";
 import { onStorageChange, storageState } from "@/lib/store";
@@ -409,7 +409,14 @@ export function NoteScreen() {
                 if (!importing) return;
                 const { version: _v, companyId: _c, name: _n, exportedAt: _e, ...rest } = importing;
                 void _v; void _c; void _n; void _e;
-                await replaceLocal(c.cid, rest);
+                try {
+                  await replaceLocal(c.cid, rest);
+                } catch {
+                  // 레코드를 만들다 어긋나면 지우기 전에 멈춘다(지금 자료는 그대로)
+                  setImporting(null);
+                  setImportErr(NOT_EXPORT_FILE);
+                  return;
+                }
                 setMemo(rest.notes?.memo ?? "");
                 setImporting(null);
                 toast("파일의 내용을 불러왔습니다.");

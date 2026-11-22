@@ -1,6 +1,9 @@
 """자격 대조 서비스와 API 테스트. 실제 API 는 호출하지 않는다."""
 import json
 import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
@@ -536,6 +539,71 @@ def test_api_gp_brief_only_accepts_listed_managers(api, monkeypatch):
     daily_limits(LINER_SEARCH=1)  # 검색 1회가 재시도까지 가면 2회
     res = client.post("/api/gp/brief", json=body)
     assert res.status_code == 429 and res.json()["code"] == "daily_limit" and len(calls) == 1
+
+
+class _ConcurrencyProbe:
+    """가짜 Liner 클라이언트가 부르는 곳. 종류별로 지금 들어와 있는 요청 수와 그 최댓값을 센다.
+    상한(caps)만큼 모일 때까지 잠깐(최대 0.5초) 기다려, slot 으로 묶지 않았다면 상한을 넘게 겹치도록 만든다."""
+
+    def __init__(self, caps: dict[str, int]):
+        self.caps = caps
+        self.active = {k: 0 for k in caps}
+        self.peak = {k: 0 for k in caps}
+        self.cond = threading.Condition()
+
+    def run(self, kind: str) -> None:
+        with self.cond:
+            self.active[kind] += 1
+            self.peak[kind] = max(self.peak[kind], self.active[kind])
+            self.cond.notify_all()
+            self.cond.wait_for(lambda: self.active[kind] >= self.caps[kind], timeout=0.5)
+        time.sleep(0.02)
+        with self.cond:
+            self.active[kind] -= 1
+            self.cond.notify_all()
+
+
+class _ProbeLiner:
+    """LinerClient 대신 쓰는 가짜. 실제 요청은 보내지 않고 calls 만 남긴다(하루 상한 확정용)."""
+
+    def __init__(self, probe: _ConcurrencyProbe):
+        self.probe = probe
+        self.calls: list[dict] = []
+
+    def search_web(self, query, **kw):
+        self.probe.run("search")
+        self.calls.append({"kind": "search", "include_knowledge": bool(kw.get("include_knowledge"))})
+        return {"results": GP_RESULTS}, {}
+
+    def chat_json(self, model, system, user, *, schema_name="result", **kw):
+        self.probe.run("model")
+        self.calls.append({"kind": "model"})
+        answer = {"notice_conditions": EXTRACT_ANSWER, "gp_brief": GP_ANSWER}.get(schema_name, MATCH_ANSWER)
+        return {"model": "m", "choices": [{"message": {"content": json.dumps(answer, ensure_ascii=False)}}]}, {}
+
+    def close(self):
+        pass
+
+
+def test_notice_and_gp_brief_share_server_wide_liner_concurrency_slots(api, monkeypatch):
+    """공고문 대조·운용사 요약도 회사 분석과 같은 limits.slot 으로 Liner 동시 요청을 묶는다(서버 공용 상한을 넘지 않는다)."""
+    caps = {"model": 2, "search": 2}
+    monkeypatch.setitem(L._slots, L.LINER_MODEL, threading.BoundedSemaphore(caps["model"]))
+    monkeypatch.setitem(L._slots, L.LINER_SEARCH, threading.BoundedSemaphore(caps["search"]))
+    probe = _ConcurrencyProbe(caps)
+    monkeypatch.setattr(api_main, "LinerClient", lambda key, source, limits: _ProbeLiner(probe))
+    monkeypatch.setattr(api_main, "_funds_by_gp", {"가나벤처스": [{"name": "가나 1호", "field": "AI", "year": 2024}]})
+    notice_req = api_main.AnalyzeRequest(**BODY)
+    gp_req = api_main.GpBriefRequest(gp="가나벤처스", company={"region": "대전"})
+    with ThreadPoolExecutor(max_workers=12) as pool:   # 요청 제한(미들웨어)을 거치지 않게 경로 함수를 바로 부른다
+        jobs = [pool.submit(api_main.analyze, notice_req) for _ in range(6)] + \
+               [pool.submit(api_main.gp_brief, gp_req) for _ in range(6)]
+        results = [j.result(timeout=30) for j in jobs]
+    assert all(isinstance(r, dict) for r in results)          # 모두 끝났다(교착 없음)
+    assert [r["match"]["overall"] for r in results[:6]] == ["확인 후 판단"] * 6
+    assert [len(r["facts"]) for r in results[6:]] == [2] * 6
+    assert probe.peak == caps                                  # 상한까지는 겹쳤고, 넘지는 않았다
+    assert L._slots[L.LINER_MODEL]._value == caps["model"] and L._slots[L.LINER_SEARCH]._value == caps["search"]  # 모두 놓았다
 
 
 def test_revenue_omits_basis_when_the_engine_does_not_know_it():

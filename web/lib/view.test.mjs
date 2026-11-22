@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { SCREEN_SECTIONS, TOC_TEXT, announcements, errorSentence, isSlow, keyTiles, overlay, phaseOf, retryState, rivalsCost, stillChecking, summaryLine, unavailableScreens, visibleRivals } from "./view.ts";
 import { DEFAULT_ESTIMATES } from "./contract.ts";
+import { noticeCompany } from "./company-values.ts";
 
 const fx = (name) => JSON.parse(readFileSync(new URL(`../../fixtures/analysis/${name}.json`, import.meta.url), "utf8"));
 const job = (name, i = 0) => fx(name).exchanges.filter((e) => e.method === "GET" && /^\/api\/(analysis\/[0-9a-f]{32}|company\/[^/]+\/analysis)$/.test(e.path))[i].response;
@@ -103,6 +104,52 @@ test("새로 분석 중에는 이전 결과를 두고, 끝난 단락만 바꾼�
   const o2 = overlay(base, lost);
   assert.equal(o2.job.sections.official, base.sections.official);
   assert.equal(o2.kept.get("official").reason, "정한 시간 안에 응답이 오지 않았습니다.");
+});
+
+test("새로 분석에서 단락이 미확보로 끝나면 합친 값도 이전 값을 두어 핵심 값 칸·공고문 대조 입력이 미확보로 바뀌지 않는다", () => {
+  const base = job("F-FULL");
+  const miss = (reason) => ({ display: null, raw: null, status: "unavailable", source: null, quote: null, note: null, reason, values: null, usedIndex: null });
+  const err = { code: "timeout", message: "", source: null, retryAt: null };
+  const done = staged[6];
+  const live = {
+    ...done, jobId: "e".repeat(32), status: "running", busy: true,
+    sections: {
+      ...done.sections,
+      official: { ...done.sections.official, status: "unavailable", result: null, error: err },
+      facts: { ...done.sections.facts, status: "unavailable", result: null, error: err },
+      profile: { ...done.sections.profile, status: "unavailable", result: null, error: err },
+    },
+    merged: {
+      ...done.merged,
+      revenue: { official: miss("정한 시간 안에 응답이 오지 않음"), web: miss("매출 보도 없음") },
+      industry: { official: done.merged.industry.official, web: miss("업종 자료 없음") },
+      npsLatest: miss("정한 시간 안에 응답이 오지 않음"),
+      employees: miss("직원 수 자료 없음"),
+      founded: miss("설립 자료 없음"),
+      bizType: miss("근거 자료 없음"),
+      investors: [], rivals: [], techKeywords: [], programKeywords: [], bidKeywords: [], pending: [],
+    },
+  };
+  const o = overlay(base, live);
+  assert.ok(o.kept.has("official") && o.kept.has("facts") && o.kept.has("profile"));
+  const m = o.job.merged;
+  assert.equal(m.revenue.official, base.merged.revenue.official);
+  assert.equal(m.revenue.web, base.merged.revenue.web);
+  assert.equal(m.industry.web, base.merged.industry.web);
+  assert.equal(m.industry.official, live.merged.industry.official); // 새 값이 있으면 새 값
+  assert.equal(m.npsLatest, base.merged.npsLatest);
+  assert.equal(m.employees, base.merged.employees);
+  assert.equal(m.bizType, live.merged.bizType); // 둘 다 미확보면 새 값
+  assert.equal(m.investors, base.merged.investors);
+  assert.equal(m.rivals, base.merged.rivals);
+  assert.equal(m.programKeywords, base.merged.programKeywords);
+  // 핵심 값 칸과 공고문 대조 입력은 이전 값 그대로
+  assert.deepEqual(keyTiles(o.job)[0].big, keyTiles(base)[0].big);
+  assert.equal(keyTiles(o.job)[1].missing, null);
+  assert.deepEqual(noticeCompany(o.job, {}), noticeCompany(base, {}));
+  // 이전 값도 미확보였으면 새 미확보 값을 쓴다
+  const baseMiss = { ...base, merged: { ...base.merged, npsLatest: miss("국민연금 사업장을 찾지 못함") } };
+  assert.equal(overlay(baseMiss, live).job.merged.npsLatest, live.merged.npsLatest);
 });
 
 test("깊이 비교 비용 줄은 고른 곳 수 기준이고, 5곳 기준 값은 서버 상한(고정 4 + 한 곳당 6)과 맞는다", () => {

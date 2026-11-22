@@ -275,6 +275,7 @@ export const unavailableScreens = (job: AnalysisJob) => SCREEN_SECTIONS.filter((
 /**
  * 저장된 분석(base) 위에 진행 중인 새 작업(live)을 얹는다. 새 단락이 끝 상태이고 결과가 있으면 그 단락만 바꾼다.
  * 새 단락이 미확보이고 이전 결과가 있으면 이전 결과를 두고 fallbackNote 를 남긴다.
+ * 합친 값(merged)도 같다: 새 값이 미확보인데 이전 값은 미확보가 아니면 이전 값을 둔다(핵심 값 칸·공고문 대조 입력이 미확보로 바뀌지 않게).
  */
 export type Overlay = { job: AnalysisJob; refreshing: Set<SectionKey>; kept: Map<SectionKey, { at: string | null; reason: string }> };
 export function overlay(base: AnalysisJob | null, live: AnalysisJob | null): Overlay | null {
@@ -294,24 +295,36 @@ export function overlay(base: AnalysisJob | null, live: AnalysisJob | null): Ove
     if (nb.status === "unavailable" && ob.result) kept.set(key, { at: ob.analyzedAt, reason: errorSentence(nb.error) });
     else (sections as Record<string, unknown>)[key] = nb;
   }
-  const merged = mergeFallback(base.merged, live.merged);
+  const merged = mergeFallback(base.merged, live.merged, kept);
   return { job: { ...base, sections, merged, busy: live.busy, paid: live.paid, estimates: live.estimates, refresh: live.refresh }, refreshing, kept };
 }
 
-function mergeFallback(base: Merged, live: Merged): Merged {
+const isValueLike = (x: unknown): x is Value => Boolean(x && typeof x === "object" && !Array.isArray(x) && typeof (x as Value).status === "string");
+/** 새 값이 아직 없거나(확인 중), 미확보인데 이전 값은 미확보가 아니면 이전 값. 그 밖에는 새 값 */
+function keepValue(nv: unknown, ov: unknown): unknown {
+  if (nv === null || nv === undefined) return ov;
+  if (isValueLike(nv) && nv.status === "unavailable" && isValueLike(ov) && ov.status !== "unavailable") return ov;
+  return nv;
+}
+
+function mergeFallback(base: Merged, live: Merged, kept: ReadonlyMap<SectionKey, unknown>): Merged {
   const out = { ...live } as Record<string, unknown>;
   for (const [k, v] of Object.entries(live)) {
     const b = (base as Record<string, unknown>)[k];
-    if (v === null) out[k] = b;
-    else if (k === "industry" || k === "revenue") {
+    if (k === "industry" || k === "revenue") {
       const tv = v as { official: unknown; web: unknown };
-      const tb = b as { official: unknown; web: unknown };
-      out[k] = { official: tv.official ?? tb.official, web: tv.web ?? tb.web };
-    }
+      const tb = (b ?? {}) as { official?: unknown; web?: unknown };
+      out[k] = { official: keepValue(tv.official, tb.official), web: keepValue(tv.web, tb.web) };
+    } else out[k] = keepValue(v, b);
   }
-  if (live.pending.length) {
-    if (live.pending.includes("investors.confirmed")) out.investors = base.investors;
-    if (live.pending.includes("rivals.facts")) out.rivals = base.rivals;
+  // 값 모양이 아닌 목록은, 그 목록을 채우는 단락을 이전 결과로 두었으면(kept) 이전 목록을 쓴다
+  const keptAny = (...keys: SectionKey[]) => keys.some((key) => kept.has(key));
+  if (live.pending.includes("investors.confirmed") || keptAny("funding_history", "facts")) out.investors = base.investors;
+  if (live.pending.includes("rivals.facts") || keptAny("profile", "facts")) out.rivals = base.rivals;
+  if (kept.has("profile")) {
+    out.techKeywords = base.techKeywords;
+    out.programKeywords = base.programKeywords;
+    out.bidKeywords = base.bidKeywords;
   }
   return out as Merged;
 }

@@ -77,6 +77,24 @@ def test_founded_conflict_rules():
     assert remerge(r)["founded"]["status"] == "confirmed"
 
 
+def test_founded_compares_day_when_web_value_has_day():
+    """웹 값이 YYYY-MM-DD 면 일까지 견준다: 하루라도 다르면 엇갈림(계약 7.3). YYYY-MM·YYYY 는 앞 7자·4자만."""
+    r = base()
+    assert r["sections"]["identity"]["result"]["corp"]["founded"] == "2020-09-15"
+    f = next(x for x in r["sections"]["facts"]["result"]["fields"] if x["key"] == "founded")
+    f.update(value="2020-09-15", status="reported")
+    assert remerge(r)["founded"]["status"] == "confirmed"
+    f.update(value="2020-09-01", status="confirmed")
+    m = remerge(r)["founded"]
+    assert m["status"] == "conflicting" and m["usedIndex"] == 0 and [v["display"] for v in m["values"]] == ["2020-09-15", "2020-09-01"]
+    f.update(value="2020-09", status="reported")
+    assert remerge(r)["founded"]["status"] == "confirmed"
+    f.update(value="2020-10", status="reported")
+    assert remerge(r)["founded"]["status"] == "conflicting"
+    assert merge._same_founded("2020-09-15", "2020") and not merge._same_founded("2020-09-15", "2021")
+    assert merge._same_founded("2020-09-15", "2020-09-15") and not merge._same_founded("2020-09-15", "2020-09-16")
+
+
 def test_no_corp_uses_facts_and_single_value_conflict():
     r = copy.deepcopy(JOBS["F-NOCORP#0"])
     region = next(x for x in r["sections"]["facts"]["result"]["fields"] if x["key"] == "region")

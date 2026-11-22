@@ -26,6 +26,8 @@ const fakeProgram = (id, title, end) => ({
 const PROGRAMS = JSON.stringify([fakeProgram("PBLN_000000000000001", "가나다시 반도체 기업 운전자금 가짜 공고", "2026-12-05"), fakeProgram("PBLN_000000000000002", "가나다시 창업기업 운전자금 가짜 공고", "2026-11-30"), ...programs]);
 const fakeFund = (gp, name) => ({ name, gp, field: "AI", year: 2026, maturity: "2034-12-31", commitRaw: 1 });
 const FUNDS = JSON.stringify([fakeFund("가나다벤처스", "가나다벤처스 AI 가짜 투자조합"), fakeFund("타파하인베스트", "타파하인베스트 AI 가짜 펀드"), fakeFund("나다라파트너스", "나다라파트너스 AI 가짜 펀드"), ...funds]);
+const NEWS_ARTICLES = JSON.parse(readFileSync(new URL("../../fixtures/analysis/F-FULL.articles.json", import.meta.url), "utf8")).articles;
+const NEWS_REFRESH_DROP = 30; // scripts/mock_api.mjs 와 같은 값: 뉴스만 새로 받기 뒤 새 판은 앞 30건이 빠진 목록
 
 // ---------------------------------------------------------------- 도구
 const results = [];
@@ -487,6 +489,52 @@ await run("saved", async () => {
   check("A-22", tt >= -2 && tt < 200, `${Math.round(tt)}px`);
 });
 
+// 시작 화면이 넘긴 작업 id(세션 값 pending.jobId)는 한 번만 쓴다. 끝났거나 서버에 없는 작업 id 가 남아 있어도 그 회사의
+// 진행 중 작업과 최신 저장 분석을 찾는다(같은 탭에서 나중에 새로 분석한 뒤 새로고침한 경우)
+await run("resume", async () => {
+  const OLD = "a".repeat(32); // 가짜 서버에 없는 옛 작업
+  const RUNNING = "5a1c0e7b9d3f4a2e8b6c1d0f9e8a7b6c";
+  const withPending = async (jobId = OLD) => {
+    const page = await open("/");
+    await page.evaluate((cid, id) => sessionStorage.setItem(`growthnote.pending.${cid}`, JSON.stringify({ name: "가나다테크", crno: null, homepage: null, jobId: id })), CID, jobId);
+    // 앞 점검에서 열어 둔 화면도 같은 작업 id 를 묻으므로, 이 화면이 보낸 요청만 센다
+    page.apiPaths = [];
+    page.on("request", (r) => {
+      const u = new URL(r.url());
+      if (u.pathname.startsWith("/api/")) page.apiPaths.push(u.pathname.slice(5));
+    });
+    await page.goto(`${BASE}/c/${CID}`, { waitUntil: "domcontentloaded" });
+    return page;
+  };
+  const pendingJob = (page) => page.evaluate((cid) => JSON.parse(sessionStorage.getItem(`growthnote.pending.${cid}`) ?? "{}").jobId ?? null, CID);
+  const sent = (page, path) => page.apiPaths.filter((p) => p === path).length;
+  /** 이 화면이 그 주소로 보낸 요청이 n회가 될 때까지(최대 timeout) 기다려 그 수를 돌려준다 */
+  const waitSent = async (page, path, n, timeout = 10000) => {
+    const end = Date.now() + timeout;
+    while (Date.now() < end && sent(page, path) < n) await wait(250);
+    return sent(page, path);
+  };
+  const polled = `analysis/${RUNNING}`;
+  const savedPath = `company/${CID}/analysis`;
+  await reset({ scenario: "F-FULL" });
+  let page = await withPending();
+  const shown = await waitText(page, "출원인이 확인된 국내 특허 11건");
+  check("A-24 (끝난 작업 id)", shown && !(await text(page)).includes("아직 분석하지 않은 회사입니다.") && sent(page, `analysis/${OLD}`) === 1 && sent(page, savedPath) >= 1 && (await pendingJob(page)) === null);
+  await page.browserContext().close();
+  await reset({ scenario: "F-STAGED", step: 2 });
+  page = await withPending();
+  const runPolls = await waitSent(page, polled, 2);
+  check("A-24 (진행 중 작업)", sent(page, `company/${CID}/job`) >= 1 && runPolls >= 2 && sent(page, `analysis/${OLD}`) === 1 && (await pendingJob(page)) === null, `폴링 ${runPolls}회`);
+  await page.browserContext().close();
+  // 기억한 작업이 끝났지만 단락 다시 실행 중(done + busy)이고 더 새 저장 분석이 있어도, 그 작업을 계속 묻는다
+  const news = JSON.parse(readFileSync(new URL("../../fixtures/analysis/F-FULL.json", import.meta.url), "utf8")).exchanges.find((e) => e.method === "GET" && /^\/api\/analysis\/[0-9a-f]{32}$/.test(e.path)).response.sections.news;
+  await reset({ scenario: "F-FULL", newerSaved: true, overrides: { news: { ...news, retryable: false, rerun: { status: "running", startedAt: "2026-11-22T20:59:00+09:00", seconds: 1, error: null } } } });
+  page = await withPending(RUNNING);
+  const rerunPolls = await waitSent(page, polled, 3); // 처음 확인 1회 + 폴링 2회 이상
+  check("A-24 (단락 다시 실행 중)", rerunPolls >= 3 && sent(page, savedPath) === 0 && (await text(page, "#news")).includes("새로 확인 중"), `폴링 ${rerunPolls}회, 저장 분석 조회 ${sent(page, savedPath)}회`);
+  await page.browserContext().close();
+});
+
 // ================================================================ 회사 분석 단락(F-FULL), 경쟁사, 자금 조달, 심사 준비, 판로, 노트를 한 브라우저로 이어서
 const finder = await import("../lib/finder.ts");
 await run("main", async () => {
@@ -603,6 +651,14 @@ await run("main", async () => {
   await wait(1000);
   const lg = (await getLog()).slice(n0);
   check("NE-07", count(lg, "POST", /sections\/news$/) === 1 && count(lg, "POST", /sections\/(?!news)/) === 0);
+  // 뉴스만 새로 받기가 끝나면(결과 판이 바뀌면) 펼친 기사 목록을 첫 쪽부터 새로 받는다. 옛 쪽·건수가 남거나 더 보기에서 섞이지 않는다
+  const freshDeals = NEWS_ARTICLES.slice(NEWS_REFRESH_DROP).filter((a) => a.categories.includes("수주·계약"));
+  const refreshed = await waitText(page, `수주·계약 기사 ${freshDeals.length}건`, 12000);
+  await wait(300);
+  const refetched = (await getLog()).slice(n0).filter((x) => x.method === "GET" && /\/news$/.test(x.path) && /offset=0/.test(x.query)).length;
+  const firstTitle = await page.$eval("#news [data-item='0']", (e) => e.innerText.split("\n")[0].trim()).catch(() => "");
+  const shown = await page.$$eval("#news [data-item]", (l) => l.filter((x) => x.getBoundingClientRect().height > 0).length);
+  check("NE-10", refreshed && refetched >= 1 && firstTitle === freshDeals[0].title && shown === 20, `${firstTitle} / ${shown}줄 / 다시 받기 ${refetched}`);
   // 기술
   const te = await text(page, "#tech");
   const yrs = await page.$eval("#tech svg[role=img]", (s) => s.getAttribute("aria-label"));
@@ -1065,6 +1121,13 @@ await run("main", async () => {
   await input.uploadFile(other);
   await wait(500);
   check("N-09", (await text(np)).includes("다른 회사(다른가짜회사)의 파일입니다.") && !(await np.$("dialog[open]")));
+  // 모양이 어긋난 파일(담은 항목에 null)은 거절하고, 지금 담은 항목·메모를 지우지 않는다
+  const savedBefore = await idbCount(np, "saved");
+  const broken = `${OUT ?? "/tmp"}/broken-note.json`;
+  writeFileSync(broken, JSON.stringify({ ...ef, saved: [null] }));
+  await input.uploadFile(broken);
+  await wait(500);
+  check("N-13", (await text(np)).includes("성장노트에서 내보낸 파일이 아닙니다.") && !(await np.$("dialog[open]")) && savedBefore >= 3 && (await idbCount(np, "saved")) === savedBefore && (await np.$eval("#note-memo", (e) => e.value)) === "노트 메모 시험", `담은 항목 ${savedBefore}`);
   const npr = await open(`/c/${CID}/note`, { ctx });
   await waitText(npr, "회사 핵심 값");
   await wait(500);

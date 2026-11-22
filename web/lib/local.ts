@@ -183,21 +183,35 @@ export function saveSalesKeywords(cid: string, keywords: string[]) {
   void store.put("salesKeywords", cid, keywords);
 }
 
-/** 파일에서 불러온 내용으로 이 회사의 브라우저 자료를 바꾼다 */
+const LOCAL_STORES = ["edits", "saved", "checks", "rivalChecks", "briefs", "rivalChoices", "prep", "notes", "salesKeywords"] as const;
+
+/**
+ * 파일에서 불러온 내용으로 이 회사의 브라우저 자료를 바꾼다. 넣을 레코드와 화면 값을 먼저 모두 만든 뒤에 지우고 쓴다:
+ * 만드는 중에 어긋난 항목이 있으면 예외가 나고, 그때 지금 자료는 하나도 지우지 않는다(파일 모양 검사는 note.parseImport).
+ */
 export async function replaceLocal(cid: string, data: Omit<Local, "loaded">) {
-  for (const s of ["edits", "saved", "checks", "rivalChecks", "briefs", "rivalChoices", "prep", "notes", "salesKeywords"] as const) {
+  const rows: [store.StoreName, store.Key, unknown][] = [["edits", cid, data.edits]];
+  for (const s of data.saved) rows.push(["saved", savedKey(cid, s.kind, s.itemId), s]);
+  for (const c of Object.values(data.checks)) rows.push(["checks", [cid, c.programId], c]);
+  for (const c of Object.values(data.rivalChecks)) rows.push(["rivalChecks", [cid, c.programId, c.rivalKey], c]);
+  for (const b of Object.values(data.briefs)) rows.push(["briefs", [cid, b.gp], b]);
+  rows.push(["rivalChoices", cid, data.rivalChoices], ["prep", cid, data.prep]);
+  if (data.notes) rows.push(["notes", cid, data.notes]);
+  if (data.salesKeywords) rows.push(["salesKeywords", cid, data.salesKeywords]);
+  const next: Local = {
+    ...data,
+    loaded: true,
+    saved: [...data.saved].sort((a, b) => a.savedAt.localeCompare(b.savedAt)),
+    checks: Object.fromEntries(Object.values(data.checks).map((c) => [c.programId, c])),
+    rivalChecks: Object.fromEntries(Object.values(data.rivalChecks).map((c) => [rivalKeyText(c.programId, c.rivalKey), c])),
+    briefs: Object.fromEntries(Object.values(data.briefs).map((b) => [b.gp, b])),
+  };
+
+  for (const s of LOCAL_STORES) {
     for (const r of await store.all(s, cid)) await store.del(s, r.key);
   }
-  await store.put("edits", cid, data.edits);
-  for (const s of data.saved) await store.put("saved", savedKey(cid, s.kind, s.itemId), s);
-  for (const c of Object.values(data.checks)) await store.put("checks", [cid, c.programId], c);
-  for (const c of Object.values(data.rivalChecks)) await store.put("rivalChecks", [cid, c.programId, c.rivalKey], c);
-  for (const b of Object.values(data.briefs)) await store.put("briefs", [cid, b.gp], b);
-  await store.put("rivalChoices", cid, data.rivalChoices);
-  await store.put("prep", cid, data.prep);
-  if (data.notes) await store.put("notes", cid, data.notes);
-  if (data.salesKeywords) await store.put("salesKeywords", cid, data.salesKeywords);
-  cache.set(cid, { ...data, loaded: true });
+  for (const [s, key, value] of rows) await store.put(s, key, value);
+  cache.set(cid, next);
   emit(cid);
 }
 

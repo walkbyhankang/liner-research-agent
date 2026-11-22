@@ -4,7 +4,8 @@
   기사 목록만 전체가 들어 있다. 맨 앞에 "schema": "growth.analysis/1" 을 더한다(응답으로 낼 때 뺀다).
 - 쓰기: 키 지우기(analysis.scrub) → 키 문자열·인증 머리글 모양이 남았는지 검사 → 임시 파일에 쓰고 os.replace(원자적 교체).
   남았으면 쓰지 않는다. 다른 작업의 파일은 건드리지 않고, 이전 스냅샷을 지우거나 덮어쓰지 않는다.
-- latest.json: {"file", "jobId", "analyzedAt"}. 작업이 done 이 될 때만 바꾼다.
+- latest.json: {"file", "jobId", "analyzedAt"}. 작업이 done 이 될 때만, 지금 가리키는 분석보다 analyzedAt 이 새롭거나 같을 때만
+  바꾼다(견주는 일은 growth.jobs.Job._write 가 latest_info() 로 한다).
 - results/ 는 Git 에서 제외돼 있다(제3자 기사 발췌가 들어 있다).
 """
 from __future__ import annotations

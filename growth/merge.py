@@ -83,10 +83,13 @@ def _web_value(v: _View, field: dict, display: str | None = None, raw=None) -> d
 
 
 def _same_founded(official: str, web: str) -> bool:
-    """금융위 설립일(YYYY-MM-DD)과 웹 값이 같은가. 웹 값이 YYYY-MM 이면 앞 7자, YYYY 이면 앞 4자를 견준다."""
-    m = re.match(r"^(\d{4})(?:-(\d{2}))?", web or "")
+    """금융위 설립일(YYYY-MM-DD)과 웹 값이 같은가(계약 7.3). 웹 값이 YYYY-MM-DD 면 10자 전체, YYYY-MM 이면 앞 7자,
+    YYYY 이면 앞 4자를 견준다(일까지 적힌 웹 값이 하루라도 다르면 엇갈림)."""
+    m = re.match(r"^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?", web or "")
     if not m:
         return False
+    if m.group(3):
+        return official[:10] == f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
     if m.group(2):
         return official[:7] == f"{m.group(1)}-{m.group(2)}"
     return official[:4] == m.group(1)
