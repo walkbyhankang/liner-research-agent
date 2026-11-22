@@ -7,7 +7,11 @@
   --color-sub: #586377;
   --color-rule: #dde2e9;
   --color-ledger: #0c6b58;
+  --color-ledger-deep: #0a5a4a;
   --color-ledger-soft: #e5f1ed;
+  /* 상태 낱말·작은 표시의 테두리(선보다 한 단계 진하게, 점 테두리는 두 단계) */
+  --color-rule-strong: #b9c1cc;
+  --color-rule-dot: #8a95a5;
   --color-amber: #7a4b00;
   --color-amber-soft: #fcefd7;
   --color-wash: #f3f5f8;
@@ -47,6 +51,38 @@ body {
   word-break: keep-all;
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums lining-nums;
+  accent-color: var(--color-ledger);
+}
+
+/* 브라우저가 그리는 부분도 같은 색으로: 글 고르기, 입력 커서 */
+::selection {
+  background: var(--color-ledger-soft);
+  color: var(--color-ink);
+}
+input,
+textarea {
+  caret-color: var(--color-ledger);
+}
+/* 입력 예시 글도 보조 글 대비(6:1)를 지킨다. 브라우저 기본 예시 글은 3:1이다 */
+::placeholder {
+  color: var(--color-sub);
+  opacity: 1;
+}
+/* 제목은 줄 길이를 고르게, 문단은 끝 줄에 낱말 하나만 남지 않게 */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+p,
+li,
+dd {
+  text-wrap: pretty;
+}
+/* 줄 수를 자른 글(.clamp-2·3)은 고르게 나누면 첫 줄이 짧아지고 잘리는 글이 늘어 보통 줄바꿈으로 둔다 */
+.clamp-2,
+.clamp-3 {
+  text-wrap: wrap;
 }
 
 button,
@@ -58,10 +94,10 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* 초점 테두리는 요소의 둥글기를 그대로 따른다(둥근 칩은 둥글게). 요소 모양을 바꾸지 않는다 */
 :focus-visible {
   outline: 3px solid var(--color-ledger);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
 /* 단락으로 옮길 때 위에 붙은 줄에 가리지 않게 */
@@ -111,8 +147,8 @@ button:disabled {
     color: #fff;
   }
   .btn-primary:hover:not(:disabled) {
-    background: #0a5a4a;
-    border-color: #0a5a4a;
+    background: var(--color-ledger-deep);
+    border-color: var(--color-ledger-deep);
   }
   .btn-primary:disabled {
     background: var(--color-wash);
@@ -182,13 +218,34 @@ button:disabled {
     color: var(--color-sub);
     vertical-align: middle;
   }
-  /* 상태 낱말이 아닌 작은 표시(예시 회사, 이름이 같음 등) */
+  /*
+   * 상태 낱말이 아닌 작은 표시는 상태 낱말(테두리·칠로 구분)과 다른 계열로 그린다. 테두리와 칠이 없다.
+   * .tag: 눈여겨볼 표시(예시 회사, 이름이 같음, 이미 투자함, 경쟁사에 투자, 회사 사업과 관련, 핵심 낱말 일치):
+   *       잉크 굵은 글 앞에 작은 마름모. 색은 쓰지 않는다(호박색은 엇갈림·확인 필요, 녹색은 누르는 것에만).
+   * .meta: 분류·지역·개수 같은 꼬리표: 보조 글만.
+   */
   .tag {
     display: inline-flex;
     align-items: center;
-    padding: 0 6px;
-    border-radius: 4px;
-    border: 1px solid #b9c1cc;
+    gap: 5px;
+    font-size: 12px;
+    line-height: 20px;
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--color-ink);
+  }
+  .tag::before {
+    content: "";
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    background: currentColor;
+    transform: rotate(45deg);
+    print-color-adjust: exact;
+  }
+  .meta {
+    display: inline-flex;
+    align-items: center;
     font-size: 12px;
     line-height: 20px;
     font-weight: 500;
@@ -199,10 +256,10 @@ button:disabled {
     padding: 0;
   }
   .word-reported {
-    border-color: #b9c1cc;
+    border-color: var(--color-rule-strong);
   }
   .word-reference {
-    border: 1px dotted #8a95a5;
+    border: 1px dotted var(--color-rule-dot);
   }
   .word-inferred {
     border: 1px dashed var(--color-ink);
@@ -272,15 +329,16 @@ button:disabled {
   .row-btn:hover {
     background: var(--color-wash);
   }
+  /* 열린 줄과 그 아래 내용은 각진 한 덩어리(왼쪽 2px 선이 둥근 모서리에서 휘지 않게) */
   .row-btn[aria-expanded="true"] {
     background: var(--color-wash);
-    border-radius: 6px 6px 0 0;
+    border-radius: 0;
   }
   .row-body {
     margin: 0 0 8px;
     padding: 8px 12px 12px;
     background: var(--color-wash);
-    border-radius: 0 0 6px 6px;
+    border-radius: 0;
     box-shadow: inset 2px 0 0 var(--color-sub);
     font-size: 14px;
   }
@@ -301,6 +359,15 @@ button:disabled {
     margin-bottom: 6px;
   }
 
+  /* 문장 속 고르기(/funding): 누를 수 있다는 것을 꺾쇠로 보인다(브라우저 기본 화살표는 지웠다) */
+  .pick {
+    padding-right: 26px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 7.5l5 5 5-5' fill='none' stroke='%230c6b58' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-size: 14px 14px;
+  }
+
   .ph {
     background: var(--color-wash);
     border-radius: 4px;
@@ -312,11 +379,14 @@ button:disabled {
     background: var(--color-paper);
   }
 
-  .lane-debt {
-    box-shadow: inset 0 3px 0 var(--color-debt);
-  }
-  .lane-equity {
-    box-shadow: inset 0 3px 0 var(--color-equity);
+  /* 갈래 머리 윗선은 두 갈래가 나란히 보이는 넓은 화면에만. 좁은 화면은 갈래 탭 밑줄이 같은 일을 한다 */
+  @media (min-width: 1024px) {
+    .lane-debt {
+      box-shadow: inset 0 3px 0 var(--color-debt);
+    }
+    .lane-equity {
+      box-shadow: inset 0 3px 0 var(--color-equity);
+    }
   }
 
   .clamp-2 {

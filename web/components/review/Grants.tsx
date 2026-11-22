@@ -216,7 +216,8 @@ function NoticeCard({ x, company }: { x: SavedProgram; company: NoticeCompany | 
     <article className="card p-4" data-notice={id}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h3 className="clamp-2 min-w-0 flex-1 text-lg font-semibold leading-snug">{x.item.title}</h3>
-        <span className="num text-sm">{endDay ? (d !== null && d >= 0 ? `D-${d}, ${shortDate(endDay)} 마감` : `${shortDate(endDay)} 마감`) : "신청기간 미기재"}</span>
+        {/* 휴대폰에서는 마감을 제목 위 한 줄로 올려 제목이 전체 폭을 쓰게 한다 */}
+        <span className="num text-sm max-sm:order-first max-sm:w-full">{endDay ? (d !== null && d >= 0 ? `D-${d}, ${shortDate(endDay)} 마감` : `${shortDate(endDay)} 마감`) : "신청기간 미기재"}</span>
       </div>
       {x.item.kind === "salesProgram" && <p className="text-xs text-sub">판로 지원사업</p>}
 
@@ -358,16 +359,22 @@ function NoticeDetail({ cid, programId, result, rec, onRerun, url, onRemove }: {
         {ex.doc.truncated ? ". 공고문이 길어 앞부분만 읽었습니다" : ""}
         {ex.notStated.length > 0 ? `. 공고문에 없는 항목: ${ex.notStated.join(", ")}` : ""}. 모델이 읽은 결과이므로 신청 전 공고문을 직접 확인하세요.
       </p>
-      <div className="no-print flex flex-wrap gap-2">
-        <button type="button" className="btn" onClick={onRerun}>
-          다시 대조
-        </button>
-        <ExtLink href={url} className="btn">
-          공고 원문
-        </ExtLink>
-        <button type="button" className="btn btn-quiet" onClick={onRemove}>
-          담은 공고에서 빼기
-        </button>
+      {/* 호출이 드는 "다시 대조"는 걸리는 시간과 묶어 왼쪽에, 링크·빼기는 오른쪽에 떼어 둔다 */}
+      <div className="no-print flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="flex flex-wrap items-center gap-3">
+          <button type="button" className="btn" onClick={onRerun}>
+            다시 대조
+          </button>
+          <span className="text-sm text-sub">보통 30~50초</span>
+        </span>
+        <span className="flex flex-wrap gap-2 sm:ml-auto">
+          <ExtLink href={url} className="btn">
+            공고 원문
+          </ExtLink>
+          <button type="button" className="btn btn-quiet" onClick={onRemove}>
+            담은 공고에서 빼기
+          </button>
+        </span>
       </div>
     </>
   );

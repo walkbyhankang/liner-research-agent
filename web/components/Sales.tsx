@@ -68,12 +68,13 @@ export function SalesScreen() {
           {env?.status === "unavailable" && <StatusWord w="unavailable" />}
         </h2>
         <p className="text-sm text-sub">조달청 나라장터, 최근 28일</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* 검색어는 누르는 것이 아니라 테두리 없이 따옴표로 보인다. 고치기는 아래 "검색어 고치기"에서 */}
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="text-sm text-sub">검색어</span>
           {keywords.length ? (
             keywords.map((k) => (
-              <span key={k} data-keyword className="rounded border border-rule px-2 py-0.5 text-sm">
-                {k}
+              <span key={k} data-keyword className="text-sm font-medium">
+                &lsquo;{k}&rsquo;
               </span>
             ))
           ) : (
@@ -202,7 +203,7 @@ function BidRow({ b, today }: { b: Bid; today: string }) {
       head={
         <span className="block">
           <span className="flex flex-wrap items-center gap-2">
-            {b.relevance === "high" && <span className="inline-flex rounded bg-ledger-soft px-1.5 text-xs font-semibold leading-5 text-ledger">핵심 낱말 일치</span>}
+            {b.relevance === "high" && <span className="tag">핵심 낱말 일치</span>}
             <span className="num text-sm">{today ? bidDeadline(b, today) : ""}</span>
           </span>
           <span className="clamp-2 mt-0.5 font-medium">{b.title}</span>

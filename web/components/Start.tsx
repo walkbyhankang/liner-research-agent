@@ -421,7 +421,7 @@ function Confirm({ query }: { query: string }) {
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="font-bold">{c.name}</span>
                   {c.exact && <span className="tag">이름이 같음</span>}
-                  {c.snapshotAt && <span className="tag border-ledger text-ledger">저장된 분석 있음 ({fmtDay(c.snapshotAt)})</span>}
+                  {c.snapshotAt && <span className="tag">저장된 분석 있음 ({fmtDay(c.snapshotAt)})</span>}
                 </span>
                 <span className="num mt-0.5 flex flex-wrap gap-x-4 text-sm">
                   <span>
