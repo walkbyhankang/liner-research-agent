@@ -1,6 +1,6 @@
 # liner-research-agent 프로젝트 규칙
 
-Liner API 기반 기업분석 Streamlit 프로토타입. 핵심 Python 분석 엔진을 유지하면서 FastAPI + React/Next.js 웹서비스로 전환하는 것이 목표다(`docs/architecture.md`).
+**성장노트**: 회사 이름 하나로 우리 회사를 객관적으로 분석하고(통합 회사분석), 그 결과로 받을 수 있는 자금·심사 준비·판로까지 잇는 웹 서비스. 화면은 Next.js(`web/`), 서버는 FastAPI(`api/`). 설계는 `docs/integration-design.md`, UX는 `docs/ux/`, 서버·화면 계약은 `docs/contract.md`.
 
 ## 작업 원칙
 - 모든 응답과 보고는 한국어로 한다.
@@ -11,14 +11,14 @@ Liner API 기반 기업분석 Streamlit 프로토타입. 핵심 Python 분석 �
 
 ## 환경
 - Python 3.12, 프로젝트 가상환경 `.venv` 사용. 의존성은 `requirements.txt`.
-- 실행: `.venv/bin/python -m streamlit run app.py` / 테스트: `.venv/bin/python -m pytest -q tests`
+- 실행: `scripts/run_local.sh`(성장노트: 화면 3100 + 분석 서버 8000, 둘 다 127.0.0.1) / 테스트: `.venv/bin/python -m pytest -q tests`, `npm --prefix web test`
+- 테스트는 외부로 연결하지 못한다(`tests/conftest.py`가 막음). 가짜 응답(`httpx.MockTransport`, `fixtures/analysis/`)으로 한다.
 
-## 구조 (현재 flat 구조 — 이동·리팩터링은 명시적 지시가 있을 때만)
-- `config.py` 설정·한도·키 탐색 / `liner_client.py` HTTP·한도·재시도·호출 기록
-- `planner.py` 검색 계획 / `sources.py` 정규화·기업 식별·신뢰도 / `fetcher.py` 원문 확인
-- `categories.py` 카테고리별 Model 스키마·검증·적격성 / `integrate.py` Search↔Agent 통합·Premium 비교
-- `analysis.py` 정규화·마스킹 / `pipeline.py` 실행 흐름·품질 지표·결과 저장
-- `app.py` Streamlit UI(8개 탭) / `run_probe.py` CLI / `tests/` 테스트
+## 구조 (이동·리팩터링은 명시적 지시가 있을 때만)
+- `web/` 성장노트 화면(Next.js) / `api/` FastAPI(`main.py` 공고문 대조·운용사 요약·상태·요청 제한, `analysis.py` 회사 분석 경로)
+- `growth/` 회사 분석 서버 패키지(단락 작업·합친 값·스냅샷·수집 모듈, `limits.py` 호출 상한, `contract.py` 계약 타입) / `funding/` 공고문 추출·대조, 운용사 요약, 회사 조회 엔진
+- 기존 엔진(flat): `config.py` 설정·키 / `liner_client.py` HTTP·한도·재시도 / `planner.py` / `sources.py` / `fetcher.py` 원문 확인(내부망 차단) / `categories.py` / `integrate.py` / `analysis.py` 정규화·마스킹 / `pipeline.py`
+- 참고용(팀원 Streamlit 통합 분석, 제출 때 지워질 수 있음): `research/`, `app.py`, `app_legacy.py`. **성장노트 코드(`growth/`, `api/`, `web/`)는 `research/`를 불러오지 않는다.**
 
 ## 보안
 - API 키·토큰을 소스, 로그, 결과 파일, 커밋에 넣거나 출력하지 않는다. `.env`는 커밋 금지(`.env.example`만 추적).
@@ -28,7 +28,7 @@ Liner API 기반 기업분석 Streamlit 프로토타입. 핵심 Python 분석 �
 
 ## API 호출·비용
 - 유료 호출을 최소화한다. 테스트는 `httpx.MockTransport`로 하며 실제 호출은 사용자가 요청할 때만 한다.
-- 한도: 검색 최대 50, Model 6(카테고리당 1), Agent 1, Premium 1. 한도는 `LinerClient`가 강제한다.
+- 성장노트 한도: API별 하루 상한과 단락별 상한(`growth/limits.py`, `docs/contract.md` 14절). 단락의 Liner 클라이언트는 `budget.liner_client()`로만 만든다. 기존 엔진(Streamlit 검증 화면)의 한도는 검색 최대 50, Model 6, Agent 1, Premium 1(`LinerClient`가 강제).
 - 524/429/5xx는 Retry-After를 따라 최대 1회만 재시도하고, 타임아웃은 재시도하지 않는다. Deep Research는 호출하지 않는다.
 - 기본 검색은 `include_knowledge=false`를 명시 전송한다(공식 기본값이 true).
 
