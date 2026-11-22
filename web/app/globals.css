@@ -1,61 +1,444 @@
 @import "tailwindcss";
 
+/* 성장노트 시각 토큰(docs/ux/visual-plan.md 3절). 바탕은 흰색 하나, 칠은 엇갈림·미확보·담은 항목 막대에만 쓴다 */
 @theme {
-  --color-paper: #f6f4ee;
-  --color-card: #ffffff;
-  --color-ink: #171b24;
-  --color-muted: #646b78;
-  --color-line: #e3dfd4;
-  --color-accent: #0f5c4d;
-  --color-accent-soft: #e3f0ec;
-  --color-debt: #8a5310;
-  --color-debt-soft: #f8eeda;
-  --color-equity: #2447b8;
-  --color-equity-soft: #e6ecfb;
-  --color-warn: #9a3412;
-  --color-warn-soft: #fdeee4;
-  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
-    "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --color-paper: #ffffff;
+  --color-ink: #1e2a3f;
+  --color-sub: #586377;
+  --color-rule: #dde2e9;
+  --color-ledger: #0c6b58;
+  --color-ledger-soft: #e5f1ed;
+  --color-amber: #7a4b00;
+  --color-amber-soft: #fcefd7;
+  --color-wash: #f3f5f8;
+  --color-debt: #8b6534;
+  --color-equity: #3a52a0;
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --text-xs: 12px;
+  --text-xs--line-height: 1.55;
+  --text-sm: 14px;
+  --text-sm--line-height: 1.6;
+  --text-base: 16px;
+  --text-base--line-height: 1.7;
+  --text-lg: 18px;
+  --text-lg--line-height: 1.55;
+  --text-xl: 21px;
+  --text-xl--line-height: 1.45;
+  --text-2xl: 28px;
+  --text-2xl--line-height: 1.3;
+  --text-3xl: 36px;
+  --text-3xl--line-height: 1.2;
 }
 
 html {
   background: var(--color-paper);
-  /* 스크롤 막대 자리를 늘 비워 둔다. 긴 화면과 짧은 화면을 오갈 때 막대가 생겼다 사라지며 내용이 좌우로 밀리지 않게 한다 */
+  /* 단락이 채워질 때 읽던 자리는 화면 코드가 직접 지킨다(restoreAnchor) */
+  overflow-anchor: none;
   scrollbar-gutter: stable;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.7;
   word-break: keep-all;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
-button {
+button,
+summary,
+[role="button"] {
   cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-ledger);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 단락으로 옮길 때 위에 붙은 줄에 가리지 않게 */
+.anchor {
+  scroll-margin-top: 112px;
+}
+@media (min-width: 1024px) {
+  .anchor {
+    scroll-margin-top: 72px;
+  }
+}
+
+@layer components {
+  .num {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /* 단추: 누르는 곳은 모두 44px 이상 */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 16px;
+    border-radius: 6px;
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--color-ink) 45%, transparent);
+  }
+  .btn:disabled {
+    color: var(--color-sub);
+    background: var(--color-wash);
+  }
+  .btn-primary {
+    background: var(--color-ledger);
+    border-color: var(--color-ledger);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #0a5a4a;
+    border-color: #0a5a4a;
+  }
+  .btn-primary:disabled {
+    background: var(--color-wash);
+    border-color: var(--color-rule);
+    color: var(--color-sub);
+  }
+  .btn-quiet {
+    border-color: transparent;
+    color: var(--color-ledger);
+    padding: 0 10px;
+  }
+  .btn-quiet:hover:not(:disabled) {
+    background: var(--color-wash);
+    border-color: transparent;
+  }
+  .btn-pressed {
+    background: var(--color-ledger-soft);
+    border-color: var(--color-ledger);
+    color: var(--color-ledger);
+  }
+
+  /* 따로 놓인 링크(출처 줄 끝 "원문 열기" 등)도 44px */
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    color: var(--color-ledger);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .chip[aria-pressed="true"],
+  .chip[aria-selected="true"] {
+    border-color: var(--color-ledger);
+    background: var(--color-ledger-soft);
+    color: var(--color-ledger);
+    font-weight: 600;
+  }
+
+  /* 상태 낱말 7개: 모양으로 나눈다(visual-plan 3.4) */
+  .word {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    line-height: 20px;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--color-sub);
+    vertical-align: middle;
+  }
+  /* 상태 낱말이 아닌 작은 표시(예시 회사, 이름이 같음 등) */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 6px;
+    border-radius: 4px;
+    border: 1px solid #b9c1cc;
+    font-size: 12px;
+    line-height: 20px;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--color-sub);
+  }
+  .word-confirmed {
+    padding: 0;
+  }
+  .word-reported {
+    border-color: #b9c1cc;
+  }
+  .word-reference {
+    border: 1px dotted #8a95a5;
+  }
+  .word-inferred {
+    border: 1px dashed var(--color-ink);
+    color: var(--color-ink);
+  }
+  .word-conflicting {
+    background: var(--color-amber-soft);
+    color: var(--color-amber);
+    font-weight: 700;
+  }
+  .word-unavailable {
+    background: var(--color-wash);
+    border: 1px dashed var(--color-sub);
+    color: var(--color-ink);
+    font-weight: 700;
+  }
+  .word-edited {
+    padding: 0 2px;
+    color: var(--color-ledger);
+    border-bottom: 2px solid var(--color-ledger);
+    border-radius: 0;
+    font-weight: 600;
+  }
+
+  /* 펼치기 줄 */
+  .disclosure {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    padding: 8px 4px 8px 0;
+    border-top: 1px solid var(--color-rule);
+    text-align: left;
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+  .disclosure[aria-expanded="true"] {
+    box-shadow: inset 2px 0 0 var(--color-ledger);
+    padding-left: 14px;
+  }
+  .disclosure .chev {
+    color: var(--color-ledger);
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+  }
+  .disclosure[aria-expanded="true"] .chev {
+    transform: rotate(180deg);
+  }
+  .panel {
+    box-shadow: inset 2px 0 0 var(--color-ledger);
+    padding: 4px 0 12px 14px;
+  }
+
+  /* 줄 자세히 */
+  .row-btn {
+    display: flex;
+    width: 100%;
+    align-items: flex-start;
+    gap: 12px;
+    min-height: 44px;
+    padding: 10px 8px;
+    border-radius: 6px;
+    text-align: left;
+  }
+  .row-btn:hover {
+    background: var(--color-wash);
+  }
+  .row-btn[aria-expanded="true"] {
+    background: var(--color-wash);
+    border-radius: 6px 6px 0 0;
+  }
+  .row-body {
+    margin: 0 0 8px;
+    padding: 8px 12px 12px;
+    background: var(--color-wash);
+    border-radius: 0 0 6px 6px;
+    box-shadow: inset 2px 0 0 var(--color-sub);
+    font-size: 14px;
+  }
+
+  /* 출처 줄: 각주선 하나 아래 두 부분 */
+  .source {
+    margin-top: 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--color-sub);
+  }
+  .source::before {
+    content: "";
+    display: block;
+    width: 24px;
+    height: 1px;
+    background: var(--color-sub);
+    margin-bottom: 6px;
+  }
+
+  .ph {
+    background: var(--color-wash);
+    border-radius: 4px;
+  }
+
+  .card {
+    border: 1px solid var(--color-rule);
+    border-radius: 10px;
+    background: var(--color-paper);
+  }
+
+  .lane-debt {
+    box-shadow: inset 0 3px 0 var(--color-debt);
+  }
+  .lane-equity {
+    box-shadow: inset 0 3px 0 var(--color-equity);
+  }
+
+  .clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* 회사 표시줄: 좁은 3줄 / 중간 2줄 / 넓은 1줄(screens 1.2) */
+  .cbar {
+    display: grid;
+    gap: 10px 16px;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "name name" "chips chips" "time btns";
+    align-items: center;
+  }
+  .cbar-name {
+    grid-area: name;
+  }
+  .cbar-chips {
+    grid-area: chips;
+  }
+  .cbar-time {
+    grid-area: time;
+  }
+  .cbar-btns {
+    grid-area: btns;
+    justify-content: flex-end;
+  }
+  @media (min-width: 640px) {
+    .cbar {
+      grid-template-areas: "name btns" "chips time";
+    }
+    .cbar-time {
+      justify-self: end;
+    }
+  }
+  @media (min-width: 1024px) {
+    .cbar {
+      grid-template-columns: auto auto 1fr auto;
+      grid-template-areas: "name chips time btns";
+    }
+    .cbar-time {
+      justify-self: start;
+    }
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.print-only {
+  display: none;
 }
 
 @media print {
   .no-print {
     display: none !important;
   }
+  .print-only {
+    display: block !important;
+  }
+  .print-open {
+    display: block !important;
+  }
   html,
   body {
     background: #fff;
   }
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+  a {
+    color: inherit;
+    text-decoration: none;
   }
-  to {
-    opacity: 1;
-    transform: none;
+  @page {
+    size: A4 portrait;
+    margin: 16mm 14mm 18mm;
   }
-}
-
-.rise {
-  animation: rise 0.35s ease both;
+  /* "미팅 근거 묶음 인쇄": 묶음만 A4 한 장으로 */
+  body[data-print="evidence"] * {
+    visibility: hidden;
+  }
+  body[data-print="evidence"] .evidence-print,
+  body[data-print="evidence"] .evidence-print * {
+    visibility: visible;
+  }
+  body[data-print="evidence"] .evidence-print {
+    position: absolute;
+    inset: 0 0 auto 0;
+    border: 0;
+    padding: 0;
+    font-size: 12px;
+  }
+  body[data-print="evidence"] .evidence-print svg {
+    max-height: 120px;
+  }
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
 }

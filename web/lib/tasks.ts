@@ -3,7 +3,7 @@
 // 진행 중인 요청의 결과가 버려지지 않고, 같은 입력이면 같은 결과를 함께 본다.
 // 페이지를 새로 열면 지워진다(브라우저에 저장하지 않는다).
 
-export type Task<T> = { status: "idle" | "loading" | "done" | "error"; data?: T; error?: string };
+export type Task<T> = { status: "idle" | "loading" | "done" | "error"; data?: T; error?: string; startedAt?: number };
 
 export const IDLE: Task<never> = { status: "idle" };
 const MAX_TASKS = 200;
@@ -36,7 +36,7 @@ function put(key: string, task: Task<unknown>) {
  */
 export function runTask<T>(key: string, work: () => Promise<T>): boolean {
   if (tasks.get(key)?.status === "loading") return false;
-  put(key, { status: "loading" });
+  put(key, { status: "loading", startedAt: Date.now() });
   work().then(
     (data) => put(key, { status: "done", data }),
     (e) => put(key, { status: "error", error: e instanceof Error ? e.message : "요청 실패" }),
