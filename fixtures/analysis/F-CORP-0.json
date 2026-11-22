@@ -1,0 +1,22 @@
+{
+ "fixture": "F-CORP-0",
+ "description": "법인 후보 0곳",
+ "baseDate": "2026-11-22",
+ "exchanges": [
+  {
+   "label": null,
+   "method": "GET",
+   "path": "/api/corp/search",
+   "query": {
+    "name": "없는회사"
+   },
+   "request": null,
+   "status": 200,
+   "response": {
+    "query": "없는회사",
+    "candidates": [],
+    "queriedAt": "2026-11-22T20:44:01+09:00"
+   }
+  }
+ ]
+}

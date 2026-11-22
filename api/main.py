@@ -26,6 +26,7 @@ from funding import gp as gp_mod  # noqa: E402
 from funding import profile as profile_mod  # noqa: E402
 from funding import service  # noqa: E402
 from liner_client import MAX_AUTO_RETRIES, CallLimitExceeded, LinerAPIError, LinerClient  # noqa: E402
+from api.analysis import router as analysis_router  # noqa: E402
 
 SNAPSHOT = ROOT / "web" / "public" / "data" / "programs.json"
 FUNDS_SNAPSHOT = ROOT / "web" / "public" / "data" / "funds.json"
@@ -39,6 +40,7 @@ WEB_ORIGINS = [o.strip() for o in os.environ.get(
     "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3100,http://127.0.0.1:3100").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=WEB_ORIGINS,
                    allow_methods=["GET", "POST"], allow_headers=["content-type"])
+app.include_router(analysis_router)
 
 _lock = threading.Lock()
 _paid_used = 0

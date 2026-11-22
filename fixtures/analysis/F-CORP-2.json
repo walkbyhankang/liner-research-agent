@@ -1,0 +1,69 @@
+{
+ "fixture": "F-CORP-2",
+ "description": "이름 같은 2곳",
+ "baseDate": "2026-11-22",
+ "exchanges": [
+  {
+   "label": null,
+   "method": "GET",
+   "path": "/api/corp/search",
+   "query": {
+    "name": "가나다테크"
+   },
+   "request": null,
+   "status": 200,
+   "response": {
+    "query": "가나다테크",
+    "candidates": [
+     {
+      "companyId": "0000000000001",
+      "crno": "0000000000001",
+      "bzno": "0000000001",
+      "name": "주식회사 가나다테크",
+      "names": [
+       "주식회사 가나다테크",
+       "가나다테크"
+      ],
+      "nameEn": "GANADA TECH Inc.",
+      "ceo": "홍길동",
+      "founded": "2011-02-11",
+      "address": "부산광역시 해운대구 예시로 2",
+      "region": "부산",
+      "district": "해운대구",
+      "homepage": "www.example.com",
+      "industry": "전자집적회로 제조업",
+      "mainBiz": null,
+      "market": "기타",
+      "updated": "2026-05-01",
+      "exact": true,
+      "snapshotAt": null
+     },
+     {
+      "companyId": "0000000000002",
+      "crno": "0000000000002",
+      "bzno": "0000000002",
+      "name": "가나다테크 주식회사",
+      "names": [
+       "가나다테크 주식회사",
+       "가나다테크 주식회사"
+      ],
+      "nameEn": null,
+      "ceo": "홍길동",
+      "founded": "2012-03-12",
+      "address": "경기도 성남시 분당구 예시로 3",
+      "region": "경기",
+      "district": "성남시 분당구",
+      "homepage": "www.example.com",
+      "industry": null,
+      "mainBiz": null,
+      "market": "기타",
+      "updated": "2026-05-01",
+      "exact": true,
+      "snapshotAt": null
+     }
+    ],
+    "queriedAt": "2026-11-22T20:44:01+09:00"
+   }
+  }
+ ]
+}

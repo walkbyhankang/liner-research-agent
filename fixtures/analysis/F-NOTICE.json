@@ -1,0 +1,163 @@
+{
+ "fixture": "F-NOTICE",
+ "description": "공고문 대조 응답: 충족 4, 미충족 1, 확인 필요 2, 판단 대상 아님 2, 질문 5, 준비 자료 3.",
+ "baseDate": "2026-11-22",
+ "exchanges": [
+  {
+   "label": null,
+   "method": "POST",
+   "path": "/api/notice/analyze",
+   "query": null,
+   "request": {
+    "programId": "PBLN_000000000000001",
+    "company": {
+     "name": "주식회사 가나다테크",
+     "region": "서울",
+     "biz": "venture",
+     "founded": "2020-09",
+     "industry": "전자집적회로 제조업",
+     "employees": "약 120명 (2026-06 기준)",
+     "revenue": "56.7억원 (2024 사업연도, 별도)",
+     "need": "운전자금 3억 원",
+     "notes": "확인된 국내 특허 11건(출원인 확인, 등록 8건), 국민연금 가입자 118명(2026-10, 직원 수와 다름)"
+    }
+   },
+   "status": 200,
+   "response": {
+    "program": {
+     "id": "PBLN_000000000000001",
+     "title": "가나다시 지원자금 가짜 공고",
+     "url": "https://example.com/program/1",
+     "docUrl": "https://example.com/program/1.hwpx"
+    },
+    "extraction": {
+     "summary": "가나다시 기업 운전자금 융자(가짜)",
+     "notStated": [
+      "금리·보증료"
+     ],
+     "doc": {
+      "kind": "hwpx",
+      "pages": null,
+      "chars": 12000,
+      "truncated": false
+     },
+     "model": "openai/gpt-6.2-sol",
+     "extractedAt": "2026-11-22T11:50:00+00:00",
+     "dropped": 0,
+     "cached": false
+    },
+    "match": {
+     "overall": "대상 아님",
+     "overallReason": "제외 대상 조건 하나가 맞지 않습니다(가짜).",
+     "adjusted": false,
+     "rows": [
+      {
+       "field": "지역",
+       "requirement": "지역 조건 가짜 문장",
+       "quote": "지역 관련 공고문 가짜 문장",
+       "verdict": "충족",
+       "reason": "회사 값과 맞음"
+      },
+      {
+       "field": "업력",
+       "requirement": "업력 조건 가짜 문장",
+       "quote": "업력 관련 공고문 가짜 문장",
+       "verdict": "충족",
+       "reason": "회사 값과 맞음"
+      },
+      {
+       "field": "업종",
+       "requirement": "업종 조건 가짜 문장",
+       "quote": "업종 관련 공고문 가짜 문장",
+       "verdict": "충족",
+       "reason": "회사 값과 맞음"
+      },
+      {
+       "field": "기업규모",
+       "requirement": "기업규모 조건 가짜 문장",
+       "quote": "기업규모 관련 공고문 가짜 문장",
+       "verdict": "충족",
+       "reason": "회사 값과 맞음"
+      },
+      {
+       "field": "제외대상",
+       "requirement": "체납 기업 제외",
+       "quote": "체납 사실이 있는 기업은 제외한다",
+       "verdict": "미충족",
+       "reason": "가짜 판정"
+      },
+      {
+       "field": "지원대상 기타",
+       "requirement": "지원대상 기타 조건 가짜 문장",
+       "quote": "지원대상 기타 관련 공고문 가짜 문장",
+       "verdict": "확인 필요",
+       "reason": "회사 값에 없음"
+      },
+      {
+       "field": "자금용도",
+       "requirement": "자금용도 조건 가짜 문장",
+       "quote": "자금용도 관련 공고문 가짜 문장",
+       "verdict": "확인 필요",
+       "reason": "회사 값에 없음"
+      },
+      {
+       "field": "신청방법",
+       "requirement": "신청방법 안내 가짜 문장",
+       "quote": "신청방법 관련 공고문 가짜 문장",
+       "verdict": "판단 대상 아님",
+       "reason": "자격과 무관"
+      },
+      {
+       "field": "제출서류",
+       "requirement": "제출서류 안내 가짜 문장",
+       "quote": "제출서류 관련 공고문 가짜 문장",
+       "verdict": "판단 대상 아님",
+       "reason": "자격과 무관"
+      }
+     ],
+     "questions": [
+      "기관에 물어볼 가짜 질문 1",
+      "기관에 물어볼 가짜 질문 2",
+      "기관에 물어볼 가짜 질문 3",
+      "기관에 물어볼 가짜 질문 4",
+      "기관에 물어볼 가짜 질문 5"
+     ],
+     "documents": [
+      "준비 자료 1",
+      "준비 자료 2",
+      "준비 자료 3"
+     ],
+     "model": "anthropic/claude-opus-5.5",
+     "costUsd": 0.0123,
+     "elapsedSec": 21.4
+    }
+   }
+  },
+  {
+   "label": "상한 도달",
+   "method": "POST",
+   "path": "/api/notice/analyze",
+   "query": null,
+   "request": {
+    "programId": "PBLN_000000000000002",
+    "company": {
+     "name": "주식회사 가나다테크",
+     "region": "서울",
+     "biz": "venture",
+     "founded": "2020-09",
+     "industry": "전자집적회로 제조업",
+     "employees": "약 120명 (2026-06 기준)",
+     "revenue": "56.7억원 (2024 사업연도, 별도)",
+     "need": "운전자금 3억 원",
+     "notes": "확인된 국내 특허 11건(출원인 확인, 등록 8건), 국민연금 가입자 118명(2026-10, 직원 수와 다름)"
+    }
+   },
+   "status": 429,
+   "response": {
+    "detail": "오늘 호출 상한에 닿았습니다. 내일 0시 이후에 다시 할 수 있습니다.",
+    "code": "daily_limit",
+    "retryAt": "2026-11-23T00:00:00+09:00"
+   }
+  }
+ ]
+}

@@ -1,0 +1,109 @@
+{
+ "fixture": "F-BRIEF",
+ "description": "운용사 요약 응답: 사실 4, 맞닿는 점 2, 물어볼 것 2, 검색 결과 6(지금 코드 상한: 맞닿는 점·물어볼 것 각 2).",
+ "baseDate": "2026-11-22",
+ "exchanges": [
+  {
+   "label": null,
+   "method": "POST",
+   "path": "/api/gp/brief",
+   "query": null,
+   "request": {
+    "gp": "가나다벤처스",
+    "company": {
+     "name": "주식회사 가나다테크",
+     "region": "서울",
+     "biz": "venture",
+     "founded": "2020-09",
+     "industry": "전자집적회로 제조업",
+     "employees": "약 120명 (2026-06 기준)",
+     "revenue": "56.7억원 (2024 사업연도, 별도)",
+     "need": "운전자금 3억 원",
+     "notes": "확인된 국내 특허 11건(출원인 확인, 등록 8건), 국민연금 가입자 118명(2026-10, 직원 수와 다름)"
+    }
+   },
+   "status": 200,
+   "response": {
+    "gp": "가나다벤처스",
+    "facts": [
+     {
+      "kind": "투자 분야",
+      "text": "투자 분야 가짜 사실",
+      "quote": "투자 분야 관련 검색 결과 가짜 문장",
+      "sourceUrl": "https://example.com/gp/0",
+      "sourceHost": "example.com"
+     },
+     {
+      "kind": "투자 단계",
+      "text": "투자 단계 가짜 사실",
+      "quote": "투자 단계 관련 검색 결과 가짜 문장",
+      "sourceUrl": "https://example.com/gp/1",
+      "sourceHost": "example.com"
+     },
+     {
+      "kind": "투자 사례",
+      "text": "투자 사례 가짜 사실",
+      "quote": "투자 사례 관련 검색 결과 가짜 문장",
+      "sourceUrl": "https://example.com/gp/2",
+      "sourceHost": "example.com"
+     },
+     {
+      "kind": "제안 경로",
+      "text": "제안 경로 가짜 사실",
+      "quote": "제안 경로 관련 검색 결과 가짜 문장",
+      "sourceUrl": "https://example.com/gp/3",
+      "sourceHost": "example.com"
+     }
+    ],
+    "fit": [
+     {
+      "text": "회사 분야와 투자 분야가 맞닿음(가짜)",
+      "fact": 0
+     },
+     {
+      "text": "회사 단계와 투자 단계가 맞닿음(가짜)",
+      "fact": 1
+     }
+    ],
+    "questions": [
+     "가짜 질문 1",
+     "가짜 질문 2"
+    ],
+    "sources": [
+     {
+      "title": "검색 결과 1",
+      "url": "https://example.com/gp/src/1",
+      "host": "example.com"
+     },
+     {
+      "title": "검색 결과 2",
+      "url": "https://example.com/gp/src/2",
+      "host": "example.com"
+     },
+     {
+      "title": "검색 결과 3",
+      "url": "https://example.com/gp/src/3",
+      "host": "example.com"
+     },
+     {
+      "title": "검색 결과 4",
+      "url": "https://example.com/gp/src/4",
+      "host": "example.com"
+     },
+     {
+      "title": "검색 결과 5",
+      "url": "https://example.com/gp/src/5",
+      "host": "example.com"
+     },
+     {
+      "title": "검색 결과 6",
+      "url": "https://example.com/gp/src/6",
+      "host": "example.com"
+     }
+    ],
+    "searched": 6,
+    "model": "openai/gpt-6.2-sol"
+   }
+  }
+ ]
+}
