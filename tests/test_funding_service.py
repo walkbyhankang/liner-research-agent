@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import api.main as api_main  # noqa: E402
 from funding import company, notice, service  # noqa: E402
+from growth import limits as L  # noqa: E402
 from liner_client import LinerClient  # noqa: E402
 from tests.test_funding_notice import make_hwpx  # noqa: E402
 
@@ -93,8 +94,7 @@ def test_match_fills_unjudged_conditions_as_needs_check():
 @pytest.fixture
 def api(monkeypatch, tmp_path):
     monkeypatch.setattr(api_main, "_programs", {PROGRAM["id"]: PROGRAM})
-    monkeypatch.setattr(api_main, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(api_main, "_paid_used", 0)
+    monkeypatch.setattr(api_main, "CACHE_DIR", tmp_path)  # 하루 사용량은 tests/conftest.py 가 테스트마다 새로 시작한다
     monkeypatch.setattr(api_main.config, "resolve_api_key", lambda: ("secret-key-xyz", "env"))
     seen: list[dict] = []
     monkeypatch.setattr(api_main, "LinerClient", lambda key, source, limits: _limited(chat_client([EXTRACT_ANSWER, MATCH_ANSWER], seen), limits))
@@ -105,6 +105,22 @@ def api(monkeypatch, tmp_path):
 def _limited(client: LinerClient, limits: dict) -> LinerClient:
     client._limits.update(limits)
     return client
+
+
+def liner_used() -> int:
+    """오늘 하루 상한에 확정된 Liner 요청 수(4종 합)."""
+    apis = L.usage_today()["apis"]
+    return sum(apis[a]["used"] for a in L.LINER_APIS)
+
+
+def remaining(api: str) -> int:
+    """하루 상한 − 확정 − 예약 중."""
+    return L.usage_today()["apis"][api]["remaining"]
+
+
+def daily_limits(**caps: int) -> None:
+    """하루 상한을 낮춰 새로 시작한다. 예: daily_limits(LINER_MODEL=3)"""
+    L._reset_for_tests({L.ENV_PREFIX + k: str(v) for k, v in caps.items()})
 
 
 BODY = {"programId": PROGRAM["id"], "company": {"region": "대전", "biz": "venture", "founded": "2023-09", "need": "운전자금 3억"}}
@@ -133,11 +149,13 @@ def test_api_rejects_bad_input_and_unknown_program(api):
 
 def test_api_stops_at_paid_call_cap_and_without_key(api, monkeypatch):
     client, seen = api
-    monkeypatch.setattr(api_main, "_paid_used", api_main.MAX_PAID_CALLS - 1)
-    assert client.post("/api/notice/analyze", json=BODY).status_code == 429
-    assert seen == [] and api_main._paid_used == api_main.MAX_PAID_CALLS - 1
+    daily_limits(LINER_MODEL=3)  # 추출·대조 2회가 재시도까지 가면 4회 → 3회만 남았으면 보내지 않는다
+    res = client.post("/api/notice/analyze", json=BODY)
+    assert res.status_code == 429 and res.json()["code"] == "daily_limit" and res.json()["retryAt"].endswith("T00:00:00+09:00")
+    assert seen == [] and liner_used() == 0 and remaining(L.LINER_MODEL) == 3  # 거절하면 아무것도 잡지 않는다
     monkeypatch.setattr(api_main.config, "resolve_api_key", lambda: (None, None))
-    assert client.post("/api/notice/analyze", json=BODY).status_code == 503
+    res = client.post("/api/notice/analyze", json=BODY)
+    assert res.status_code == 503 and res.json()["code"] == "missing_config" and "LINER_API_KEY" not in res.text
     assert client.get("/api/health").json()["hasKey"] is False
 
 
@@ -263,12 +281,14 @@ def test_api_lookup_runs_as_a_job_and_releases_unused_calls(api, monkeypatch):
     body = wait_job(client, res.json()["jobId"])
     assert body["status"] == "done" and body["result"]["draft"]["name"] == "가나다" and body["result"]["query"] == "가나다"
     assert body["stage"] == "회사 정보·기존 투자자·경쟁사 추출" and calls == [("가나다", "example.kr")]
-    assert api_main._paid_used == 0  # 실제로 나간 호출이 없으면 잡아 둔 횟수를 돌려준다
+    # 실제로 나간 호출이 없으면 잡아 둔 횟수를 돌려준다
+    assert liner_used() == 0 and remaining(L.LINER_SEARCH) == 500 and remaining(L.LINER_MODEL) == 200
     assert client.post("/api/company/lookup", json={"name": "가"}).status_code == 422
     assert client.post("/api/company/lookup", json={"name": "가나다", "homepage": "https://x.kr/a?b"}).status_code == 422
     assert client.get("/api/company/lookup/" + "0" * 32).status_code == 404
-    monkeypatch.setattr(api_main, "_paid_used", api_main.MAX_PAID_CALLS - 5)
-    assert client.post("/api/company/lookup", json={"name": "가나다"}).status_code == 429 and len(calls) == 1
+    daily_limits(LINER_SEARCH=L.worst_case(api_main.LOOKUP_SEARCHES) - 1)
+    res = client.post("/api/company/lookup", json={"name": "가나다"})
+    assert res.status_code == 429 and res.json()["code"] == "daily_limit" and len(calls) == 1
 
 
 def test_api_lookup_job_reports_failures_and_limits_concurrency(api, monkeypatch):
@@ -294,8 +314,9 @@ def test_api_lookup_job_reports_failures_and_limits_concurrency(api, monkeypatch
     gate.set()
     a, b = wait_job(client, first), wait_job(client, second)
     assert a["status"] == "error" and "모델 호출 실패" in a["error"] and "result" not in a
-    assert b["status"] == "error" and "RuntimeError" in b["error"] and "secret detail" not in b["error"]
-    assert api_main._paid_used == 0
+    # 예외 이름·내용은 응답에 넣지 않는다(계약 1.3)
+    assert b["status"] == "error" and "RuntimeError" not in b["error"] and "secret detail" not in b["error"] and "오류" in b["error"]
+    assert liner_used() == 0
     assert client.post("/api/company/lookup", json={"name": "네번째"}).status_code == 202
 
 
@@ -344,17 +365,17 @@ def test_api_counts_automatic_retries_against_the_cap(api, monkeypatch):
     flaky = LinerClient("k", transport=httpx.MockTransport(lambda req: answers.pop(0)), sleep=lambda s: None)
     monkeypatch.setattr(api_main, "LinerClient", lambda key, source, limits: _limited(flaky, limits))
     assert client.post("/api/notice/analyze", json=BODY).status_code == 200
-    assert api_main._paid_used == 3  # 실패한 첫 요청, 재시도, 대조
+    assert liner_used() == 3 and remaining(L.LINER_MODEL) == 197  # 실패한 첫 요청, 재시도, 대조. 남은 예약은 돌려준다
 
 
 def test_api_reserves_room_for_retries_before_sending(api, monkeypatch):
     client, seen = api
     # 재시도까지 가면 4회가 나갈 수 있으므로, 3회만 남았으면 보내지 않는다
-    monkeypatch.setattr(api_main, "_paid_used", api_main.MAX_PAID_CALLS - 3)
+    daily_limits(LINER_MODEL=3)
     assert client.post("/api/notice/analyze", json=BODY).status_code == 429 and seen == []
-    monkeypatch.setattr(api_main, "_paid_used", api_main.MAX_PAID_CALLS - 4)
+    daily_limits(LINER_MODEL=4)
     assert client.post("/api/notice/analyze", json=BODY).status_code == 200
-    assert api_main._paid_used == api_main.MAX_PAID_CALLS - 2
+    assert liner_used() == 2 and remaining(L.LINER_MODEL) == 2
 
 
 def test_api_reports_document_outage_as_handled_error(api, monkeypatch):
@@ -365,8 +386,8 @@ def test_api_reports_document_outage_as_handled_error(api, monkeypatch):
 
     monkeypatch.setattr(service.docs, "fetch_document", down)
     res = client.post("/api/notice/analyze", json=BODY)
-    assert res.status_code == 422 and "공고문" in res.json()["detail"]
-    assert seen == [] and api_main._paid_used == 0
+    assert res.status_code == 422 and "공고문" in res.json()["detail"] and res.json()["code"] == "analysis_failed"
+    assert seen == [] and liner_used() == 0 and remaining(L.LINER_MODEL) == 200
 
 
 ALL_MET = {"overall": "신청 검토 가능", "overall_reason": "모두 충족", "questions": [], "documents": [],
@@ -582,11 +603,13 @@ def test_api_gp_brief_only_accepts_listed_managers(api, monkeypatch):
     monkeypatch.setattr(api_main.gp_mod, "brief", lambda gp, funds, text, c: calls.append((gp, len(funds))) or {"gp": gp, "facts": []})
     body = {"gp": "가나벤처스", "company": {"region": "대전"}}
     assert client.post("/api/gp/brief", json=body).json() == {"gp": "가나벤처스", "facts": []}
-    assert calls == [("가나벤처스", 1)] and api_main._paid_used == 0
-    assert client.post("/api/gp/brief", json={**body, "gp": "아무 검색어나 넣기"}).status_code == 404
+    assert calls == [("가나벤처스", 1)] and liner_used() == 0 and remaining(L.LINER_SEARCH) == 500
+    res = client.post("/api/gp/brief", json={**body, "gp": "아무 검색어나 넣기"})
+    assert res.status_code == 404 and res.json()["code"] == "not_found"
     assert client.post("/api/gp/brief", json={**body, "gp": "가"}).status_code == 422
-    monkeypatch.setattr(api_main, "_paid_used", api_main.MAX_PAID_CALLS - 3)
-    assert client.post("/api/gp/brief", json=body).status_code == 429 and len(calls) == 1
+    daily_limits(LINER_SEARCH=1)  # 검색 1회가 재시도까지 가면 2회
+    res = client.post("/api/gp/brief", json=body)
+    assert res.status_code == 429 and res.json()["code"] == "daily_limit" and len(calls) == 1
 
 
 def test_revenue_omits_basis_when_the_engine_does_not_know_it():
@@ -615,12 +638,13 @@ def test_api_lookup_admission_is_atomic_under_concurrent_requests(api, monkeypat
         assert codes == [202, 202] + [429] * 6
         running = [j for j in api_main._jobs.values() if j["status"] == "running"]
         assert len(running) == api_main.MAX_RUNNING_LOOKUPS
-        assert api_main._paid_used == 2 * api_main.worst_case(api_main.LOOKUP_SEARCHES + api_main.LOOKUP_MODELS)
+        assert remaining(L.LINER_SEARCH) == 500 - 2 * L.worst_case(api_main.LOOKUP_SEARCHES)  # 받아들인 두 건만 잡혀 있다
+        assert remaining(L.LINER_MODEL) == 200 - 2 * L.worst_case(api_main.LOOKUP_MODELS)
     finally:
         gate.set()
         for j in list(api_main._jobs.values()):
             j["thread"].join(3)
-    assert api_main._paid_used == 0
+    assert liner_used() == 0 and remaining(L.LINER_SEARCH) == 500
 
 
 def test_conflicting_or_inferred_values_are_shown_but_never_autofilled():

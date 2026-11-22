@@ -9,6 +9,8 @@ from xml.etree import ElementTree
 
 import httpx
 
+from fetcher import BlockedAddress, GuardedTransport
+
 MAX_BYTES = 15_000_000
 ALLOWED_HOSTS = {"www.bizinfo.go.kr", "bizinfo.go.kr"}
 USER_AGENT = "FundingNoteBot/0.1 (+public notice reader)"
@@ -29,14 +31,15 @@ def detect_kind(data: bytes) -> str:
 
 
 def fetch_document(url: str, *, transport: httpx.BaseTransport | None = None, timeout: float = 40.0) -> bytes:
-    """기업마당에 올라온 공고문 파일만 받는다. 스냅샷의 주소를 그대로 쓰므로 호스트를 제한한다."""
+    """기업마당에 올라온 공고문 파일만 받는다. 스냅샷의 주소를 그대로 쓰므로 호스트를 제한한다.
+    요청은 fetcher.GuardedTransport(내부망 차단, 연결한 IP 확인)를 거치고, 환경변수 프록시는 쓰지 않는다."""
     parsed = urlparse(url)
     if parsed.scheme != "https" or parsed.hostname not in ALLOWED_HOSTS:
         raise DocumentError(f"허용되지 않은 주소: {parsed.scheme}://{parsed.hostname}")
     chunks, size = [], 0
     try:
-        with httpx.Client(transport=transport, timeout=timeout, follow_redirects=False,
-                          headers={"User-Agent": USER_AGENT}) as http:
+        with httpx.Client(transport=GuardedTransport(transport), timeout=timeout, follow_redirects=False,
+                          trust_env=False, headers={"User-Agent": USER_AGENT}) as http:
             with http.stream("GET", url) as resp:
                 if resp.status_code != 200:
                     raise DocumentError(f"HTTP {resp.status_code}")
@@ -47,8 +50,10 @@ def fetch_document(url: str, *, transport: httpx.BaseTransport | None = None, ti
                     chunks.append(chunk)
     except httpx.TimeoutException as exc:
         raise DocumentError("공고문 서버가 제때 응답하지 않았습니다") from exc
-    except httpx.HTTPError as exc:  # 연결 실패, 중간 끊김 등. 예외 메시지에 주소가 들어 있을 수 있어 종류만 남긴다
-        raise DocumentError(f"공고문 서버에 연결하지 못했습니다({type(exc).__name__})") from exc
+    except BlockedAddress as exc:
+        raise DocumentError("공고문 주소가 내부망을 가리켜 열지 않았습니다") from exc
+    except httpx.HTTPError as exc:  # 연결 실패, 중간 끊김 등. 응답에 실리므로 예외 이름·메시지(주소가 들어 있을 수 있음)는 넣지 않는다
+        raise DocumentError("공고문 서버에 연결하지 못했습니다") from exc
     return b"".join(chunks)
 
 

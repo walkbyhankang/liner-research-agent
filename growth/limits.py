@@ -5,21 +5,29 @@
 2. API별 하루 상한(DAILY_LIMITS): 서버 전체, 한국 시간 0시에 0부터 다시 센다.
 3. 동시 요청 상한(CONCURRENCY): slot(api) 로 묶는다.
 
-지금 구현은 메모리에만 센다(서버를 다시 시작하면 0부터). ②가 results/usage/<YYYY-MM-DD>.json 에 이어 세도록 _Limiter 내부만 바꾼다.
+하루 사용량은 results/usage/<YYYY-MM-DD>.json(한국 날짜, 계약 12.2절)에 원자적 교체로 저장하고, 서버를 다시 시작하면 그날 파일에서
+이어 센다. 예약 중인 수(held)는 저장하지 않는다(다시 시작하면 사라진다). 서버 프로세스 하나가 이 파일을 쓴다는 전제다
+(uvicorn 을 --workers 여러 개로 띄우면 프로세스끼리 숫자를 나누지 않는다).
 공개 이름(상수, LimitReached, LinerSectionLimit, reserve, reserve_many, reserve_section, SectionBudget, GuardedLinerClient, use, liner_used,
 usage_today, remaining, next_reset, refresh_remaining, take_refresh, worst_case, slot)과 인자·예외는 바꾸지 않는다.
 
 Liner 요청은 '최악의 경우'(자동 재시도까지 간 수, worst_case)만큼 미리 잡고, 끝나면 실제로 보낸 요청 수로 확정한다
-(api/main.py 의 reserve_paid/release_paid/worst_case 와 같은 방식을 API별로). 무료 API 는 요청을 보내기 직전에 use() 로 하나씩 센다.
+(공고문 대조·운용사 요약·회사 조회도 api/main.py 에서 같은 방식으로 쓴다). 무료 API 는 요청을 보내기 직전에 use() 로 하나씩 센다.
 """
+import json
+import logging
 import os
+import tempfile
 import threading
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import config
 from liner_client import MAX_AUTO_RETRIES, CallLimitExceeded, LinerClient
 
 KST = timezone(timedelta(hours=9), "KST")
+USAGE_DIR = config.RESULTS_DIR / "usage"   # 하루 사용량 파일 폴더(results/ 는 Git 에서 제외)
+_log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------- API 이름
 
@@ -129,65 +137,170 @@ class LinerSectionLimit(LimitReached, CallLimitExceeded):
     """
 
 
+def _env_limits(environ: dict | None) -> dict[str, int | None]:
+    """DAILY_LIMITS 에 환경변수 덮어쓰기를 얹는다. 정수(0 이면 막음) 또는 none(상한 없음)만 받고, 그 밖의 값은 무시한다."""
+    limits = dict(DAILY_LIMITS)
+    env = os.environ if environ is None else environ
+    for api in API_NAMES:
+        name = ENV_PREFIX + api.upper().replace(".", "_")
+        raw = str(env.get(name, "")).strip().lower()
+        if raw == "none":
+            limits[api] = None
+        elif raw.isdigit():
+            limits[api] = int(raw)
+        elif raw:
+            _log.warning("%s 값을 읽지 못해 기본 상한을 씁니다(정수 또는 none)", name)
+    return limits
+
+
+def _count(value) -> int | None:
+    """파일에서 읽은 횟수. 0 이상의 정수만 받는다(bool 은 정수로 치지 않는다)."""
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+class _Day:
+    """하루치 사용량. used(확정)·refresh(새로 분석 횟수)는 파일에 남기고, held(예약 중)는 메모리에만 둔다."""
+
+    __slots__ = ("used", "held", "refresh")
+
+    def __init__(self, used: dict[str, int] | None = None, refresh: dict[str, int] | None = None):
+        self.used: dict[str, int] = dict(used or {})
+        self.held: dict[str, int] = {}
+        self.refresh: dict[str, int] = dict(refresh or {})
+
+
 class _Limiter:
-    """하루 사용량 저장소(메모리). ②가 파일 저장으로 바꾼다. 날짜별로 used(확정)·held(예약 중)를 센다."""
+    """하루 사용량 저장소. 날짜(한국 시간)별로 used(확정)·held(예약 중)·refresh 를 센다.
 
-    def __init__(self, environ: dict | None = None):
+    usage_dir 가 있으면 그날 파일(<usage_dir>/<YYYY-MM-DD>.json)에서 처음 읽어 이어 세고, used·refresh 가 바뀔 때마다
+    파일 전체를 임시 파일에 쓴 뒤 os.replace 로 바꾼다(원자적 교체, 읽는 쪽이 쓰다 만 파일을 보지 않는다).
+    usage_dir 가 None 이면 메모리에만 센다(테스트용). 모든 읽기·쓰기는 _lock 안에서 해서 동시 요청에서도 숫자가 어긋나지 않는다.
+    """
+
+    def __init__(self, environ: dict | None = None, usage_dir: Path | None = None):
         self._lock = threading.Lock()
-        self._used: dict[tuple[str, str], int] = {}
-        self._held: dict[tuple[str, str], int] = {}
-        self._refresh: dict[tuple[str, str], int] = {}
-        self.limits = dict(DAILY_LIMITS)
-        env = os.environ if environ is None else environ
-        for api in API_NAMES:
-            raw = str(env.get(ENV_PREFIX + api.upper().replace(".", "_"), "")).strip().lower()
-            if raw == "none":
-                self.limits[api] = None
-            elif raw.isdigit():
-                self.limits[api] = int(raw)
+        self._days: dict[str, _Day] = {}
+        self.usage_dir = Path(usage_dir) if usage_dir is not None else None
+        self.limits = _env_limits(environ)
 
-    def _check(self, day: str, api: str, n: int, now: datetime | None) -> None:
+    # ---------------------------------------------------------------- 파일
+
+    def _path(self, day: str) -> Path:
+        return self.usage_dir / f"{day}.json"
+
+    def _load(self, day: str) -> _Day:
+        """그날 파일을 읽는다. 없으면 0부터. 깨진 파일은 지우지 않고 옆으로 옮겨 두고 0부터 센다(경고를 남긴다)."""
+        if self.usage_dir is None:
+            return _Day()
+        path = self._path(day)
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return _Day()
+        except (OSError, ValueError):
+            data = None
+        if not isinstance(data, dict) or data.get("date") != day:
+            aside = path.with_name(f"{path.name}.broken-{datetime.now(KST):%H%M%S}")
+            try:
+                os.replace(path, aside)
+            except OSError:
+                pass
+            _log.warning("하루 사용량 파일을 읽지 못해 옆으로 옮기고 0부터 셉니다: %s", aside.name)
+            return _Day()
+        apis = data.get("apis") if isinstance(data.get("apis"), dict) else {}
+        used = {str(k): n for k, v in apis.items() if isinstance(v, dict) and (n := _count(v.get("used"))) is not None}
+        refresh = data.get("refresh") if isinstance(data.get("refresh"), dict) else {}
+        return _Day(used, {str(k): n for k, v in refresh.items() if (n := _count(v)) is not None})
+
+    def _save(self, day: str) -> None:
+        """_lock 을 잡은 상태에서만 부른다. 실패해도 메모리 숫자는 그대로 두고 다음 쓰기에서 다시 쓴다(전체를 쓰므로 빠짐이 없다)."""
+        if self.usage_dir is None:
+            return
+        st = self._days[day]
+        names = list(API_NAMES) + sorted(set(st.used) - set(API_NAMES))   # 모르는 이름도 지우지 않고 남긴다
+        body = {"date": day, "apis": {api: {"used": st.used.get(api, 0)} for api in names},
+                "refresh": dict(sorted(st.refresh.items()))}
+        path = self._path(day)
+        tmp = None
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(body, fh, ensure_ascii=False, indent=1)
+            os.replace(tmp, path)
+            tmp = None
+        except OSError:
+            _log.warning("하루 사용량 파일을 쓰지 못했습니다(메모리 숫자로 계속 셉니다): %s", path.name)
+        finally:
+            if tmp is not None and os.path.exists(tmp):
+                os.unlink(tmp)
+
+    def _state(self, day: str) -> _Day:
+        """_lock 을 잡은 상태에서만 부른다. 그날 상태가 메모리에 없으면 파일에서 읽는다.
+        파일에 저장할 때는 예약이 남지 않은 다른 날 상태를 메모리에서 내린다(파일이 기준이라 다시 필요하면 다시 읽는다)."""
+        st = self._days.get(day)
+        if st is None:
+            st = self._days[day] = self._load(day)
+            if self.usage_dir is not None:
+                for other in [d for d, s in self._days.items() if d != day and not any(s.held.values())]:
+                    del self._days[other]
+        return st
+
+    # ---------------------------------------------------------------- 세기
+
+    def _check(self, st: _Day, api: str, n: int, now: datetime | None) -> None:
         """_lock 을 잡은 상태에서만 부른다."""
         limit = self.limits.get(api)
         if limit is None:
             return
-        taken = self._used.get((day, api), 0) + self._held.get((day, api), 0)
+        taken = st.used.get(api, 0) + st.held.get(api, 0)
         if taken + n > limit:
             raise LimitReached(api, "daily", limit, taken, next_reset(now))
 
     def hold(self, plan: dict[str, int], now: datetime | None) -> str:
-        """plan 의 API별 수를 한 번에 잡는다. 하나라도 넘으면 아무것도 잡지 않고 LimitReached."""
+        """plan 의 API별 수를 한 번에 잡는다. 하나라도 넘으면 아무것도 잡지 않고 LimitReached. 예약은 파일에 쓰지 않는다."""
         day = _day(now)
         with self._lock:
+            st = self._state(day)
             for api, n in plan.items():
                 if n > 0:
-                    self._check(day, api, n, now)
+                    self._check(st, api, n, now)
             for api, n in plan.items():
                 if n > 0:
-                    self._held[(day, api)] = self._held.get((day, api), 0) + n
+                    st.held[api] = st.held.get(api, 0) + n
         return day
 
     def settle(self, day: str, plan: dict[str, int], used: dict[str, int]) -> None:
+        """예약한 날(day)의 예약을 풀고 실제 수를 확정한다. 자정을 넘겨 확정해도 예약한 날에 센다(그날 몫으로 잡아 둔 수다)."""
         with self._lock:
+            st = self._state(day)
             for api, n in plan.items():
                 if n > 0:
-                    self._held[(day, api)] = max(0, self._held.get((day, api), 0) - n)
+                    st.held[api] = max(0, st.held.get(api, 0) - n)
+            changed = False
             for api, n in used.items():
                 if n > 0:
-                    self._used[(day, api)] = self._used.get((day, api), 0) + n
+                    st.used[api] = st.used.get(api, 0) + n
+                    changed = True
+            if changed:
+                self._save(day)
 
     def use(self, api: str, n: int, now: datetime | None) -> None:
         day = _day(now)
         with self._lock:
-            self._check(day, api, n, now)
-            self._used[(day, api)] = self._used.get((day, api), 0) + n
+            st = self._state(day)
+            self._check(st, api, n, now)
+            if n > 0:
+                st.used[api] = st.used.get(api, 0) + n
+                self._save(day)
 
     def usage(self, now: datetime | None) -> dict:
         day = _day(now)
         with self._lock:
+            st = self._state(day)
             apis = {}
             for api in API_NAMES:
-                used, held, limit = self._used.get((day, api), 0), self._held.get((day, api), 0), self.limits.get(api)
+                used, held, limit = st.used.get(api, 0), st.held.get(api, 0), self.limits.get(api)
                 apis[api] = {"used": used, "limit": limit, "remaining": None if limit is None else max(0, limit - used - held)}
         return {"date": day, "resetAt": next_reset(now).isoformat(timespec="seconds"), "apis": apis}
 
@@ -196,18 +309,20 @@ class _Limiter:
 
     def refresh_used(self, company_id: str, now: datetime | None) -> int:
         with self._lock:
-            return self._refresh.get((_day(now), company_id), 0)
+            return self._state(_day(now)).refresh.get(company_id, 0)
 
     def take_refresh(self, company_id: str, now: datetime | None) -> None:
         day = _day(now)
         with self._lock:
-            n = self._refresh.get((day, company_id), 0)
+            st = self._state(day)
+            n = st.refresh.get(company_id, 0)
             if n >= REFRESH_PER_COMPANY_PER_DAY:
                 raise LimitReached(REFRESH, "refresh", REFRESH_PER_COMPANY_PER_DAY, n, next_reset(now))
-            self._refresh[(day, company_id)] = n + 1
+            st.refresh[company_id] = n + 1
+            self._save(day)
 
 
-_limiter = _Limiter()
+_limiter = _Limiter(usage_dir=USAGE_DIR)
 _slots = {k: threading.BoundedSemaphore(v) for k, v in CONCURRENCY.items()}
 
 
@@ -433,7 +548,8 @@ def slot(api: str) -> threading.BoundedSemaphore:
     return _slots["datagokr" if api.startswith("datagokr.") else api]
 
 
-def _reset_for_tests(environ: dict | None = None) -> None:
-    """테스트용: 사용량을 모두 지우고 환경변수 덮어쓰기를 다시 읽는다."""
+def _reset_for_tests(environ: dict | None = None, *, usage_dir: Path | None = None) -> None:
+    """테스트용: 사용량을 모두 지우고 환경변수 덮어쓰기를 다시 읽는다.
+    usage_dir 를 주면 그 폴더의 파일에 이어 세고(재시작 흉내), 주지 않으면 메모리에만 센다(실제 results/usage 를 건드리지 않는다)."""
     global _limiter
-    _limiter = _Limiter(environ)
+    _limiter = _Limiter(environ, usage_dir=usage_dir)
