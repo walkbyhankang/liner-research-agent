@@ -36,6 +36,14 @@ function getPending(cid: string): Pending | null {
     return null;
   }
 }
+/** 시작 화면이 넘긴 작업 id 를 지운다(이름·법인번호·홈페이지는 둔다). jobId 를 주면 그 작업일 때만 */
+function clearPendingJob(cid: string, jobId?: string) {
+  const p = getPending(cid);
+  if (!p?.jobId || (jobId && p.jobId !== jobId)) return;
+  const { jobId: _done, ...rest } = p;
+  void _done;
+  setPending(cid, rest);
+}
 
 export type Phase = "loading" | "ready" | "none" | "invalid";
 export type RunResult = { ok: true } | { ok: false; code: string | null; message: string };
@@ -107,7 +115,11 @@ export function CompanyProvider({ cid, children }: { cid: string; children: Reac
           void saveSnapshot(next);
         }
       }
-      if (next.status !== "running") void forgetJob(next.companyId);
+      if (next.status !== "running" && !next.busy) {
+        // 다 끝났을 때만 잊는다(단락 다시 실행 중에 새로고침해도 그 작업을 다시 찾게)
+        void forgetJob(next.companyId);
+        clearPendingJob(next.companyId, next.jobId);
+      }
       setPhase("ready");
       touchCompany(next.companyId, next);
     },
@@ -171,11 +183,30 @@ export function CompanyProvider({ cid, children }: { cid: string; children: Reac
         setPhase("ready");
         touchCompany(cid, snap.job);
       }
-      // 방금 시작한 작업이 있으면 그것부터 묻는다
+      // 방금 시작한 작업이 있으면 그것부터 묻는다. 시작 화면이 넘긴 id 는 한 번만 쓴다: 세션 값에서 지우고 이 브라우저의
+      // '진행 중 작업' 기억으로 옮긴다(끝나면 accept 가 지운다). 같은 탭에서 나중에 새로 분석해도 옛 id 가 남아 막지 않게 한다
+      if (pending?.jobId) {
+        clearPendingJob(cid, pending.jobId);
+        await rememberJob(cid, pending.jobId);
+        if (cancelled) return;
+      }
       const started = pending?.jobId ?? (await recallJob(cid))?.jobId;
+      if (cancelled) return;
       if (started) {
-        poll(started);
-        return;
+        let first: AnalysisJob | null | undefined;
+        try {
+          first = await apiOrNull<AnalysisJob>(`analysis/${started}`);
+        } catch {
+          first = undefined; // 지금은 물을 수 없다(연결 끊김 등): 그 작업을 계속 묻는다
+        }
+        if (cancelled) return;
+        // 진행 중이거나, 끝났어도 단락 다시 실행 중(busy)이면 그 작업을 이어서 묻는다
+        if (first === undefined || (first && isAnalysisJob(first) && first.companyId === cid && (first.status === "running" || first.busy))) {
+          poll(started);
+          return;
+        }
+        // 끝나고 할 일도 없거나 서버에 없는 작업: 기억을 지우고, 아래에서 그 회사의 진행 중 작업과 최신 저장 분석을 확인한다
+        void forgetJob(cid);
       }
       try {
         const running = await apiOrNull<CompanyJobResponse>(`company/${cid}/job`);
@@ -215,6 +246,7 @@ export function CompanyProvider({ cid, children }: { cid: string; children: Reac
           body: { name, crno: b?.company.crno ?? p?.crno ?? null, homepage: p?.homepage ?? null, refresh },
         });
         void rememberJob(cid, res.jobId);
+        if (p?.jobId) setPending(cid, { ...p, jobId: res.jobId }); // 세션 값이 옛 작업을 가리키지 않게
         stopPoll();
         poll(res.jobId);
         return { ok: true };

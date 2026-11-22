@@ -485,6 +485,37 @@ def test_snapshot_is_written_scrubbed_and_restored(world):
     assert page["items"] and page["items"][0]["id"] == "a21" and page["articleTotal"] == v["sections"]["news"]["result"]["articleTotal"]
 
 
+def test_section_on_restored_older_job_does_not_move_latest_pointer_back(world):
+    """서버를 다시 시작한 뒤 옛 작업 A 에서 단락(sales)을 실행해도 latest.json 은 더 새 작업 B 를 가리킨다."""
+    a = run_full(world)
+    status, body = world.manager.start("주식회사 가나다테크", CRNO, "example.com", True)  # 새로 분석(진행 중 모양 검사는 run_full 이 한다)
+    assert status == 202 and body["started"]
+    b = wait_idle(world.manager, body["jobId"])
+    assert a["jobId"] != b["jobId"] and b["status"] == "done"
+    latest = world.root / CRNO / "latest.json"
+    assert json.loads(latest.read_text())["jobId"] == b["jobId"]
+    # A 가 B 보다 확실히 먼저 끝난 것으로(같은 초에 끝났을 수 있으므로 파일의 분석 시각을 하루 앞당긴다)
+    a_path = next(p for p in (world.root / CRNO).glob("2*.json") if json.loads(p.read_text())["jobId"] == a["jobId"])
+    d = json.loads(a_path.read_text(encoding="utf-8"))
+    older = (common.parse_iso(b["analyzedAt"]) - timedelta(days=1)).isoformat(timespec="seconds")
+    d["analyzedAt"] = older
+    a_path.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+
+    m2 = jobs.Manager(Store(world.root))  # 다시 시작: A 를 디스크에서 읽는다
+    m2.run_section(a["jobId"], "sales", None, ["AI 서버"])
+    after = wait_idle(m2, a["jobId"])
+    assert after["sections"]["sales"]["status"] == "done" and after["analyzedAt"] == older
+    assert json.loads(a_path.read_text(encoding="utf-8"))["sections"]["sales"]["status"] == "done"  # A 파일은 썼다
+    assert json.loads(latest.read_text())["jobId"] == b["jobId"]
+    assert m2.saved_job_id(CRNO) == b["jobId"] and m2.company_analysis(CRNO)["jobId"] == b["jobId"]
+
+    # 새롭거나 같은 쪽(B)에서 단락을 실행하면 포인터를 쓴다(지워져 있었으면 다시 만든다)
+    latest.unlink()
+    m2.run_section(b["jobId"], "sales", None, ["AI 서버"])
+    wait_idle(m2, b["jobId"])
+    assert json.loads(latest.read_text())["jobId"] == b["jobId"]
+
+
 def test_restart_turns_running_file_into_interrupted(world):
     v = run_full(world)
     path = next(p for p in (world.root / CRNO).glob("2*.json"))

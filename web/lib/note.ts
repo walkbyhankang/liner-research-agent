@@ -1,7 +1,7 @@
 // 노트(screens 8절): 회사 핵심 값 표, 텍스트 복사 글, 파일 내보내기·불러오기.
 // 노트는 내보내는 문서라 출처를 값 옆에 그대로 쓴다. 복사 글의 출처는 "{기관·자료 이름} ({자료 종류}) · {기준일}" 한 줄(C-09).
 import { STATUS_LABEL, sourceLine, type AnalysisJob, type Value } from "./contract.ts";
-import { BIZ_LABEL, isBizType, type Edits } from "./company-values.ts";
+import { BIZ_LABEL, EDIT_FIELDS, isBizType, type Edits } from "./company-values.ts";
 import { ageLabel, byCurrencyTexts, compactDay, fmtTime, yearsSince } from "./format.ts";
 import type { Local } from "./local.ts";
 import { wordText, type Word } from "./view.ts";
@@ -124,23 +124,62 @@ export function exportFile(companyId: string, name: string, local: Local, export
 }
 
 export type ImportResult = { ok: true; data: ExportFile } | { ok: false; message: string };
+export const NOT_EXPORT_FILE = "성장노트에서 내보낸 파일이 아닙니다.";
+
+// 불러올 파일의 모양 검사. 하나라도 어긋나면 파일 전체를 거절한다(지금 브라우저 자료를 지우기 전에 판단한다)
+type Obj = Record<string, unknown>;
+const isObj = (x: unknown): x is Obj => typeof x === "object" && x !== null && !Array.isArray(x);
+const isStr = (x: unknown): x is string => typeof x === "string";
+const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
+const isStrList = (x: unknown) => Array.isArray(x) && x.every(isStr);
+const isObjList = (x: unknown) => Array.isArray(x) && x.every(isObj);
+const values = (x: unknown, ok: (v: unknown) => boolean) => isObj(x) && Object.values(x).every(ok);
+const SAVED_KINDS = new Set(["program", "gp", "salesProgram", "bid"]);
+const isEdits = (x: unknown) =>
+  isObj(x) && Object.entries(x).every(([k, v]) => (EDIT_FIELDS as readonly string[]).includes(k) && isObj(v) && isStr(v.value) && isStr(v.updatedAt));
+const isSaved = (x: unknown) =>
+  isObj(x) && isStr(x.kind) && SAVED_KINDS.has(x.kind) && isStr(x.itemId) && isStr(x.title) && isStr(x.savedAt) &&
+  values(x.meta, (v) => v === null || isStr(v) || isNum(v) || typeof v === "boolean");
+const isError = (x: unknown) => x === null || (isObj(x) && isStr(x.code) && isStr(x.message));
+const isCompany = (x: unknown) => values(x, isStr);
+const isNoticeResult = (x: unknown) =>
+  x === null ||
+  (isObj(x) && isObj(x.program) && isStr(x.program.id) && isObj(x.extraction) && isObj(x.match) && isStr(x.match.overall) &&
+    isObjList(x.match.rows) && isStrList(x.match.questions) && isStrList(x.match.documents));
+const isGpResult = (x: unknown) =>
+  x === null || (isObj(x) && isStr(x.gp) && isObjList(x.facts) && isObjList(x.fit) && isStrList(x.questions) && isObjList(x.sources));
+const isCheck = (x: unknown) => isObj(x) && isStr(x.programId) && isStr(x.ranAt) && isCompany(x.company) && isError(x.error) && isNoticeResult(x.result);
+const isRivalCheck = (x: unknown) => isCheck(x) && isStr((x as Obj).rivalKey);
+const isBrief = (x: unknown) => isObj(x) && isStr(x.gp) && isStr(x.ranAt) && isCompany(x.company) && isError(x.error) && isGpResult(x.result);
+const isRivalChoices = (x: unknown) =>
+  isObj(x) && values(x.choices, (v) => v === "yes" || v === "no") && Array.isArray(x.added) && x.added.every((a) => isObj(a) && isStr(a.key) && isStr(a.name));
+const isPrep = (x: unknown) =>
+  isObj(x) && values(x.questions, (q) => isObj(q) && typeof q.ready === "boolean" && isStr(q.memo)) && values(x.dd, (v) => typeof v === "boolean");
+const isMemo = (x: unknown) => x === null || (isObj(x) && isStr(x.memo) && isStr(x.updatedAt));
+/** 없어도 되는 칸(없으면 빈 값으로 채운다). 있으면 모양이 맞아야 한다 */
+const optional = (x: unknown, ok: (v: unknown) => boolean) => x === undefined || ok(x);
+
 export function parseImport(text: string, companyId: string): ImportResult {
-  let d: ExportFile;
+  let d: unknown;
   try {
     d = JSON.parse(text);
   } catch {
-    return { ok: false, message: "성장노트에서 내보낸 파일이 아닙니다." };
+    return { ok: false, message: NOT_EXPORT_FILE };
   }
-  if (!d || d.version !== 1 || typeof d.companyId !== "string" || typeof d.name !== "string" || typeof d.edits !== "object" || !Array.isArray(d.saved)) {
-    return { ok: false, message: "성장노트에서 내보낸 파일이 아닙니다." };
-  }
+  if (!isObj(d) || d.version !== 1 || !isStr(d.companyId) || !isStr(d.name) || !optional(d.exportedAt, isStr)) return { ok: false, message: NOT_EXPORT_FILE };
   if (d.companyId !== companyId) return { ok: false, message: `다른 회사(${d.name})의 파일입니다. 이 회사 노트로 불러올 수 없습니다.` };
+  const shapeOk =
+    isEdits(d.edits) && Array.isArray(d.saved) && d.saved.every(isSaved) &&
+    optional(d.checks, (x) => values(x, isCheck)) && optional(d.rivalChecks, (x) => values(x, isRivalCheck)) && optional(d.briefs, (x) => values(x, isBrief)) &&
+    optional(d.rivalChoices, isRivalChoices) && optional(d.prep, isPrep) && optional(d.notes, isMemo) && optional(d.salesKeywords, (x) => x === null || isStrList(x));
+  if (!shapeOk) return { ok: false, message: NOT_EXPORT_FILE };
+  const f = d as unknown as ExportFile;
   return {
     ok: true,
     data: {
-      ...d,
-      checks: d.checks ?? {}, rivalChecks: d.rivalChecks ?? {}, briefs: d.briefs ?? {}, rivalChoices: d.rivalChoices ?? { choices: {}, added: [] },
-      prep: d.prep ?? { questions: {}, dd: {} }, notes: d.notes ?? null, salesKeywords: d.salesKeywords ?? null,
+      ...f,
+      checks: f.checks ?? {}, rivalChecks: f.rivalChecks ?? {}, briefs: f.briefs ?? {}, rivalChoices: f.rivalChoices ?? { choices: {}, added: [] },
+      prep: f.prep ?? { questions: {}, dd: {} }, notes: f.notes ?? null, salesKeywords: f.salesKeywords ?? null,
     },
   };
 }

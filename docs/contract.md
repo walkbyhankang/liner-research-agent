@@ -438,7 +438,7 @@
 ### 7.3 대표·설립 (`ceo`, `founded`)
 
 - `ceo`: 금융위 대표(`confirmed`). 법인이 없으면 `unavailable`("법인 확인 안 함"). `profile`의 창업자 글은 쓰지 않는다.
-- `founded`: 금융위 설립일(`YYYY-MM-DD`, `confirmed`). `facts`의 설립 값과 견준다 — `facts` 값이 `YYYY-MM`이면 앞 7자, `YYYY`이면 앞 4자가 같으면 같은 값으로 보고 금융위 값만 둔다. 다르면 `conflicting`(`values` = [금융위, 웹], `usedIndex` 0). `facts` 전에는 금융위 값을 두고 `pending`에 `founded.web`.
+- `founded`: 금융위 설립일(`YYYY-MM-DD`, `confirmed`). `facts`의 설립 값과 견준다 — `facts` 값이 `YYYY-MM-DD`이면 10자 전체(일까지), `YYYY-MM`이면 앞 7자, `YYYY`이면 앞 4자가 같으면 같은 값으로 보고 금융위 값만 둔다. 일까지 적힌 `facts` 값은 하루라도 다르면 다른 값이다. 다르면 `conflicting`(`values` = [금융위, 웹], `usedIndex` 0). `facts` 전에는 금융위 값을 두고 `pending`에 `founded.web`.
 - 법인이 없으면 `facts`의 설립 값과 그 상태. 그 상태가 `conflicting`이면 6.2의 1개짜리 엇갈림.
 
 ### 7.4 기업 유형 (`bizType`, `bizTypeHint`)
@@ -715,7 +715,7 @@
 - 핵심 값 4칸: 매출 = `merged.revenue.official`(없으면 `.web`), 국민연금 가입자 = `merged.npsLatest` + `official.result.nps.summary.change`, 누적 투자 = `funding_history.result.summary.cumulative.byCurrency`(통화마다 따로) + `roundCount`·`latest`, 국내 특허 = `merged.patentCount` + `patents.result.summary.registered`.
 - 회사 표시줄 칩: 지역 = `merged.region`, 업력 = `merged.founded.raw`(엇갈림이면 `values[usedIndex].raw`, `usedIndex`가 null이면 "업력 엇갈림"), 기업 유형 = 사용자 고르기(`merged.bizType`는 늘 미확보) + `bizTypeHint`.
 - 자금 조달 조건: 지역 = `merged.region.raw`(`confirmed`·`reported`일 때만), 관심 투자 분야 = `merged.fundField.raw`, 회사 사업과 관련 = `merged.programKeywords`, 이미 투자함 = `merged.investors`, 경쟁사에 투자 = `rivals_deep.result.rivalInvestors`.
-- 저장된 분석과 진행 중 작업이 동시에 있으면(새로 분석 중) 저장된 분석을 보이고, 새 작업의 단락이 끝 상태가 되면 그 단락만 바꾼다. 새 작업의 단락이 `unavailable`이면 이전 결과를 두고 사유를 단락 바닥에 쓴다(screens 1.7).
+- 저장된 분석과 진행 중 작업이 동시에 있으면(새로 분석 중) 저장된 분석을 보이고, 새 작업의 단락이 끝 상태가 되면 그 단락만 바꾼다. 새 작업의 단락이 `unavailable`이면 이전 결과를 두고 사유를 단락 바닥에 쓴다(screens 1.7). 합친 값(`merged`)도 같은 규칙이다: 새 값이 `null`(확인 중)이거나 `unavailable`인데 이전 값이 `unavailable`이 아니면 이전 값을 쓴다(`industry`·`revenue`는 `official`·`web` 하나씩). 이전 결과를 둔 단락이 채우는 목록(`funding_history`·`facts` → `investors`, `profile`·`facts` → `rivals`, `profile` → `techKeywords`·`programKeywords`·`bidKeywords`)은 이전 목록을 쓴다.
 
 ## 10. 예상값 (`estimates`)
 
@@ -750,7 +750,7 @@
 - 파일: `results/analysis/<companyId>/<YYYYMMDD-HHMMSS>.json`(작업 `startedAt`, 한국 시간). 내용은 `AnalysisJob`과 같은 모양이고, 차이는 `sections.news.result.articles`에 기사 **전체**가 있다는 것 하나다(앞에 `"schema": "growth.analysis/1"`을 더해도 된다 — 응답으로 낼 때 뺀다).
 - 작업 상태나 단락 상태가 바뀔 때마다 파일 전체를 임시 파일에 쓰고 `os.replace`로 바꾼다(원자적 교체). 다른 작업의 파일은 건드리지 않는다. 이전 스냅샷을 지우거나 덮어쓰지 않는다(새로 분석은 새 파일).
 - 쓰기 전에 `analysis.scrub(data, secrets)`를 거치고, 결과 글에 키 문자열이 남았으면 쓰지 않는다(지금 `research/controller.save` 방식, `secrets`는 16.3).
-- `results/analysis/<companyId>/latest.json` = `{"file": "<파일 이름>", "jobId": "…", "analyzedAt": "…"}`. 작업이 `done`이 될 때만 바꾼다. 2.6·2.8이 이 파일을 먼저 본다(없거나 깨졌으면 폴더를 훑는다).
+- `results/analysis/<companyId>/latest.json` = `{"file": "<파일 이름>", "jobId": "…", "analyzedAt": "…"}`. 작업이 `done`이 될 때만 바꾸고, 지금 가리키는 분석보다 `analyzedAt`이 새롭거나 같을 때만 바꾼다(서버를 다시 시작한 뒤 옛 작업에서 단락을 실행해도 더 새 분석을 가리키는 포인터를 뒤로 돌리지 않는다). 2.6·2.8이 이 파일을 먼저 본다(없거나 깨졌으면 폴더를 훑는다).
 - 서버가 켜질 때 `results/analysis/*/*.json`을 읽어 `jobId → 파일` 표를 만든다. `status: "running"`인 파일은 `interrupted`로 바꾼다: `waiting`·`running` 단락 → `unavailable`(`interrupted`, `retryable: true`), `rerun.status: "running"` → `failed`(`interrupted`), `analyzedAt` = 파일의 마지막 수정 시각(한국 시간), `busy: false`. 그리고 파일을 다시 쓴다.
 - 작업 상태는 메모리 + 이 파일이다. DB는 쓰지 않는다. `results/`는 Git에서 제외돼 있다.
 - 나중에 계약에 더한 키가 없는 옛 스냅샷은 읽을 때(`Store.read`) `null`로 채워 응답이 계약 모양이 되게 한다. 이것 때문에 파일을 다시 쓰지는 않는다(상태가 바뀌어 다시 쓸 때 함께 들어간다). 지금은 `Corp.formerNames`(2026-11-23에 더함, `identity.result.corp`·`otherCorps`, `rivals_deep.result.rivals[].corp`) 하나다. 서버는 스냅샷을 읽을 때 계약 모양을 검사하지 않는다(검사는 테스트에서만 한다).

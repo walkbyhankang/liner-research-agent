@@ -3,7 +3,7 @@
 //
 // 실행: node scripts/mock_api.mjs [포트, 기본 8200]
 // 조종(시험 스크립트가 쓴다):
-//   POST /__control {scenario, step, corp, formerNamesUnknown, example, health, delayMs, notice, noticeDelayMs, gpDelayMs, salesPartial, fail500, stagedRegionLater}
+//   POST /__control {scenario, step, corp, formerNamesUnknown, example, health, delayMs, notice, noticeDelayMs, gpDelayMs, salesPartial, fail500, stagedRegionLater, overrides, newerSaved}
 //     formerNamesUnknown: true 면 법인 후보의 formerNames 를 모두 null 로(서버의 이름 이력 조회가 실패·상한에 걸린 경우, 계약 2.1)
 //   GET  /__log      받은 /api 요청 목록
 //   POST /__reset    상태와 기록을 처음으로
@@ -17,11 +17,13 @@ const FIX = Object.fromEntries(
   readdirSync(DIR).filter((f) => f.endsWith(".json")).map((f) => [f.replace(/\.json$/, ""), JSON.parse(readFileSync(new URL(f, DIR), "utf8"))]),
 );
 const ARTICLES = FIX["F-FULL.articles"].articles;
+/** 뉴스만 새로 받기가 끝난 뒤에 주는 기사 목록(앞 30건이 빠진 새 판). ux-check NE-10 이 같은 값으로 견준다 */
+const NEWS_REFRESH_DROP = 30;
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const ex = (name, pred = () => true) => FIX[name].exchanges.find(pred);
 const jobOf = (name, i = 0) => clone(FIX[name].exchanges.filter((e) => e.method === "GET" && /^\/api\/(analysis\/[0-9a-f]{32}|company\/[^/]+\/analysis)$/.test(e.path))[i].response);
 
-const DEFAULT = { scenario: "F-FULL", step: 0, corp: null, formerNamesUnknown: false, example: false, health: "up", delayMs: 0, notice: "ok", noticeDelayMs: 300, gpDelayMs: 200, salesPartial: false, fail500: false, overrides: {}, newsReruns: 0 };
+const DEFAULT = { scenario: "F-FULL", step: 0, corp: null, formerNamesUnknown: false, example: false, health: "up", delayMs: 0, notice: "ok", noticeDelayMs: 300, gpDelayMs: 200, salesPartial: false, fail500: false, overrides: {}, newsReruns: 0, newsVersion: 0 };
 let st = clone(DEFAULT);
 let log = [];
 
@@ -53,7 +55,12 @@ function scenarioJob() {
   }
   if (st.newsReruns > 0 && job.sections.news.rerun) {
     st.newsReruns -= 1;
-    if (st.newsReruns === 0) job.sections.news.rerun = null;
+    if (st.newsReruns === 0) {
+      // 다시 받기가 끝남: 결과의 판(analyzedAt)이 바뀌고, 기사 목록도 새 판으로 준다
+      st.overrides.news = { ...st.overrides.news, rerun: null, retryable: true, analyzedAt: "2026-11-22T20:59:00+09:00" };
+      st.newsVersion += 1;
+      job.sections.news = clone(st.overrides.news);
+    }
   }
   job.busy = job.status === "running" || Object.values(job.sections).some((s) => s.status === "waiting" || s.status === "running" || s.rerun?.status === "running");
   return job;
@@ -100,6 +107,11 @@ async function api(req, res, url, body) {
     if (m[1] !== job.companyId) return err(res, 404, "not_found", "저장된 분석이 없습니다");
     if (m[2] === "job") return job.status === "running" ? send(res, 200, { jobId: job.jobId, companyId: job.companyId, startedAt: job.startedAt, status: "running" }) : err(res, 404, "not_found", "진행 중인 작업이 없습니다");
     if (job.status === "running") return err(res, 404, "not_found", "저장된 분석이 없습니다");
+    // newerSaved: 이 회사에 더 새 저장 분석(다른 jobId, 다 끝남)이 있는 것처럼 준다(ux-check A-24)
+    if (st.newerSaved) {
+      for (const env of Object.values(job.sections)) env.rerun = null;
+      return send(res, 200, { ...job, jobId: "b".repeat(32), analyzedAt: "2026-11-22T20:58:00+09:00", busy: false });
+    }
     return send(res, 200, job);
   }
   m = /^analysis\/([0-9a-f]{32})\/news$/.exec(p);
@@ -109,7 +121,7 @@ async function api(req, res, url, body) {
     const offset = Number(q.get("offset") ?? 0);
     const limit = Number(q.get("limit") ?? 20);
     const cats = q.getAll("category");
-    const all = ARTICLES;
+    const all = st.newsVersion ? ARTICLES.slice(NEWS_REFRESH_DROP) : ARTICLES;
     const filtered = cats.length ? all.filter((a) => a.categories.some((c) => cats.includes(c))) : all;
     const job = scenarioJob();
     return send(res, 200, { jobId: m[1], offset, limit, categories: cats, total: filtered.length, articleTotal: all.length, categoryCounts: job.sections.news.result?.categoryCounts ?? [], items: filtered.slice(offset, offset + limit) });

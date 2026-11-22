@@ -230,6 +230,32 @@ def paid_used(client: LinerClient) -> dict[str, int]:
     return limits.liner_used(client.calls)
 
 
+class _SlottedClient:
+    """LinerClient 를 감싸 실제 요청(모델·검색) 하나가 오가는 동안만 서버 공용 동시 요청 상한(limits.slot)을 잡는다.
+    회사 분석(growth/liner.py)과 같은 세마포어를 쓰므로 공고문 대조·운용사 요약이 그 상한을 넘지 못한다.
+    요청 하나마다 잡고 바로 놓는다. 감싼 LinerClient 는 이 래퍼를 다시 부르지 않으므로 같은 스레드가 같은 세마포어를
+    겹쳐 잡지 않는다(공고문 추출의 공고별 잠금은 slot 보다 먼저 잡히고, slot 을 쥔 채 그 잠금을 기다리는 길은 없다)."""
+
+    def __init__(self, client: LinerClient):
+        self._client = client
+
+    def chat_json(self, *args, **kwargs):
+        with limits.slot(limits.LINER_MODEL):
+            return self._client.chat_json(*args, **kwargs)
+
+    def responses(self, *args, **kwargs):
+        with limits.slot(limits.LINER_MODEL):
+            return self._client.responses(*args, **kwargs)
+
+    def search_web(self, query: str, *, include_knowledge: bool | None = None, **kwargs):
+        premium = config.INCLUDE_KNOWLEDGE if include_knowledge is None else bool(include_knowledge)
+        with limits.slot(limits.LINER_PREMIUM if premium else limits.LINER_SEARCH):
+            return self._client.search_web(query, include_knowledge=include_knowledge, **kwargs)
+
+    def __getattr__(self, name: str):
+        return getattr(self._client, name)
+
+
 def _env_present(*names: str) -> bool:
     """키가 있는지만 본다(값은 응답에 넣지 않는다). 환경변수 → 이 프로젝트 .env 순서."""
     file_env = dotenv_values(config.ENV_FILE) if config.ENV_FILE.is_file() else {}
@@ -281,9 +307,10 @@ def analyze(req: AnalyzeRequest) -> dict | JSONResponse:
         return _limit_error(e)
     with reservation:  # 클라이언트를 만들다 실패하면 잡은 수를 모두 쓴 것으로 센다(덜 세지 않게)
         client = LinerClient(key, source, limits={"model": planned, "search": 0, "agent": 0, "premium": 0})
+        liner = _SlottedClient(client)
         try:
-            extraction = service.extract_notice(program, client, CACHE_DIR)
-            match = service.match_company(extraction, company_mod.describe(req.company.model_dump()), client)
+            extraction = service.extract_notice(program, liner, CACHE_DIR)
+            match = service.match_company(extraction, company_mod.describe(req.company.model_dump()), liner)
         except service.AnalysisError as e:
             return error(422, "analysis_failed", str(e))
         except CallLimitExceeded:  # 이 요청에 잡은 호출 수를 넘으려 함(정상 흐름에서는 일어나지 않음). 하루 상한과는 다르다
@@ -334,7 +361,7 @@ def gp_brief(req: GpBriefRequest) -> dict | JSONResponse:
     with reservation:
         client = LinerClient(key, source, limits={"search": 1, "model": 1, "agent": 0, "premium": 0})
         try:
-            return gp_mod.brief(req.gp, funds, company_mod.describe(req.company.model_dump()), client)
+            return gp_mod.brief(req.gp, funds, company_mod.describe(req.company.model_dump()), _SlottedClient(client))
         except LinerAPIError as e:
             return _upstream_error(e)
         finally:

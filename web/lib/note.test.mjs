@@ -50,3 +50,63 @@ test("다른 회사 파일은 불러오지 않는다(N-09)", () => {
   assert.equal(parseImport("{", "0000000000001").ok, false);
   assert.equal(parseImport(JSON.stringify(exportFile("0000000000001", "가", local, "x")), "0000000000001").ok, true);
 });
+
+// 파일 불러오기 모양 검사와 지우기 전 검증(가져오기 파일이 잘못되면 지금 자료를 지우지 않는다)
+const CID = "0000000000001";
+const company = { name: "가", region: "서울", biz: "", founded: "2020-09", industry: "AI", employees: "", revenue: "", need: "", notes: "" };
+const fullLocal = {
+  ...local,
+  saved: [{ kind: "program", itemId: "PBLN_1", title: "공고 1", savedAt: "2026-11-20T00:00:00Z", meta: { deadline: "2026-12-01", agency: "기관", funds: 2, open: true, extra: null } }],
+  checks: { PBLN_1: { programId: "PBLN_1", ranAt: "x", company, error: null, result: { program: { id: "PBLN_1", title: "t", url: "u", docUrl: "d" }, extraction: { summary: "" }, match: { overall: "확인 후 판단", overallReason: "", rows: [{ field: "업력" }], questions: ["질문"], documents: ["서류"] } } } },
+  rivalChecks: { "PBLN_1|rival:가": { programId: "PBLN_1", rivalKey: "rival:가", ranAt: "x", company, error: { code: "upstream_error", message: "실패" }, result: null } },
+  briefs: { 가나벤처스: { gp: "가나벤처스", ranAt: "x", company, error: null, result: { gp: "가나벤처스", facts: [], fit: [], questions: ["q"], sources: [], searched: 0 } } },
+  rivalChoices: { choices: { "rival:가": "yes" }, added: [{ key: "user:나", name: "나" }] },
+  prep: { questions: { q1: { ready: true, memo: "m" } }, dd: { d1: false } },
+  salesKeywords: ["AI 서버"],
+};
+
+test("불러오기: 모든 칸과 목록 항목의 모양을 검사해, 하나라도 어긋나면 파일 전체를 거절한다", () => {
+  const good = exportFile(CID, "가", fullLocal, "2026-11-22T00:00:00Z");
+  const ok = parseImport(JSON.stringify(good), CID);
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.data.saved, fullLocal.saved);
+  const bad = (patch) => parseImport(JSON.stringify({ ...good, ...patch }), CID);
+  const NOT = { ok: false, message: "성장노트에서 내보낸 파일이 아닙니다." };
+  const cases = [
+    { saved: [null] }, { saved: [{ ...fullLocal.saved[0], kind: "other" }] }, { saved: [{ ...fullLocal.saved[0], meta: { a: {} } }] }, { saved: {} },
+    { edits: null }, { edits: [] }, { edits: { industry: "글" } }, { edits: { unknown: { value: "x", updatedAt: "x" } } },
+    { checks: { PBLN_1: null } }, { checks: { PBLN_1: { ...fullLocal.checks.PBLN_1, result: { match: null } } } }, { checks: [] },
+    { rivalChecks: { a: { ...fullLocal.checks.PBLN_1 } } }, // rivalKey 없음
+    { briefs: { a: { ...fullLocal.briefs.가나벤처스, result: { gp: "가", facts: null } } } },
+    { rivalChoices: { choices: { a: "maybe" }, added: [] } }, { rivalChoices: { choices: {}, added: [null] } },
+    { prep: { questions: { q1: { ready: "yes", memo: "" } }, dd: {} } }, { prep: { questions: {} } },
+    { notes: "메모" }, { notes: { memo: 1, updatedAt: "x" } }, { salesKeywords: [1] }, { exportedAt: 3 },
+  ];
+  for (const c of cases) assert.deepEqual(bad(c), NOT, JSON.stringify(c));
+  // 없어도 되는 칸은 빈 값으로 채운다(이전 파일과 호환)
+  const { checks: _c, rivalChecks: _r, briefs: _b, rivalChoices: _rc, prep: _p, notes: _n, salesKeywords: _s, ...minimal } = good;
+  const m = parseImport(JSON.stringify(minimal), CID);
+  assert.equal(m.ok, true);
+  assert.deepEqual([m.data.checks, m.data.notes, m.data.salesKeywords], [{}, null, null]);
+});
+
+test("불러오기: 넣을 레코드를 다 만들기 전에는 지금 브라우저 자료(담은 항목·메모)를 지우지 않는다", async () => {
+  const store = await import("./store.ts");
+  store.setBackendForTest(store.memoryBackend());
+  const { replaceLocal, getLocal } = await import("./local.ts");
+  const keep = { kind: "gp", itemId: "가나벤처스", title: "가나벤처스", savedAt: "2026-11-01T00:00:00Z", meta: {} };
+  await store.put("saved", [CID, "gp", "가나벤처스"], keep);
+  await store.put("notes", CID, { memo: "지우면 안 되는 메모", updatedAt: "x" });
+  const { loaded: _l, ...data } = fullLocal;
+  await assert.rejects(replaceLocal(CID, { ...data, saved: [null] }));
+  await assert.rejects(replaceLocal(CID, { ...data, checks: { a: null } }));
+  assert.deepEqual((await store.all("saved", CID)).map((r) => r.value), [keep]);
+  assert.equal((await store.get("notes", CID)).memo, "지우면 안 되는 메모");
+  // 맞는 자료면 바꾼다(지금 자료는 지우고 파일 내용으로)
+  await replaceLocal(CID, data);
+  assert.deepEqual((await store.all("saved", CID)).map((r) => r.value), fullLocal.saved);
+  assert.equal((await store.get("notes", CID)).memo, "메모");
+  assert.deepEqual((await store.all("rivalChecks", CID))[0].key, [CID, "PBLN_1", "rival:가"]);
+  assert.deepEqual(getLocal(CID).saved, fullLocal.saved);
+  assert.equal(getLocal(CID).briefs.가나벤처스.gp, "가나벤처스");
+});

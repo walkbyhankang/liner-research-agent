@@ -179,11 +179,29 @@ class Job:
             log.error("분석 스냅샷을 쓰지 못했습니다(작업 %s): %s", self.job_id, type(e).__name__)
             return
         if v["status"] == "done" and self._latest_written != v["analyzedAt"]:
-            try:
-                self.m.store.write_latest(v)
-                self._latest_written = v["analyzedAt"]
-            except (LeakError, OSError):
-                log.error("latest.json 을 쓰지 못했습니다(작업 %s)", self.job_id)
+            with self.m.latest_lock:  # 읽고 견주고 쓰는 사이에 다른 작업이 latest.json 을 바꾸지 않게
+                if not self._not_older_than_latest(v):
+                    return  # 같은 회사의 더 새 분석을 가리키고 있다(되살린 옛 작업에서 단락만 실행한 경우): 뒤로 돌리지 않는다
+                try:
+                    self.m.store.write_latest(v)
+                    self._latest_written = v["analyzedAt"]
+                except (LeakError, OSError):
+                    log.error("latest.json 을 쓰지 못했습니다(작업 %s)", self.job_id)
+
+    def _not_older_than_latest(self, v: dict) -> bool:
+        """지금 latest.json 이 가리키는 분석보다 이 작업의 analyzedAt 이 새롭거나 같은가. 포인터가 없거나 깨졌거나 이 작업이면 참."""
+        info = self.m.store.latest_info(v["companyId"])
+        if info is None or info.get("jobId") == v["jobId"]:
+            return True
+        current, mine = common.parse_iso(info.get("analyzedAt")), common.parse_iso(v["analyzedAt"])
+        if current is None:
+            return True
+        if mine is None:
+            return False
+        try:
+            return mine >= current
+        except TypeError:  # 시간대 표기가 섞인 경우: 같은 모양(common.iso)의 글로 견준다
+            return str(v["analyzedAt"]) >= str(info.get("analyzedAt"))
 
 
 def retryable(key: str, env: dict, secs: dict, merged: dict, is_example: bool) -> bool:
@@ -217,6 +235,7 @@ class Manager:
         self.lock = threading.RLock()
         self.jobs: dict[str, Job] = {}       # 메모리에 있는 작업(진행 중 + 읽어 온 것)
         self.meta: dict[str, dict] = {}      # jobId → {companyId, status, startedAt, analyzedAt, name}
+        self.latest_lock = threading.Lock()  # latest.json 을 견주고 바꾸는 동안(Job._write)
         self._loaded = False
 
     # ---------------- 시작할 때 파일에서 되살리기(12.1)

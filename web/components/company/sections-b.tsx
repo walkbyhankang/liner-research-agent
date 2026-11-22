@@ -32,8 +32,16 @@ const setPages = (key: string, p: Pages) => {
   pageListeners.forEach((l) => l());
 };
 
-async function fetchPage(jobId: string, cats: NewsCategory[], offset: number) {
-  const key = `${jobId}|${cats.join(",")}`;
+/**
+ * 기사 목록 캐시 열쇠: 작업 id, 뉴스 단락 결과의 판(analyzedAt), 고른 분류. 같은 작업에서 뉴스만 새로 받으면 판이 바뀌어
+ * 옛 쪽·분류 건수를 다시 쓰거나 더 보기에서 옛 기사와 새 기사가 섞이지 않는다.
+ */
+const newsKey = (jobId: string, version: string, cats: readonly NewsCategory[]) => `${jobId}@${version}|${cats.join(",")}`;
+
+async function fetchPage(jobId: string, version: string, cats: NewsCategory[], offset: number) {
+  const key = newsKey(jobId, version, cats);
+  // 같은 작업의 옛 판 기사 목록은 버린다
+  for (const k of [...pageCache.keys()]) if (k.startsWith(`${jobId}@`) && !k.startsWith(`${jobId}@${version}|`)) pageCache.delete(k);
   const cur = pageCache.get(key);
   if (cur?.loading) return;
   setPages(key, { items: cur?.items ?? [], total: cur?.total ?? 0, counts: cur?.counts ?? [], loading: true, error: null });
@@ -57,8 +65,9 @@ function newsJobId(c: ReturnType<typeof useCompany>) {
 export function NewsList({ fixed }: { fixed?: NewsCategory[] }) {
   const c = useCompany();
   const jobId = newsJobId(c);
+  const version = c.job!.sections.news.analyzedAt ?? "";
   const [cats, setCats] = useState<NewsCategory[]>(fixed ?? []);
-  const key = `${jobId}|${cats.join(",")}`;
+  const key = newsKey(jobId, version, cats);
   const pages = useSyncExternalStore(
     (cb) => {
       pageListeners.add(cb);
@@ -68,13 +77,15 @@ export function NewsList({ fixed }: { fixed?: NewsCategory[] }) {
     () => undefined,
   );
   useEffect(() => {
-    if (!pageCache.has(key)) void fetchPage(jobId, cats, 0);
-  }, [key, jobId, cats]);
+    if (!pageCache.has(key)) void fetchPage(jobId, version, cats, 0);
+  }, [key, jobId, version, cats]);
   const all = c.job!.sections.news.result;
-  const counts = (pageCache.get(`${jobId}|`)?.counts ?? all?.categoryCounts ?? []).filter((x) => x.count > 0);
+  const counts = (pageCache.get(newsKey(jobId, version, []))?.counts ?? all?.categoryCounts ?? []).filter((x) => x.count > 0);
   const items = pages?.items ?? [];
   const total = pages?.total ?? 0;
   const mr = useMore(Math.max(total, items.length), 20, 20, items.length);
+  const resetMore = mr.reset;
+  useEffect(() => resetMore(), [key, resetMore]); // 분류를 바꾸거나 뉴스를 새로 받으면 첫 쪽부터 보인다
   const toggle = (cat: NewsCategory) => setCats((cs) => (cs.includes(cat) ? cs.filter((x) => x !== cat) : [...cs, cat]));
 
   return (
@@ -129,7 +140,7 @@ export function NewsList({ fixed }: { fixed?: NewsCategory[] }) {
             left={Math.max(0, total - mr.count)}
             step={20}
             onClick={() => {
-              if (items.length < mr.count + 20 && items.length < total) void fetchPage(jobId, cats, items.length);
+              if (items.length < mr.count + 20 && items.length < total) void fetchPage(jobId, version, cats, items.length);
               mr.more();
             }}
           />
