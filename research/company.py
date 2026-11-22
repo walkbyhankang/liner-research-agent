@@ -5,7 +5,10 @@ Liner 웹 검색 결과를 모델 1회로 정리한다. 모델에는 검색 결�
 """
 from __future__ import annotations
 
-from research import public_data
+import re
+from concurrent.futures import ThreadPoolExecutor
+
+from research import common, public_data
 from research.liner import DATA_RULE, Liner, numbered
 
 FUND_FIELDS = ["early", "ai", "bio", "content", "mfg", "green", "local", "ip", "impact", "scale"]  # web/lib/finder.ts fundFields id
@@ -29,13 +32,14 @@ SCHEMA = {
         "stage": {"type": "string", "enum": ["예비·초기", "성장", "후기·상장 준비", "상장사·대기업", "판단 불가"]},
         "fund_field": {"type": "string", "enum": FUND_FIELDS,
                        "description": "모태펀드 출자분야 중 가장 가까운 것: early 창업초기, ai AI·딥테크·SW, bio 바이오, content 콘텐츠, mfg 소부장, green 환경에너지, local 지방, ip 특허·기술사업화, impact 소셜임팩트, scale 스케일업·해외"},
-        "competitors": {"type": "array", "description": "대표 경쟁사 5개. 직접 경쟁제품·대체기술·유사 사업모델 포함, 국내외 모두",
+        "competitors": {"type": "array", "description": "국내(한국 본사) 경쟁사 최대 5개. 직접 경쟁제품·유사 기술·유사 사업모델 기준, 상장·비상장 모두. "
+                                                       "외국 기업과 외국 기업의 한국 지사·법인은 넣지 않는다. 적합한 국내 기업이 5개 미만이면 그만큼만",
                         "items": {"type": "object", "additionalProperties": False,
                                   "required": ["name", "name_en", "registered_name_ko", "country", "is_korean", "relation", "reason"],
                                   "properties": {"name": {"type": "string"}, "name_en": {"type": "string"},
                                                  "registered_name_ko": {"type": "string", "description": "한국 법인이면 등기상 한글 상호(예: 퓨리오사에이아이). 모르면 빈 문자열"},
                                                  "country": {"type": "string"}, "is_korean": {"type": "boolean"},
-                                                 "relation": {"type": "string", "enum": ["직접 경쟁", "대체 기술", "유사 사업모델", "해외 경쟁사"]},
+                                                 "relation": {"type": "string", "enum": ["직접 경쟁", "대체 기술", "유사 사업모델"]},
                                                  "reason": {"type": "string", "description": "경쟁 관계 한 문장"}}}},
         "tech_keywords": {"type": "array", "description": "논문·정부사업 검색용 주요 기술 분야 5~10개",
                           "items": {"type": "object", "additionalProperties": False, "required": ["ko", "en"],
@@ -62,9 +66,9 @@ def analyze(name: str, liner: Liner, progress=None) -> dict:
     except public_data.PublicDataError as e:
         out["errors"].append(f"금융위 기업기본정보: {e}")
     say("사업내용·핵심 기술·경쟁사 검색 중(Liner Web Search)...")
-    results = []
-    for q in QUERIES:
-        results += liner.search(q.format(n=name), max_results=10, label="profile_search")
+    # 검색 3회는 서로 독립이라 동시에 부른다. 결과는 원래 질의 순서대로 합친다
+    with ThreadPoolExecutor(max_workers=len(QUERIES), thread_name_prefix="profile") as ex:
+        results = [r for rs in ex.map(lambda q: liner.search(q.format(n=name), max_results=10, label="profile_search"), QUERIES) for r in rs]
     seen, uniq = set(), []
     for r in results:
         u = r.get("url")
@@ -78,13 +82,45 @@ def analyze(name: str, liner: Liner, progress=None) -> dict:
     say("기업 프로필·경쟁사 5개·기술 키워드 도출 중(Liner Model)...")
     system = (f"당신은 기업 분석가입니다. {DATA_RULE}\n"
               "검색 자료와 공공 API 값을 바탕으로 기업 프로필을 만듭니다. 사실(설립·대표·제품·현황)은 자료에 있는 것만 쓰고 없으면 비웁니다. "
-              "경쟁사·기술 키워드·검색어는 자료와 업계 지식을 바탕으로 폭넓게 제시해도 됩니다. 투자 가능성이나 점수는 쓰지 않습니다.")
+              "경쟁사·기술 키워드·검색어는 자료와 업계 지식을 바탕으로 폭넓게 제시해도 됩니다. 투자 가능성이나 점수는 쓰지 않습니다.\n"
+              "경쟁사는 한국에 본사를 둔 국내 기업만 고릅니다(상장·비상장 모두). 외국 기업과 외국 기업의 한국 지사·한국 법인은 제외하고, "
+              "국내 기업이 5개 미만이면 해외 기업으로 채우지 말고 찾은 만큼만 씁니다. 대상 기업 자신은 경쟁사에 넣지 않습니다.")
     user = f"대상 기업: {name}\n{corp_txt}\n\n<자료>\n{numbered(uniq[:30], 280)}\n</자료>"
     prof = liner.json(system, user, SCHEMA, name="company_profile", max_tokens=5000)
     if prof is None:
         out["errors"].append("기업 프로필 모델 분석 실패 — 검색 결과 목록만 표시합니다.")
         prof = {}
+    if prof.get("competitors") is not None:
+        prof["competitors"], out["excluded_competitors"] = domestic_only(prof.get("competitors") or [], name, prof.get("name_en") or "")
     out["profile"] = prof
     comps = (prof.get("competitors") or [])[:5]
-    say(f"경쟁사 {len(comps)}개 선정 완료")
+    say(f"국내 경쟁사 {len(comps)}개 선정 완료" + (f" (해외·지사 {len(out.get('excluded_competitors') or [])}곳 제외)" if out.get("excluded_competitors") else ""))
     return out
+
+
+KOREA = {"한국", "대한민국", "korea", "southkorea", "republicofkorea", "kr", "kor"}
+_BRANCH = re.compile(r"한국\s*지사|한국\s*법인|한국\s*지점|korea\s*branch|국내\s*법인을\s*둔\s*(해외|외국)", re.I)
+
+
+def domestic_only(comps: list[dict], target: str, target_en: str = "") -> tuple[list[dict], list[dict]]:
+    """모델이 고른 경쟁사 후처리: 한국 본사 기업만 남기고(최대 5), 해외 기업·한국 지사·대상기업 자신·중복은 뺀다.
+
+    판단 근거는 모델 답의 is_korean·country 와 상호·설명 표기뿐이다(추가 검색 없음). 뺀 기업은 사유와 함께 돌려준다.
+    '코리아'로 끝나는 이름은 국내 기업에도 흔해 그것만으로는 빼지 않는다.
+    """
+    keep, drop = [], []
+    seen = {common.norm_name(target), common.norm_name(target_en)} - {""}
+    for c in comps:
+        nm = str(c.get("name") or "").strip()
+        key = common.norm_name(nm)
+        country = common.norm_name(str(c.get("country") or ""))
+        if not nm or key in seen:
+            drop.append({**c, "excluded_reason": "대상기업 자신 또는 중복"})
+        elif not c.get("is_korean") or (country and country not in KOREA):
+            drop.append({**c, "excluded_reason": f"해외 기업(국가: {c.get('country') or '미기재'})"})
+        elif _BRANCH.search(f"{nm} {c.get('registered_name_ko') or ''} {c.get('reason') or ''}"):
+            drop.append({**c, "excluded_reason": "외국 기업의 한국 지사·법인"})
+        else:
+            seen.add(key)
+            keep.append(c)
+    return keep[:5], drop

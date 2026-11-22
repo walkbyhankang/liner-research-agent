@@ -81,6 +81,7 @@ def test_controller_continues_when_steps_fail(monkeypatch):
     monkeypatch.setattr(controller.funding_view, "company_lookup", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no key")))
     done = []
     R = controller.run("테스트", step_done=lambda k, s, i: done.append((k, s)))
-    assert [k for k, _ in done] == [k for k, _ in controller.STEPS]
+    # 병렬 실행이라 완료 알림은 끝나는 순서대로 온다. ①이 먼저, 6단계 모두 정확히 한 번씩
+    assert done[0][0] == "profile" and sorted(k for k, _ in done) == sorted(k for k, _ in controller.STEPS)
     assert dict(done)["profile"] == "실패" and dict(done)["funding"] == "완료"
     assert "policy" in R["funding"] and any("down" in e for e in R["errors"])

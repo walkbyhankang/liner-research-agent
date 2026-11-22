@@ -50,6 +50,32 @@ def key_status() -> dict[str, bool]:
     return {k: bool(env(k)) for k in SECRET_KEYS}
 
 
+# ---------------- 동시 실행 제어(병렬 분석용) ----------------
+# 서비스별 동시 요청 상한. 공식 동시성 한도가 확인되지 않은 API 라 보수적으로 둔다(중첩 스레드 풀이 있어도 실제 요청 수는 이 값으로 묶인다).
+LIMITS = {"data_go_kr": 6, "naver": 3, "openalex": 3}
+_sems = {k: threading.BoundedSemaphore(v) for k, v in LIMITS.items()}
+_key_locks: dict[str, threading.Lock] = {}
+_key_guard = threading.Lock()
+
+
+def limit(service: str) -> threading.BoundedSemaphore:
+    """with common.limit('naver'): ... — 서비스별 동시 요청 수 제한."""
+    return _sems[service]
+
+
+def key_lock(kind: str, ident: Any) -> threading.Lock:
+    """같은 캐시 키를 여러 스레드가 동시에 조회·호출하지 않게 하는 키별 잠금(single-flight).
+
+    먼저 잡은 스레드가 호출해 캐시에 넣으면, 기다린 스레드는 캐시 적중으로 끝나 같은 API 를 두 번 부르지 않는다.
+    """
+    k = kind + ":" + _cache_path(kind, ident).name
+    with _key_guard:
+        lk = _key_locks.get(k)
+        if lk is None:
+            lk = _key_locks[k] = threading.Lock()
+        return lk
+
+
 # ---------------- 파일 캐시 ----------------
 def _cache_path(kind: str, ident: Any) -> Path:
     h = hashlib.sha1(json.dumps(ident, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()[:20]
@@ -76,7 +102,7 @@ def cache_put(kind: str, ident: Any, data: Any) -> None:
     text = json.dumps({"saved_at": time.time(), "data": data}, ensure_ascii=False, default=str)
     text = scrub_text(text) if any(s in text for s in secrets()) else text
     with _lock:
-        tmp = p.with_suffix(".tmp")
+        tmp = p.with_suffix(f".{threading.get_ident()}.tmp")  # 스레드별 임시 파일 후 원자적 교체
         tmp.write_text(text, encoding="utf-8")
         os.replace(tmp, p)
 

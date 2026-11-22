@@ -17,8 +17,9 @@ from research.liner import DATA_RULE, Liner
 OA = "https://api.openalex.org"
 CACHE_HOURS = 72
 TYPES = "article|preprint|conference-paper|review"
+# fwci·citation_normalized_percentile: OpenAlex 가 주는 연도·분야 보정 인용지표(261117_Liner/05 collect.py 에서 같은 필드로 실제 호출 확인)
 SEL = ("id,doi,display_name,publication_year,publication_date,primary_location,authorships,cited_by_count,"
-       "abstract_inverted_index")
+       "fwci,citation_normalized_percentile,abstract_inverted_index")
 _http = httpx.Client(timeout=60)
 
 
@@ -26,6 +27,15 @@ def _oa(path: str, params: dict) -> dict:
     hit = common.cache_get("openalex", {"p": path, **params}, CACHE_HOURS)
     if hit is not None:
         return hit
+    with common.key_lock("openalex", {"p": path, **params}):
+        hit = common.cache_get("openalex", {"p": path, **params}, CACHE_HOURS)
+        if hit is not None:
+            return hit
+        with common.limit("openalex"):  # 동시 3개 + 기존 호출 간 0.12초 간격 유지
+            return _oa_raw(path, params)
+
+
+def _oa_raw(path: str, params: dict) -> dict:
     headers = {"User-Agent": "liner-research-agent/0.3"}
     key = common.env("OPENALEX_API_KEY")
     if key:
@@ -69,6 +79,9 @@ def _work(w: dict) -> dict:
             "소속": "; ".join(list(dict.fromkeys(i for i in insts if i))[:5]),
             "학술지·학회": ((loc.get("source") or {}).get("display_name")) or "", "피인용": w.get("cited_by_count") or 0,
             "초록": _abstract(w.get("abstract_inverted_index"))[:1500], "링크": url, "출처": "OpenAlex",
+            "id": w.get("id") or "", "doi": w.get("doi") or "", "FWCI": w.get("fwci"),
+            "인용 백분위": ((w.get("citation_normalized_percentile") or {}).get("value")),
+            "상위 10%": bool((w.get("citation_normalized_percentile") or {}).get("is_in_top_10_percent")),
             "_raw_aff": " ".join(s for a in w.get("authorships") or [] for s in (a.get("raw_affiliation_strings") or []))}
 
 
@@ -117,6 +130,8 @@ def company_papers(company: str, english: str, keywords_en: list[str], years: in
     """경쟁사(또는 대상기업)가 저자 소속으로 직접 참여한 논문. 원문 소속 문자열을 재확인한 것만 '직접 참여'로 둔다."""
     since = f"{date.today().year - years}-01-01"
     out = {"company": company, "mode": "", "works": [], "error": ""}
+    # 'Upstage Co., Ltd.' 처럼 법인 접미사가 붙은 영문명은 소속 문자열·기관 검색에 걸리지 않아 접미사를 뗀다
+    english = re.sub(r"[\s,]*(co\.?,?\s*ltd\.?|inc\.?|corp(oration)?\.?|ltd\.?|llc|limited|주식회사|\(주\)|㈜)\s*$", "", english or "", flags=re.I).strip()
     names = [n for n in dict.fromkeys([english, company]) if n and len(n) >= 3]
     if not names:
         return out
@@ -144,10 +159,27 @@ def company_papers(company: str, english: str, keywords_en: list[str], years: in
             d = _oa("/works", {"filter": f, "sort": "publication_date:desc", "per_page": 20, "select": SEL + ",authorships"})
             rows = [_work(w) for w in d.get("results") or []]
             rows = [r for r in rows if any(t in common.norm_name(r["_raw_aff"] + " " + r["소속"]) for t in tokens)]
+        rows = dedup_ids(rows)
         for r in rows:
             r["경쟁사"] = company
             r["직접 참여"] = "소속 확인"
         out["works"] = rows
+        # 연도별 발표 건수: 같은 필터 조건으로 OpenAlex 집계 질의 1회(목록 15~20건이 아니라 전체 건수)
+        try:
+            if inst_ids:
+                g = _oa("/works", {"filter": f"authorships.institutions.id:{'|'.join(inst_ids[:3])},from_publication_date:{since}", "group_by": "publication_year"})
+                out["count_basis"] = "OpenAlex 기관 ID 소속 저자 논문 전체(직접 참여)"
+                out["direct"] = True
+            else:
+                g = _oa("/works", {"filter": f'raw_affiliation_strings.search:"{names[0]}",from_publication_date:{since}', "group_by": "publication_year"})
+                out["count_basis"] = "원문 소속 문자열에 기업명이 들어간 논문 전체(소속 문자열 일치 — 개별 검증 전, 동명 기관 포함 가능)"
+                out["direct"] = False
+            out["by_year"] = {int(x["key"]): x["count"] for x in g.get("group_by") or [] if str(x.get("key")).isdigit()}
+            # 비교용: 소속과 무관하게 제목·초록·본문에 기업명이 '언급'된 논문 수(직접 참여와 구분해 표시)
+            g = _oa("/works", {"search": f'"{names[0]}"', "filter": f"from_publication_date:{since}", "group_by": "publication_year"})
+            out["mention_by_year"] = {int(x["key"]): x["count"] for x in g.get("group_by") or [] if str(x.get("key")).isdigit()}
+        except RuntimeError as e:
+            out["by_year_error"] = str(e)
     except RuntimeError as e:
         out["error"] = str(e)
     return out
@@ -166,14 +198,47 @@ def scholar_extra(liner: Liner, keyword_en: str, keyword_ko: str = "") -> list[d
     return rows
 
 
+def dedup_ids(rows: list[dict]) -> list[dict]:
+    """DOI 또는 OpenAlex ID 로 같은 논문을 한 건으로."""
+    seen, out = set(), []
+    for r in rows:
+        k = (r.get("doi") or r.get("id") or "").lower()
+        if k and k in seen:
+            continue
+        if k:
+            seen.add(k)
+        out.append(r)
+    return out
+
+
+def mark_important(papers: list[dict]) -> list[dict]:
+    """OpenAlex 가 준 지표만으로 '주요 논문' 표시(새 점수 산출·AI 판단 없음).
+
+    기준: 연도·분야 보정 인용 상위 10%(citation_normalized_percentile.is_in_top_10_percent) 또는 FWCI 2 이상.
+    지표가 없는 논문(Liner Scholar 등)은 표시하지 않는다. 순서는 바꾸지 않는다.
+    """
+    for p in papers:
+        f = p.get("FWCI")
+        why = []
+        if p.get("상위 10%"):
+            why.append("분야·연도 보정 인용 상위 10%")
+        if isinstance(f, (int, float)) and f >= 2:
+            why.append(f"FWCI {f:.1f}")
+        p["주요 논문"] = " · ".join(why)
+    return papers
+
+
 def merge_unique(*lists: list[dict]) -> list[dict]:
     seen, out = set(), []
     for lst in lists:
         for r in lst:
             k = re.sub(r"[^0-9a-z가-힣]", "", (r.get("제목") or "").lower())[:80]
-            if not k or k in seen:
+            ident = (r.get("doi") or r.get("id") or "").lower()
+            if not k or k in seen or (ident and ident in seen):
                 continue
             seen.add(k)
+            if ident:
+                seen.add(ident)
             out.append(r)
     return out
 

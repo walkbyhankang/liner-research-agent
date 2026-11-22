@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -22,6 +23,7 @@ PROGRAMS = config.BASE_DIR / "web" / "public" / "data" / "programs.json"
 G2B = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService02/"
 OPS = {"물품": "getBidPblancListInfoThngPPSSrch02", "용역": "getBidPblancListInfoServcPPSSrch02"}
 CACHE_HOURS = 12
+G2B_WORKERS = 6
 _http = httpx.Client(timeout=30)
 
 
@@ -81,6 +83,15 @@ def _g2b(op: str, params: dict) -> list[dict]:
     hit = common.cache_get("g2b", {"op": op, **params}, CACHE_HOURS)
     if hit is not None:
         return hit
+    with common.key_lock("g2b", {"op": op, **params}):
+        hit = common.cache_get("g2b", {"op": op, **params}, CACHE_HOURS)
+        if hit is not None:
+            return hit
+        with common.limit("data_go_kr"):
+            return _g2b_raw(op, params)
+
+
+def _g2b_raw(op: str, params: dict) -> list[dict]:
     key = common.env("DATA_GO_KR_SERVICE_KEY")
     if not key:
         raise RuntimeError("DATA_GO_KR_SERVICE_KEY 가 .env 에 없습니다")
@@ -149,36 +160,47 @@ def g2b_search(keywords: list[str], strong: list[str], *, days: int = 28, max_ca
     wins = _windows(days, today)
     rows: dict[str, dict] = {}
     calls, errors, skipped = 0, [], 0
+    jobs = []
     for kw in keywords:
         for kind, op in OPS.items():
             for s, e in wins:
-                if calls >= max_calls:
+                if len(jobs) >= max_calls:
                     skipped += 1
                     continue
                 params = {"pageNo": 1, "numOfRows": 999, "type": "json", "inqryDiv": 1,
                           "inqryBgnDt": f"{s:%Y%m%d}0000", "inqryEndDt": f"{e:%Y%m%d}2359", "bidNtceNm": kw}
-                calls += 1
-                try:
-                    items = _g2b(op, params)
-                except RuntimeError as ex:
-                    errors.append(f"{kw}/{kind} {s:%m%d}-{e:%m%d}: {ex}")
-                    continue
-                for it in items:
-                    no = f"{it.get('bidNtceNo')}-{it.get('bidNtceOrd')}"
-                    title = it.get("bidNtceNm") or ""
-                    if no in rows:
-                        rows[no]["_kws"].add(kw)
-                        continue
-                    amt = _won(it.get("asignBdgtAmt")) or _won(it.get("presmptPrce"))
-                    rel = "높음" if _hits(title, strong) else "보통"
-                    rows[no] = {"구분": f"나라장터({kind})", "공고명": title,
-                                "기관": " / ".join(dict.fromkeys(x for x in (it.get("ntceInsttNm"), it.get("dminsttNm")) if x)),
-                                "분야": kind, "지원대상": "", "사업 내용": f"{it.get('bidMethdNm') or ''} · {it.get('cntrctCnclsMthdNm') or ''}",
-                                "금액": amt or "공고문 확인", "기간": f"{(it.get('bidBeginDt') or '')[:16]} ~ {(it.get('bidClseDt') or '')[:16]}",
-                                "마감": (it.get("bidClseDt") or "")[:10], "상태": _bid_status(it),
-                                "신청조건": "물품분류 제한" if it.get("prdctClsfcLmtYn") == "Y" else "참가자격은 공고문 확인",
-                                "관련성": rel, "_kws": {kw}, "링크": it.get("bidNtceDtlUrl") or it.get("bidNtceUrl") or "",
-                                "_key": re.sub(r"\W", "", title)[:40], "공고일": (it.get("bidNtceDt") or "")[:10]}
+                jobs.append((kw, kind, op, s, e, params))
+
+    def fetch(job):
+        kw, kind, op, s, e, params = job
+        try:
+            return _g2b(op, params), None
+        except RuntimeError as ex:
+            return None, f"{kw}/{kind} {s:%m%d}-{e:%m%d}: {ex}"
+    # 조회 조건(키워드×종류×구간)은 모두 달라 중복 요청이 없다. 서로 독립이라 병렬로 부르고, 결과는 원래 순서대로 합친다
+    with ThreadPoolExecutor(max_workers=G2B_WORKERS, thread_name_prefix="g2b") as pool:
+        results = list(pool.map(fetch, jobs))
+    calls = len(jobs)
+    for (kw, kind, op, s, e, params), (items, err) in zip(jobs, results):
+        if err:
+            errors.append(err)
+            continue
+        for it in items:
+            no = f"{it.get('bidNtceNo')}-{it.get('bidNtceOrd')}"
+            title = it.get("bidNtceNm") or ""
+            if no in rows:
+                rows[no]["_kws"].add(kw)
+                continue
+            amt = _won(it.get("asignBdgtAmt")) or _won(it.get("presmptPrce"))
+            rel = "높음" if _hits(title, strong) else "보통"
+            rows[no] = {"구분": f"나라장터({kind})", "공고명": title,
+                        "기관": " / ".join(dict.fromkeys(x for x in (it.get("ntceInsttNm"), it.get("dminsttNm")) if x)),
+                        "분야": kind, "지원대상": "", "사업 내용": f"{it.get('bidMethdNm') or ''} · {it.get('cntrctCnclsMthdNm') or ''}",
+                        "금액": amt or "공고문 확인", "기간": f"{(it.get('bidBeginDt') or '')[:16]} ~ {(it.get('bidClseDt') or '')[:16]}",
+                        "마감": (it.get("bidClseDt") or "")[:10], "상태": _bid_status(it),
+                        "신청조건": "물품분류 제한" if it.get("prdctClsfcLmtYn") == "Y" else "참가자격은 공고문 확인",
+                        "관련성": rel, "_kws": {kw}, "링크": it.get("bidNtceDtlUrl") or it.get("bidNtceUrl") or "",
+                        "_key": re.sub(r"\W", "", title)[:40], "공고일": (it.get("bidNtceDt") or "")[:10]}
     say(f"나라장터 검색 {calls}회 완료, 공고 {len(rows)}건")
     out = []
     for r in rows.values():

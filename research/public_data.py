@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
 import httpx
@@ -18,6 +19,7 @@ CORP_URL = "https://apis.data.go.kr/1160100/service/GetCorpBasicInfoService_V2/g
 FIN_URL = "https://apis.data.go.kr/1160100/service/GetFinaStatInfoService_V2/getSummFinaStat_V2"
 NPS = "https://apis.data.go.kr/B552015/NpsBplcInfoInqireServiceV2/"
 CACHE_HOURS = 24
+NPS_WORKERS = 4
 TIMEOUT = 30
 
 ACCT = {"enpSaleAmt": "매출액", "enpBzopPft": "영업이익", "iclsPalClcAmt": "법인세차감전순이익", "enpCrtmNpf": "당기순이익",
@@ -32,11 +34,21 @@ _http = httpx.Client(timeout=TIMEOUT, headers={"User-Agent": "liner-research-age
 
 
 def _get(kind: str, url: str, params: dict, *, xml: bool = False):
-    """GET. 성공 응답만 캐시. 5xx/429/네트워크 오류는 1회만 재시도. 오류 메시지에서 키를 지운다."""
+    """GET. 성공 응답만 캐시. 같은 요청은 키별 잠금으로 한 번만 부르고, 공공데이터포털 동시 요청 수를 제한한다."""
     ident = {"url": url, "params": params}
     hit = common.cache_get(kind, ident, CACHE_HOURS)
     if hit is not None:
         return hit
+    with common.key_lock(kind, ident):
+        hit = common.cache_get(kind, ident, CACHE_HOURS)
+        if hit is not None:
+            return hit
+        with common.limit("data_go_kr"):
+            return _get_raw(kind, ident, url, params, xml)
+
+
+def _get_raw(kind: str, ident: dict, url: str, params: dict, xml: bool):
+    """5xx/429/네트워크 오류는 1회만 재시도. 오류 메시지에서 키를 지운다."""
     key = common.env("DATA_GO_KR_SERVICE_KEY")
     if not key:
         raise PublicDataError("DATA_GO_KR_SERVICE_KEY 가 .env 에 없습니다")
@@ -197,13 +209,18 @@ def nps_monthly(name: str, bzno: str | list[str] = "", months: int = 12) -> dict
         by_wk.setdefault((i.get("wkplNm"), i.get("bzowrRgstNo")), []).append(i)
     main_key = max(by_wk, key=lambda k: len(by_wk[k]))
     snaps = sorted(by_wk[main_key], key=lambda i: i.get("dataCrtYm") or "")[-months:]
-    monthly = []
-    for i in snaps:
+    def month(i: dict) -> tuple[dict, dict]:
         try:
             det = (_xml_items(_get("nps", NPS + "getDetailInfoSearchV2", {"seq": i["seq"], "pageNo": 1, "numOfRows": 10}, xml=True)) or [{}])[0]
             pd_ = (_xml_items(_get("nps", NPS + "getPdAcctoSttusInfoSearchV2", {"seq": i["seq"], "pageNo": 1, "numOfRows": 10}, xml=True)) or [{}])[0]
         except (PublicDataError, ET.ParseError):
             det, pd_ = {}, {}
+        return det, pd_
+    # 월별 조회는 서로 독립이라 병렬로(동시 요청 수는 common.limit('data_go_kr') 가 묶는다). 결과 순서는 월 순서 그대로
+    with ThreadPoolExecutor(max_workers=NPS_WORKERS, thread_name_prefix="nps") as ex:
+        details = list(ex.map(month, snaps))
+    monthly = []
+    for i, (det, pd_) in zip(snaps, details):
         ym = i.get("dataCrtYm") or ""
         monthly.append({"월": f"{ym[:4]}-{ym[4:6]}" if len(ym) == 6 else ym,
                         "가입자 수": int(det["jnngpCnt"]) if det.get("jnngpCnt") else None,

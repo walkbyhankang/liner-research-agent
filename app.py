@@ -93,6 +93,241 @@ def news_view(nw: dict | None, key: str, limit: int = 300) -> None:
             "요약": a["description"][:200], "출처": a["source_api"], "링크": a["url"]} for a in shown[:limit]], height=420)
 
 
+def funding_rows(fh: dict) -> list[dict]:
+    rows = []
+    for r in fh.get("rounds") or []:
+        amt = r.get("amount") or "미공개"
+        if r.get("other_amounts"):
+            amt += f" (다른 출처: {', '.join(r['other_amounts'])})"
+        d = r.get("date") or (f"보도 {r['reported_date']}" if r.get("reported_date") else "미상")
+        note = r.get("summary") or ("" if r.get("round") else r.get("raw", ""))
+        ent = r.get("entity") or ""
+        if ent and common_name(ent) != common_name(fh.get("company") or "") and r.get("entity_match") != "web":
+            note = f"[투자대상: {ent}] " + note
+        rows.append({"투자일자": d, "투자단계": r.get("round") or "미상", "투자금액": amt, "통화": r.get("currency") or "",
+                     "투자기관·VC": ", ".join(r.get("investors") or []) or "미공개",
+                     "리드·주요 투자자": ", ".join(r.get("lead") or []), "주요 내용": note,
+                     "출처 유형": "Premium(PDL)" if r["source_type"].startswith("premium") else "웹 검색",
+                     "url": next((s["url"] for s in r.get("sources") or [] if s.get("url")), "")})
+    return rows
+
+
+def common_name(s: str) -> str:
+    from research import common as _c
+    return _c.norm_name(s)
+
+
+def funding_history_view(fh: dict | None, key: str, *, compact: bool = False) -> None:
+    """투자유치 이력 및 투자기관(②·③ 공통)."""
+    if not fh:
+        st.info("투자유치 이력: " + NA)
+        return
+    s = fh.get("summary") or {}
+    c = st.columns(4)
+    c[0].metric("확인된 투자 라운드", f"{s.get('rounds', 0)}건")
+    c[1].metric("투자기관", f"{s.get('investors', 0)}곳", f"VC·재무적(추정) {s.get('vc_like', 0)}곳", delta_color="off")
+    tr = s.get("total_raised")
+    c[2].metric("누적 투자유치(PDL)", f"${tr / 1e6:,.1f}M" if tr else "-")
+    lt = s.get("latest") or {}
+    c[3].metric("최근 투자", lt.get("round") or "-", lt.get("date") or None, delta_color="off")
+    notes = []
+    if tr:
+        notes.append(f"누적액은 Premium(PDL) 회사 카드 total_raised 값({s.get('total_raised_entity')}, USD)")
+    if s.get("funding_stage"):
+        notes.append(f"PDL 투자단계: {s['funding_stage']}")
+    if s.get("disclosed_amounts"):
+        notes.append("확인 가능한 투자금액: " + " · ".join(s["disclosed_amounts"][:12]) + (" 외" if len(s["disclosed_amounts"]) > 12 else ""))
+    for n in notes:
+        st.caption(n)
+    rows = funding_rows(fh)
+    if rows:
+        st.markdown("**투자유치 이력**")
+        table(rows, ["투자일자", "투자단계", "투자금액", "통화", "투자기관·VC", "리드·주요 투자자", "주요 내용", "출처 유형", "url"], links=("url",))
+    else:
+        st.info("투자 라운드 자료를 확보하지 못했습니다(상장사·대기업은 라운드 방식 정보가 적을 수 있음).")
+    inv = fh.get("investors") or []
+    if inv:
+        st.markdown(f"**투자기관·VC 목록 ({len(inv)}곳)**")
+        table([{**i, "참여 라운드": ", ".join(i["참여 라운드"]), "리드·주요 투자자 표기": "예" if i["리드·주요 투자자 표기"] else ""} for i in inv])
+    cards = fh.get("cards") or []
+    if cards:
+        with st.expander(f"Premium(PDL) 회사 카드 {len(cards)}건 — 관련 법인 포함"):
+            table([{"법인명": x["name"], "일치": "이름·도메인 일치" if x["match"] == "exact" else "유사 이름(관련 법인 가능)", "투자단계": x["funding_stage"],
+                    "누적 투자(USD)": x["total_raised"], "라운드 수": x["funding_round_count"], "설립": x["established"], "웹사이트": x["website"],
+                    "위치": x["location"], "다른 이름": x["also_known_as"]} for x in cards])
+    arts = fh.get("articles") or []
+    if arts:
+        if compact:
+            with st.expander(f"투자 관련 기사 {len(arts)}건"):
+                table(arts, links=("링크",))
+        else:
+            st.markdown(f"**투자 관련 주요 기사·발표 ({len(arts)}건)**")
+            table(arts, links=("링크",), height=300)
+    st.caption("출처: Liner Premium(People Data Labs 회사 카드) 우선, 라운드가 부족하면 Liner 웹 검색 스니펫으로 보완(근거 문장이 스니펫에 있는 것만). "
+               "관련·이전 법인의 투자 이력이 섞일 수 있어 투자대상 법인명을 함께 표시합니다. 같은 라운드가 명백히 겹칠 때만 합치고 출처 간 금액 차이는 그대로 둡니다. "
+               "투자기관 유형은 이름 기반 추정입니다.")
+    for e in fh.get("errors") or []:
+        st.caption("미확보: " + e)
+
+
+def cumulative_of(fh: dict | None) -> dict:
+    """funding_history 결과의 누적 투자유치 금액. 이전 결과 파일(cumulative 필드 없음)도 기존 값으로 계산한다."""
+    s = (fh or {}).get("summary") or {}
+    if s.get("cumulative"):
+        return s["cumulative"]
+    if not fh:
+        return {}
+    from research import funding_history as _fh
+    return _fh.cumulative(fh.get("cards") or [], fh.get("rounds") or [])
+
+
+def money_text(v: float, cur: str) -> str:
+    if cur == "KRW":
+        return f"{v / 1e12:,.2f}조원" if v >= 1e12 else f"{v / 1e8:,.0f}억원"
+    sym = {"USD": "$", "EUR": "€", "GBP": "£"}.get(cur, "")
+    return f"{sym}{v / 1e6:,.1f}M" + ("" if sym else f" {cur}")
+
+
+def cum_text(cum: dict) -> str:
+    by = (cum or {}).get("by_currency") or {}
+    if not by:
+        return "미확보"
+    return " + ".join(money_text(v, c) for c, v in by.items())
+
+
+def funding_chart(cos: list[tuple[str, dict | None, bool]]) -> None:
+    """누적 투자유치 금액 비교(통화별로 따로). 금액 미확보 기업은 0으로 그리지 않고 아래에 이름만 적는다."""
+    rows, missing = [], []
+    for nm, fh, is_self in cos:
+        cum = cumulative_of(fh)
+        by = cum.get("by_currency") or {}
+        if not by:
+            missing.append(nm)
+        for cur, v in by.items():
+            rows.append({"기업": nm + (" (대상)" if is_self else ""), "통화": cur, "금액": v, "표시": money_text(v, cur),
+                         "기준": cum.get("label"), "대상": "대상기업" if is_self else "경쟁사"})
+    if not rows:
+        st.info("누적 투자유치 금액을 확보한 기업이 없어 비교 차트를 그리지 않습니다.")
+        return
+    for cur in sorted({r["통화"] for r in rows}):
+        sub = sorted([r for r in rows if r["통화"] == cur], key=lambda r: -r["금액"])
+        unit, div = ("억원", 1e8) if cur == "KRW" else (f"백만 {cur}", 1e6)
+        for r in sub:
+            r["값"] = r["금액"] / div
+        fig = px.bar(sub, x="기업", y="값", color="대상", text="표시", hover_data=["기준"], height=340,
+                     color_discrete_map={"대상기업": "#d62728", "경쟁사": "#1f77b4"},
+                     title=f"누적 투자유치 금액 비교 ({cur}, {unit})", category_orders={"기업": [r["기업"] for r in sub]})
+        fig.update_traces(textposition="outside", cliponaxis=False)
+        fig.update_layout(yaxis_title=unit, xaxis_title="", legend_title="")
+        st.plotly_chart(fig, width="stretch", key=f"fund_cmp_{cur}")
+    st.caption("통화가 다르면 환산하지 않고 차트를 나눕니다. 'PDL'은 People Data Labs 회사 카드의 누적액(USD), '라운드 금액 합계'·'확인된 투자유치 금액 합계'는 "
+               "중복 정리한 라운드의 금액을 더한 값입니다(일부 라운드만 금액이 있으면 실제 누적액보다 작을 수 있음)."
+               + (f" 금액 미확보: {', '.join(missing)}" if missing else ""))
+
+
+def company_paper_chart(cp: list[dict]) -> None:
+    """대상기업·국내 경쟁사별 연도별 논문 발표 건수(최근 5개년). OpenAlex 집계(by_year)가 없으면 수집 목록으로 센다."""
+    import datetime as _dt
+    this = _dt.date.today().year
+    years = list(range(this - 4, this + 1))
+    rows, table_rows, basis = [], [], []
+    for c in cp:
+        nm = c["company"] + (" (대상)" if c.get("self") else "")
+        if c.get("by_year") is not None:
+            by = {int(k): v for k, v in (c.get("by_year") or {}).items()}
+            how = "OpenAlex 집계 — " + (c.get("count_basis") or "")
+        else:
+            by = {}
+            for w in c.get("works") or []:
+                if str(w.get("연도") or "").isdigit():
+                    by[int(w["연도"])] = by.get(int(w["연도"]), 0) + 1
+            how = f"수집 목록 {len(c.get('works') or [])}건 범위 내 집계"
+        basis.append(f"{nm}: {how}")
+        tr = {"기업": nm, "구분": "직접 참여(소속)" if c.get("direct", True) else "소속 문자열 일치"}
+        for y in years:
+            rows.append({"기업": nm, "연도": y, "논문 수": by.get(y, 0), "대상": bool(c.get("self"))})
+            tr[str(y)] = by.get(y, 0)
+        mention = {int(k): v for k, v in (c.get("mention_by_year") or {}).items()}
+        if mention:
+            tr["기업명 언급 논문(참고, 5년 합)"] = sum(mention.get(y, 0) for y in years)
+        table_rows.append(tr)
+    if not rows:
+        return
+    st.subheader("대상기업·국내 경쟁사 연도별 논문 발표 건수")
+    fig = px.line(rows, x="연도", y="논문 수", color="기업", markers=True, height=380,
+                  title=f"기업별 논문 발표 추이 ({years[0]}~{years[-1]}, 올해는 진행 중)")
+    for tr_ in fig.data:
+        if tr_.name.endswith("(대상)"):
+            tr_.update(line={"width": 5}, marker={"size": 10})
+        else:
+            tr_.update(line={"width": 2, "dash": "dot"})
+    fig.update_xaxes(dtick=1)
+    st.plotly_chart(fig, width="stretch", key="company_paper_trend")
+    table(table_rows)
+    st.caption("저자 소속 기관이 해당 기업인 논문(직접 참여)을 셉니다. '기업명 언급 논문'은 소속과 무관하게 본문 검색에 걸린 논문 수로, 직접 참여와 구분한 참고값입니다. "
+               + " / ".join(basis))
+
+
+def patent_view(P: dict | None) -> None:
+    """④ 국내 특허 출원 동향(검색으로 확인된 공개 특허)."""
+    st.divider()
+    st.subheader("국내 특허 출원 동향")
+    cos = (P or {}).get("companies") or []
+    if not cos:
+        st.info("국내 특허: " + ((P or {}).get("error") or NA))
+        return
+    import datetime as _dt
+    this = _dt.date.today().year
+    years = list(range(this - 4, this + 1))
+    label = lambda c: c["company"] + (" (대상)" if c.get("self") else "")  # noqa: E731
+    st.markdown("**A. 기업별 특허 출원 현황 (검색으로 확인된 공개 특허)**")
+    table([{"기업": label(c), "확인된 출원 특허": (c.get("summary") or {}).get("total", 0),
+            f"최근 5개년({years[0]}~{years[-1]}) 출원": (c.get("summary") or {}).get("recent5", 0),
+            "등록": (c.get("summary") or {}).get("registered", 0), "주요 기술 분야(CPC)": ", ".join((c.get("summary") or {}).get("top_fields") or []) or "-",
+            "출원인 아닌 언급 문서": len(c.get("mentions") or []), "원문 확인 문서": c.get("pages_checked", 0),
+            "비고": "; ".join(c.get("errors") or [])} for c in cos])
+    rows, trows = [], []
+    for c in cos:
+        by = {int(k): v for k, v in ((c.get("summary") or {}).get("by_year") or {}).items()}
+        tr = {"기업": label(c)}
+        for y in years:
+            rows.append({"기업": label(c), "출원연도": y, "출원 건수": by.get(y, 0)})
+            tr[str(y)] = by.get(y, 0)
+        tr[f"{years[0]} 이전"] = sum(v for y, v in by.items() if y < years[0])
+        trows.append(tr)
+    st.markdown("**B. 연도별 출원 추이 (출원일 기준)**")
+    fig = px.line(rows, x="출원연도", y="출원 건수", color="기업", markers=True, height=360,
+                  title=f"기업별 국내 특허 출원 추이 ({years[0]}~{years[-1]}, 검색으로 확인된 공개 특허)")
+    for tr_ in fig.data:
+        tr_.update(line={"width": 5}, marker={"size": 10}) if tr_.name.endswith("(대상)") else tr_.update(line={"width": 2, "dash": "dot"})
+    fig.update_xaxes(dtick=1)
+    st.plotly_chart(fig, width="stretch", key="patent_trend")
+    table(trows)
+    st.markdown("**C. 기업별 확인된 특허 출원 건수 비교**")
+    bars = sorted([{"기업": label(c), "확인된 출원 특허": (c.get("summary") or {}).get("total", 0), "대상": "대상기업" if c.get("self") else "경쟁사"} for c in cos],
+                  key=lambda r: -r["확인된 출원 특허"])
+    fb = px.bar(bars, x="기업", y="확인된 출원 특허", color="대상", text="확인된 출원 특허", height=320,
+                color_discrete_map={"대상기업": "#d62728", "경쟁사": "#1f77b4"}, title="검색으로 확인된 공개 특허 건수(전체 출원 건수 아님)",
+                category_orders={"기업": [b["기업"] for b in bars]})
+    fb.update_traces(textposition="outside", cliponaxis=False)
+    fb.update_layout(xaxis_title="", legend_title="")
+    st.plotly_chart(fb, width="stretch", key="patent_total")
+    st.markdown("**D. 주요 특허 목록 (최근 출원순)**")
+    pats = sorted([p for c in cos for p in c.get("patents") or []], key=lambda p: p.get("filing_date") or "", reverse=True)
+    table([{"출원기업": p.get("company"), "출원일": p.get("filing_date") or "미확인", "발명의 명칭": p.get("title"),
+            "주요 기술내용": (p.get("abstract") or "")[:220], "출원번호": p.get("application_no") or "-",
+            "공개번호": p.get("publication_no") or "-", "등록번호": p.get("registration_no") or "-", "CPC": ", ".join((p.get("cpc") or [])[:3]),
+            "원문": p.get("url")} for p in pats], links=("원문",), height=420)
+    ment = [m for c in cos for m in c.get("mentions") or []]
+    if ment:
+        with st.expander(f"기업명이 언급됐지만 출원인이 다른 특허 문서 {len(ment)}건 (출원 건수에 넣지 않음)"):
+            table([{"검색 기업": c["company"], "문서": m.get("pub_no"), "발명의 명칭": m.get("title"), "출원인": m.get("assignee"), "출원일": m.get("filing_date"), "원문": m.get("url")}
+                   for c in cos for m in c.get("mentions") or []], links=("원문",))
+    st.caption("Liner 웹 검색(site:patents.google.com)으로 후보를 찾고, Google Patents 공개 원문에서 출원인이 해당 기업인 KR 특허만 셉니다. "
+               "같은 출원번호의 공개·등록 문서는 한 건으로 합쳤고, 연도는 출원일 기준입니다(출원일이 없으면 공개·등록일로 대신하지 않음). "
+               "출원 후 약 18개월 미공개 기간이 있어 최근 연도 건수는 실제보다 적게 보이며, 검색에 걸리지 않은 특허는 빠집니다.")
+
+
 # ---------------- 세션 상태 ----------------
 R = st.session_state.get("R")
 st.title("통합 기업분석")
@@ -114,15 +349,17 @@ with tabs[0]:
                                         for k, lbl in controller.STEPS))
         render_steps()
         with st.status("분석 진행 중...", expanded=True) as status:
+            # 병렬 실행: 단계는 끝나는 순서대로 알림이 온다. 콜백은 controller 가 메인 스레드에서만 부른다
             def on_step(key, s, idx):
                 state[key] = s
-                if idx + 1 < len(controller.STEPS):
-                    state[controller.STEPS[idx + 1][0]] = "진행 중"
-                bar.progress((idx + 1) / len(controller.STEPS), text=f"{idx + 1}/{len(controller.STEPS)} 단계 완료")
+                n = sum(v in ("완료", "실패") for v in state.values())
+                bar.progress(n / len(controller.STEPS), text=f"{n}/{len(controller.STEPS)} 단계 완료")
                 render_steps()
-            state[controller.STEPS[0][0]] = "진행 중"
-            render_steps()
-            R = controller.run(name.strip(), progress=lambda m: st.write(m), step_done=on_step)
+
+            def on_start(key, idx):
+                state[key] = "진행 중"
+                render_steps()
+            R = controller.run(name.strip(), progress=lambda m: st.write(m), step_done=on_step, step_start=on_start)
             try:
                 R["saved_to"] = str(controller.save(R))
             except Exception as e:
@@ -172,8 +409,10 @@ with tabs[0]:
             st.markdown("#### 기타 중요한 기업 현황")
             for s in prof.get("status_notes") or []:
                 st.write("- " + s)
-        st.markdown("#### 주요 경쟁기업 (5개)")
+        st.markdown(f"#### 주요 국내 경쟁기업 ({len(prof.get('competitors') or [])}개)")
         table(prof.get("competitors") or [], ["name", "name_en", "country", "relation", "reason"])
+        if P.get("excluded_competitors"):
+            st.caption("국내 기업만 경쟁사로 사용합니다. 제외: " + ", ".join(f"{c.get('name')}({c.get('excluded_reason')})" for c in P["excluded_competitors"]))
         st.markdown("#### 기술 키워드 (논문·정부사업·나라장터 검색에 공통 사용)")
         table(prof.get("tech_keywords") or [])
         with st.expander(f"프로필 분석에 쓴 검색 자료 {len(P.get('sources') or [])}건"):
@@ -204,6 +443,8 @@ with tabs[1]:
         st.markdown("**중요 사건**")
         table(sm.get("events") or [], ["date", "category", "title", "detail", "기사 제목", "url"], links=("url",))
     news_view(T.get("news"), "target")
+    st.subheader("D. 투자유치 이력 및 투자기관")
+    funding_history_view(T.get("funding_history"), "target")
 
 # ---------------- 3. 경쟁사 동향 ----------------
 with tabs[2]:
@@ -234,6 +475,18 @@ with tabs[2]:
         if nps_long:
             c2.plotly_chart(px.line(nps_long, x="월", y="가입자 수", color="기업", markers=True, height=320, title="국민연금 가입자 비교"), width="stretch")
         st.caption("국내 기업만 금융위·국민연금 API로 조회합니다. 해외 기업은 뉴스·검색 자료만 표시합니다.")
+        st.subheader("투자유치 이력 비교")
+        fund_rows = []
+        for nm, fh in [(R["company"] + " (대상)", T.get("funding_history"))] + [(r["info"]["name"], r.get("funding_history")) for r in rivals]:
+            s = (fh or {}).get("summary") or {}
+            lt = s.get("latest") or {}
+            inv = (fh or {}).get("investors") or []
+            cum = cumulative_of(fh)
+            fund_rows.append({"기업": nm, "누적 투자유치 금액": cum_text(cum), "산정 기준": cum.get("label") or "미확보", "확인 라운드 수": s.get("rounds", 0),
+                              "PDL 투자단계": s.get("funding_stage") or "-", "최근 투자": " ".join(x for x in (lt.get("date"), lt.get("round"), lt.get("amount")) if x) or "-",
+                              "투자기관 수": len(inv), "주요 투자기관": ", ".join(i["투자기관"] for i in inv[:6]) or "-"})
+        table(fund_rows)
+        funding_chart([(R["company"], T.get("funding_history"), True)] + [(r["info"]["name"], r.get("funding_history"), False) for r in rivals])
         summ = R.get("rivals_summary") or {}
         for i, r in enumerate(rivals):
             c = r["info"]
@@ -259,6 +512,8 @@ with tabs[2]:
                     nps_view(r["public"], f"r{i}")
                 st.markdown("**최근 12개월 뉴스**")
                 news_view(r.get("news"), f"r{i}", limit=100)
+                st.markdown("**투자유치 이력 및 투자기관**")
+                funding_history_view(r.get("funding_history"), f"r{i}", compact=True)
 
 # ---------------- 4. 기술동향 ----------------
 with tabs[3]:
@@ -278,8 +533,10 @@ with tabs[3]:
         direct = [w for c in cp for w in c.get("works") or []]
         st.subheader(f"⭐ 경쟁기업·대상기업 직접 참여 논문 ({len(direct)}건, 저자 소속 확인)")
         if direct:
-            table([{"기업": w["경쟁사"], "제목": w["제목"], "연도": w["연도"], "저자": w["저자"], "소속": w["소속"], "피인용": w["피인용"], "링크": w["링크"]} for w in direct], height=360)
+            table([{"기업": w["경쟁사"], "제목": w["제목"], "연도": w["연도"], "저자": w["저자"], "소속": w["소속"], "피인용": w["피인용"],
+                    "주요 논문(OpenAlex 지표)": w.get("주요 논문") or "", "링크": w["링크"]} for w in direct], height=360)
         st.caption(" · ".join(f"{c['company']}: {len(c.get('works') or [])}건({c.get('mode') or '-'})" + (f" 오류 {c['error']}" if c.get("error") else "") for c in cp))
+        company_paper_chart(cp)
         summary = tech.get("summary") or {}
         for t in topics:
             with st.expander(f"{t['name']} — 논문 {len(t['papers'])}건"):
@@ -295,10 +552,13 @@ with tabs[3]:
                     table(inst)
                 st.markdown("**최근·주요 논문**")
                 for p in t["papers"]:
-                    st.markdown(f"**[{p['제목']}]({p['링크']})** ({p['연도']}, {p['출처']}, 피인용 {p['피인용']})  \n"
+                    star = f"🏅 주요 논문({p['주요 논문']}) · " if p.get("주요 논문") else ""
+                    st.markdown(f"{star}**[{p['제목']}]({p['링크']})** ({p['연도']}, {p['출처']}, 피인용 {p['피인용']})  \n"
                                 f"<small>{p['저자']} · {p['소속'] or p['학술지·학회']}</small>", unsafe_allow_html=True)
                     if p["초록"]:
                         st.caption(p["초록"][:600] + ("…" if len(p["초록"]) > 600 else ""))
+
+    patent_view((R.get("tech") or {}).get("patents"))
 
 # ---------------- 5. 정부사업·입찰공고 ----------------
 with tabs[4]:

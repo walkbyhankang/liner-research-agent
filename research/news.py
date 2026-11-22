@@ -6,6 +6,8 @@ NAVER 요청 형식은 261117_Liner/03_news_api_benchmark/newsbench/clients.py �
 from __future__ import annotations
 
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
@@ -16,7 +18,9 @@ from research import common
 from research.liner import DATA_RULE, Liner, numbered
 
 NAVER_URL = "https://openapi.naver.com/v1/search/news.json"
+_NAVER = httpx.Client(timeout=30)  # 연결 재사용(httpx.Client 는 스레드 안전)
 CACHE_HOURS = 6
+NAVER_WORKERS = 3
 TOPICS = {
     "투자유치": r"투자\s*유치|시리즈\s*[A-Z]|펀딩|프리\s*IPO|상장|IPO|증자|밸류|기업가치|funding|raises",
     "매출·실적": r"매출|실적|영업이익|흑자|적자|revenue",
@@ -38,12 +42,20 @@ def _naver(query: str, start: int = 1, display: int = 100, sort: str = "date") -
     hit = common.cache_get("naver_news", params, CACHE_HOURS)
     if hit is not None:
         return hit
-    r = httpx.get(NAVER_URL, params=params, headers={"X-Naver-Client-Id": cid, "X-Naver-Client-Secret": sec}, timeout=30)
-    if r.status_code != 200:
-        raise RuntimeError(common.scrub_text(f"NAVER HTTP {r.status_code}: {r.text[:150]}"))
-    items = r.json().get("items") or []
-    common.cache_put("naver_news", params, items)
-    return items
+    with common.key_lock("naver_news", params):  # 같은 검색은 한 번만(병렬 실행 시 중복 호출 방지)
+        hit = common.cache_get("naver_news", params, CACHE_HOURS)
+        if hit is not None:
+            return hit
+        with common.limit("naver"):
+            r = _NAVER.get(NAVER_URL, params=params, headers={"X-Naver-Client-Id": cid, "X-Naver-Client-Secret": sec})
+            if r.status_code == 429:  # 초당 한도 초과: 1회만 짧게 기다려 재시도
+                time.sleep(1.0)
+                r = _NAVER.get(NAVER_URL, params=params, headers={"X-Naver-Client-Id": cid, "X-Naver-Client-Secret": sec})
+        if r.status_code != 200:
+            raise RuntimeError(common.scrub_text(f"NAVER HTTP {r.status_code}: {r.text[:150]}"))
+        items = r.json().get("items") or []
+        common.cache_put("naver_news", params, items)
+        return items
 
 
 def _date_naver(s: str) -> str:
@@ -123,13 +135,27 @@ def collect(name: str, aliases: list[str] | None = None, liner: Liner | None = N
     # 날짜순 검색은 최근 몇 주에 몰리므로, 정확도순(sim) 검색과 주제별 검색으로 12개월을 넓게 덮는다
     topics = extra_queries or ["투자 유치", "매출 실적", "계약 수주", "출시 공개", "협력 MOU", "해외 진출", "정부 과제", "대표 인터뷰"]
     plan = [(name, "date", naver_pages), (name, "sim", naver_pages)] + [(f"{name} {q}", "sim", 1) for q in topics]
-    for q, sort, pages in plan:
+    def pages_of(job):
+        """검색어 하나의 페이지들(다음 페이지 여부가 앞 페이지에 달려 있어 검색어 안에서는 순서대로)."""
+        q, sort, pages = job
+        got, errs = [], []
         for p in range(pages):
             try:
                 items = _naver(q, start=1 + p * 100, sort=sort)
             except (RuntimeError, httpx.HTTPError, ValueError) as e:
-                errors.append(common.scrub_text(f"NAVER 뉴스 실패({q}): {str(e)[:120]}"))
+                errs.append(common.scrub_text(f"NAVER 뉴스 실패({q}): {str(e)[:120]}"))
                 break
+            got.append(items)
+            old_hit = any((_date_naver(it.get("pubDate") or "") or "9") < since for it in items)
+            if (old_hit and sort == "date") or len(items) < 100:
+                break
+        return got, errs
+    # 검색어끼리는 독립이라 병렬로 부르고(동시 수는 common.limit('naver')), 결과는 원래 계획 순서대로 합친다
+    with ThreadPoolExecutor(max_workers=NAVER_WORKERS, thread_name_prefix="naver") as ex:
+        fetched = list(ex.map(pages_of, plan))
+    for (q, sort, pages), (got, errs) in zip(plan, fetched):
+        errors += errs
+        for items in got:
             counts["naver"] += len(items)
             stop = False
             for it in items:
@@ -143,8 +169,6 @@ def collect(name: str, aliases: list[str] | None = None, liner: Liner | None = N
                 url = it.get("originallink") or it.get("link") or ""
                 rows.append({"date": d, "title": title, "description": desc, "url": url, "naver_url": it.get("link") or "",
                              "publisher": _host(url), "provider": "naver", "url_key": re.sub(r"^https?://(www\.|m\.)?", "", url).rstrip("/")})
-            if (stop and sort == "date") or len(items) < 100:
-                break
     if liner and liner.ok:
         en = next((a for a in aliases if re.fullmatch(r"[A-Za-z0-9 .&'-]+", a)), "")
         lq = [(f"{name} 최근 뉴스 투자 계약 협력", "ko", "kr")]

@@ -44,3 +44,6 @@ Thumbs.db
 # --- 향후 웹 프론트엔드(Next.js) 대비 ---
 node_modules/
 .next/
+
+# --- 로컬 진단·분석 결과(실측 기록, 기사 발췌 포함 가능) ---
+analysis_*.json
