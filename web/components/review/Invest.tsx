@@ -106,8 +106,9 @@ function GpReviewCard({ item }: { item: SavedItem }) {
       </p>
       <div className="mt-3">
         {loading ? (
-          <p className="text-sub" role="status">
-            {gp} 자료를 검색하고 있습니다 <span className="num">({elapsedText(secs)})</span>
+          // 화면 읽기 알림에는 바뀌지 않는 글만, 매초 바뀌는 경과 초는 알림 영역 밖에
+          <p className="text-sub">
+            <span role="status">{gp} 자료를 검색하고 있습니다</span> <span className="num">({elapsedText(secs)})</span>
           </p>
         ) : b ? (
           b.facts.length === 0 ? (

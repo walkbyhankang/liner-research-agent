@@ -221,7 +221,11 @@ function NoticeCard({ x, company }: { x: SavedProgram; company: NoticeCompany | 
       </div>
       {x.item.kind === "salesProgram" && <p className="text-xs text-sub">판로 지원사업</p>}
 
-      <div className="mt-3" aria-live="polite">
+      {/* 화면 읽기 알림: 시작·끝·실패처럼 뜻 있는 변화만. 보이는 진행 글의 경과 초는 알림 영역 밖에 두어 매초 읽지 않게 한다 */}
+      <p className="sr-only" role="status">
+        {loading ? "공고문을 읽고 있습니다" : task.status === "error" ? "대조하지 못했습니다" : result && counts ? `대조가 끝났습니다. ${result.match.overall}, 충족 ${counts.met}, 미충족 ${counts.unmet}, 확인 필요 ${counts.check}` : ""}
+      </p>
+      <div className="mt-3">
         {loading ? (
           <p className="text-sub">
             공고문을 읽고 있습니다 <span className="num">({elapsedText(secs)})</span>

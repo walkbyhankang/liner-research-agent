@@ -163,6 +163,23 @@ const idbGet = (page, store, key) =>
     store, key,
   );
 
+/** G-20: 화면 읽기 알림 영역(aria-live, role=status/alert/log, output)의 글을 n번 표본으로 모은다.
+ *  아무것도 도착하지 않는 동안 글이 바뀌면(경과 초 등) 화면 읽기 프로그램이 그때마다 읽는다 */
+async function liveSamples(page, n = 4, gap = 700) {
+  const seen = new Set();
+  for (let i = 0; i < n; i++) {
+    seen.add(
+      await page.evaluate(() =>
+        [...document.querySelectorAll('[aria-live]:not([aria-live="off"]), [role="status"], [role="alert"], [role="log"], output')]
+          .map((e) => e.textContent.replace(/\s+/g, " ").trim())
+          .join(" | "),
+      ),
+    );
+    if (i < n - 1) await wait(gap);
+  }
+  return [...seen];
+}
+
 /** 모든 화면 공통 점검(G-01~G-08, G-12, G-17~G-19). 실패만 모은다 */
 const globalFails = {};
 async function globalChecks(page, label) {
@@ -831,16 +848,19 @@ await run("main", async () => {
   await click(rp, "저장", { exact: true, within: "dialog[open]" });
   await wait(400);
   n0 = (await getLog()).length;
-  await ctl({ noticeDelayMs: 2500 });
+  await ctl({ noticeDelayMs: 5000 });
   await click(rp, "공고문으로 자격 대조", { within: "[data-notice='PBLN_000000000000001']" });
   await wait(400);
+  // G-20: 대조가 도는 동안 카드의 경과 초가 매초 바뀌어도 알림 영역 글은 그대로다
+  const liveNotice = await liveSamples(rp, 3, 700);
+  check("G-20 (공고문 대조 중)", liveNotice.length === 1 && liveNotice[0].includes("공고문을 읽고 있습니다"), liveNotice.join(" // ").slice(0, 200));
   // C-11: 다른 단계로 갔다 와도 진행 표시와 결과가 이어진다
   await click(rp, "노트", { exact: true, within: "nav[aria-label=단계]" });
   await wait(500);
   await click(rp, "심사 준비", { within: "nav[aria-label=단계]" });
   await wait(400);
   const prog = (await text(rp, "[data-notice='PBLN_000000000000001']")).includes("공고문을 읽고 있습니다");
-  await waitText(rp, "충족 4", 6000);
+  await waitText(rp, "충족 4", 9000);
   const notices = (await getLog()).slice(n0).filter((x) => x.method === "POST" && /notice\/analyze/.test(x.path));
   check("C-11", prog && notices.length === 1, `진행 표시 ${prog}, 요청 ${notices.length}`);
   check("R-05", notices[0]?.body?.company?.need === "운전자금 3억 원" && /특허/.test(notices[0]?.body?.company?.notes) && /직원 수와 다름/.test(notices[0]?.body?.company?.notes) && notices[0]?.body?.company?.industry === "고친 업종");
@@ -894,8 +914,13 @@ await run("main", async () => {
   const inv0 = await text(rp, "#panel-invest");
   check("R-16", inv0.includes("이미 투자한 곳입니다."));
   check("R-15 (요약 전)", inv0.includes("운용사 요약") && inv0.includes("보통 10~20초"));
+  await ctl({ gpDelayMs: 2600 });
   await click(rp, "운용사 요약", { exact: true, within: "#panel-invest" });
-  await waitText(rp, "근거 4개와 검색 결과 보기", 5000);
+  await wait(300);
+  const liveGp = await liveSamples(rp, 3, 700);
+  check("G-20 (운용사 요약 중)", liveGp.length === 1 && liveGp[0].includes("자료를 검색하고 있습니다"), liveGp.join(" // ").slice(0, 200));
+  await ctl({ gpDelayMs: 200 });
+  await waitText(rp, "근거 4개와 검색 결과 보기", 6000);
   const inv1 = await text(rp, "#panel-invest");
   check("R-15", /맞닿는 점[\s\S]*회사 분야와 투자 분야가 맞닿음[\s\S]*회사 단계와 투자 단계가 맞닿음/.test(inv1) && inv1.includes("가짜 질문 2") && (await disclosure(rp, "근거 4개와 검색 결과 보기")) === "false");
   n0 = (await getLog()).length;
@@ -906,7 +931,8 @@ await run("main", async () => {
   check("R-17", blocks === 5 && lines.every((n) => n === 2) && evReq.length === 0, `${blocks}덩어리 ${lines.join(",")} 요청 ${evReq.map((x) => x.path).join(",")}`);
   const ev = await text(rp, "#evidence");
   check("D-03 (근거 묶음)", /사업연도[^\n]*\(별도\)/.test(ev));
-  // R-25(사람 확인 기준의 자동 보조): 근거 묶음 인쇄 모양을 PDF 로 만들면 A4 1쪽이고 다섯 덩어리 제목과 출처 줄이 들어 있다
+  // R-25(사람 확인 기준의 자동 보조): 근거 묶음 인쇄 모양을 PDF 로 만들면 A4 2쪽 이내이고 다섯 덩어리 제목과 출처 줄이 들어 있다
+  // (처음 기준은 1쪽. 차트 글 7pt 이상(PR-06)으로 하며 2쪽 이내로 바꿨다)
   await rp.evaluate(() => (document.body.dataset.print = "evidence"));
   await rp.emulateMediaType("print");
   const evPdf = Buffer.from(await rp.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true }));
@@ -914,7 +940,7 @@ await run("main", async () => {
   await rp.emulateMediaType("screen");
   await rp.evaluate(() => delete document.body.dataset.print);
   const evPages = (evPdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
-  check("R-25 (자동 보조)", evPages === 1 && ["재무·고용 추이", "투자 이력", "특허", "최근 성과", "미팅 전에 정리할 값"].every((t) => evPrint.includes(t)) && evPrint.includes("금융위원회 요약재무제표"), `${evPages}쪽`);
+  check("R-25 (자동 보조)", evPages >= 1 && evPages <= 2 && ["재무·고용 추이", "투자 이력", "특허", "최근 성과", "미팅 전에 정리할 값"].every((t) => evPrint.includes(t)) && evPrint.includes("금융위원회 요약재무제표"), `${evPages}쪽`);
   const qGroups = await rp.$$eval("[data-questions] button.disclosure", (l) => l.map((b) => `${b.textContent.trim()}:${b.getAttribute("aria-expanded")}`));
   check("R-20", qGroups.join() === "사업 개요 2:false,매출과 성장 4:false,경쟁 3:false,팀과 운영 3:false,재무 3:false,앞으로의 계획 4:false", qGroups.join());
   const ddGroups = await rp.$$eval("[data-dd] button.disclosure", (l) => l.map((b) => b.textContent.trim()));
@@ -1267,6 +1293,71 @@ await run("redirect", async () => {
   const p2 = await open("/s/b");
   await p2.waitForSelector("#company-name");
   check("사례 주소 → /", new URL(page.url()).pathname === "/" && new URL(p2.url()).pathname === "/");
+});
+
+// ================================================================ 실제 서버 검증에서 더한 점검(docs/verification.md)
+// G-20: 분석 진행 중·열 때 실행 중에 화면 읽기 알림 영역 글이 경과 초 때문에 바뀌지 않는다
+await run("live-regions", async () => {
+  await reset({ scenario: "F-STAGED", step: 0 });
+  const page = await open(`/c/${CID}`);
+  await waitText(page, "분석 중");
+  await wait(1500);
+  const a = await liveSamples(page, 4, 700);
+  check("G-20 (분석 진행 중)", a.length === 1 && !/\d+초/.test(a[0]), a.join(" // ").slice(0, 200));
+  await reset({ scenario: "F-FULL" });
+  const p2 = await open(`/c/${CID}#tech`);
+  await waitText(p2, "논문 분석하기");
+  await click(p2, "논문 분석하기", { exact: true, within: "#tech" });
+  await waitText(p2, "논문을 찾고 있습니다");
+  await wait(400);
+  const b = await liveSamples(p2, 4, 700);
+  check("G-20 (열 때 실행 중)", b.length === 1 && b[0].includes("논문을 찾고 있습니다") && !/\d+초/.test(b[0]), b.join(" // ").slice(0, 200));
+});
+
+// A-23: 단락이 도착하는 동안(F-STAGED t0→t6) 첫 화면에서 이미 보이던 요소가 8px 넘게 움직이지 않는다(브라우저 layout-shift 기록)
+await run("first-screen-shift", async () => {
+  for (const w of [1180, 820, 390]) {
+    await reset({ scenario: "F-STAGED", step: 0 });
+    const page = await open(`/c/${CID}`, { width: w });
+    await waitText(page, "분석 중");
+    await wait(2500);
+    await page.evaluate(() => {
+      window.__ls = [];
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries())
+          if (!e.hadRecentInput)
+            for (const s of e.sources || []) window.__ls.push({ dy: Math.round(s.currentRect.y - s.previousRect.y), y: Math.round(s.previousRect.y), what: (s.node?.textContent || "").trim().replace(/\s+/g, " ").slice(0, 24) });
+      }).observe({ type: "layout-shift" });
+    });
+    for (let s = 1; s <= 6; s++) {
+      await ctl({ step: s });
+      await wait(2200);
+    }
+    const vh = heightFor(w);
+    const moved = (await page.evaluate(() => window.__ls)).filter((x) => x.y <= vh && x.dy !== 0);
+    const worst = moved.sort((p, q) => Math.abs(q.dy) - Math.abs(p.dy))[0];
+    check(`A-23 (첫 화면 밀림 ${w})`, !worst || Math.abs(worst.dy) <= 8, worst ? `${worst.dy}px ${worst.what}` : "0px");
+    await page.browserContext().close();
+  }
+});
+
+// PR-06: 인쇄한 차트 안 글이 7pt(9.33px) 이상이다. 근거 묶음 인쇄 모양을 A4 본문 폭(182mm = 688px)으로 그려 잰다
+await run("print-chart-text", async () => {
+  await reset({ scenario: "F-FULL" });
+  const page = await open(`/c/${CID}/review?tab=invest`, { width: 688 });
+  await waitText(page, "미팅 근거 묶음");
+  await page.evaluate(() => (document.body.dataset.print = "evidence"));
+  await page.emulateMediaType("print");
+  await wait(300);
+  const sizes = await page.$$eval(".evidence-print .print-only svg[role=img]", (svgs) =>
+    svgs.map((s) => {
+      const k = s.getBoundingClientRect().width / s.viewBox.baseVal.width;
+      return Math.min(...[...s.querySelectorAll("text")].map((t) => parseFloat(t.getAttribute("font-size") || getComputedStyle(t).fontSize) * k));
+    }),
+  );
+  await page.emulateMediaType("screen");
+  const min = Math.min(...sizes);
+  check("PR-06 (자동 보조)", sizes.length >= 2 && min >= 9.33, `차트 ${sizes.length}개, 가장 작은 글 ${min.toFixed(1)}px(${((min * 72) / 96).toFixed(1)}pt)`);
 });
 
 if (OUT) {

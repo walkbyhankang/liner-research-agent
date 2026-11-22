@@ -514,8 +514,13 @@ button:disabled {
     padding-top: 1px !important;
     padding-bottom: 1px !important;
   }
-  body[data-print="evidence"] .evidence-print svg {
-    max-height: 96px;
+  /* 차트 안 글(그림 단위 12)이 인쇄에서 7pt(9.33px) 이상이 되게 그림 폭(300)을 260px 로 그린다(약 7.8pt).
+     높이를 줄여 한 장에 맞추면 글이 4.4pt 까지 작아져 읽을 수 없었다(실제 서버 검증). 그래서 2쪽까지 허용한다 */
+  body[data-print="evidence"] .evidence-print svg[role="img"] {
+    width: 260px !important;
+    max-width: 100%;
+    height: auto !important;
+    max-height: none;
   }
   body[data-print="evidence"] .evidence-print .source {
     margin-top: 4px;
