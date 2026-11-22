@@ -254,80 +254,6 @@ def test_to_draft_leaves_unknown_fields_empty():
     assert profile.to_draft({})["fields"] == []
 
 
-def wait_job(client, job_id, tries=200):
-    import time
-
-    for _ in range(tries):
-        body = client.get(f"/api/company/lookup/{job_id}").json()
-        if body["status"] != "running":
-            return body
-        time.sleep(0.01)
-    raise AssertionError("조회 작업이 끝나지 않음")
-
-
-def test_api_lookup_runs_as_a_job_and_releases_unused_calls(api, monkeypatch):
-    client, _ = api
-    monkeypatch.setattr(api_main, "_jobs", {})
-    calls = []
-
-    def fake(name, c, homepage="", progress=None):
-        progress("Model API [기업 개요] 3개 출처")
-        calls.append((name, homepage))
-        return {"draft": {"name": name}, "fields": [], "investors": []}
-
-    monkeypatch.setattr(api_main.profile_mod, "lookup", fake)
-    res = client.post("/api/company/lookup", json={"name": " 가나다 ", "homepage": "example.kr"})
-    assert res.status_code == 202 and len(res.json()["jobId"]) == 32
-    body = wait_job(client, res.json()["jobId"])
-    assert body["status"] == "done" and body["result"]["draft"]["name"] == "가나다" and body["result"]["query"] == "가나다"
-    assert body["stage"] == "회사 정보·기존 투자자·경쟁사 추출" and calls == [("가나다", "example.kr")]
-    # 실제로 나간 호출이 없으면 잡아 둔 횟수를 돌려준다
-    assert liner_used() == 0 and remaining(L.LINER_SEARCH) == 500 and remaining(L.LINER_MODEL) == 200
-    assert client.post("/api/company/lookup", json={"name": "가"}).status_code == 422
-    assert client.post("/api/company/lookup", json={"name": "가나다", "homepage": "https://x.kr/a?b"}).status_code == 422
-    assert client.get("/api/company/lookup/" + "0" * 32).status_code == 404
-    daily_limits(LINER_SEARCH=L.worst_case(api_main.LOOKUP_SEARCHES) - 1)
-    res = client.post("/api/company/lookup", json={"name": "가나다"})
-    assert res.status_code == 429 and res.json()["code"] == "daily_limit" and len(calls) == 1
-
-
-def test_api_lookup_job_reports_failures_and_limits_concurrency(api, monkeypatch):
-    import threading
-
-    client, _ = api
-    monkeypatch.setattr(api_main, "_jobs", {})
-    gate = threading.Event()
-
-    def slow(name, c, homepage="", progress=None):
-        gate.wait(2)
-        if name == "실패":
-            raise api_main.profile_mod.ProfileError("회사 정보를 추출하지 못했습니다(모델 호출 실패).")
-        if name == "예외":
-            raise RuntimeError("secret detail")
-        return {"draft": {"name": name}, "fields": [], "investors": []}
-
-    monkeypatch.setattr(api_main.profile_mod, "lookup", slow)
-    first = client.post("/api/company/lookup", json={"name": "실패"}).json()["jobId"]
-    second = client.post("/api/company/lookup", json={"name": "예외"}).json()["jobId"]
-    assert client.get(f"/api/company/lookup/{first}").json()["status"] == "running"
-    assert client.post("/api/company/lookup", json={"name": "세번째"}).status_code == 429  # 동시에 두 건까지만
-    gate.set()
-    a, b = wait_job(client, first), wait_job(client, second)
-    assert a["status"] == "error" and "모델 호출 실패" in a["error"] and "result" not in a
-    # 예외 이름·내용은 응답에 넣지 않는다(계약 1.3)
-    assert b["status"] == "error" and "RuntimeError" not in b["error"] and "secret detail" not in b["error"] and "오류" in b["error"]
-    assert liner_used() == 0
-    assert client.post("/api/company/lookup", json={"name": "네번째"}).status_code == 202
-
-
-def test_stage_label_maps_engine_messages():
-    assert api_main.stage_label("Search API [identity] 가나다 회사 개요") == "보도·공식 자료 검색"
-    assert api_main.stage_label("원문 확인") == "원문 확인"
-    assert api_main.stage_label("경쟁사 투자 이력 조회") == "경쟁사 투자 이력·규모 조회"
-    assert api_main.stage_label("알 수 없는 문구") == "조회 중"
-
-
-
 def test_concurrent_extractions_of_one_notice_call_the_model_once(tmp_path):
     import threading
     import time
@@ -616,35 +542,6 @@ def test_revenue_omits_basis_when_the_engine_does_not_know_it():
     assert profile.format_revenue({"value": "248.01", "unit": "억 원", "currency": "KRW", "year": "2025", "basis": "unknown"}) == "248.01억 원 (2025)"
     assert profile.format_revenue({"value": "5", "unit": "억원", "year": "2024", "basis": "미확인"}) == "5억원 (2024)"
     assert profile.format_revenue({"value": "5", "unit": "억원", "year": "2024", "basis": "연결"}) == "5억원 (2024, 연결)"
-
-
-def test_api_lookup_admission_is_atomic_under_concurrent_requests(api, monkeypatch):
-    import threading
-    from concurrent.futures import ThreadPoolExecutor
-
-    client, _ = api
-    monkeypatch.setattr(api_main, "_jobs", {})
-    gate = threading.Event()
-    monkeypatch.setattr(api_main.profile_mod, "lookup", lambda name, c, homepage="", progress=None: gate.wait(3) and {"draft": {"name": name}, "fields": [], "investors": []})
-    barrier = threading.Barrier(8)
-
-    def start(i):
-        barrier.wait()
-        return client.post("/api/company/lookup", json={"name": f"회사{i}"}).status_code
-
-    with ThreadPoolExecutor(8) as pool:
-        codes = sorted(pool.map(start, range(8)))
-    try:
-        assert codes == [202, 202] + [429] * 6
-        running = [j for j in api_main._jobs.values() if j["status"] == "running"]
-        assert len(running) == api_main.MAX_RUNNING_LOOKUPS
-        assert remaining(L.LINER_SEARCH) == 500 - 2 * L.worst_case(api_main.LOOKUP_SEARCHES)  # 받아들인 두 건만 잡혀 있다
-        assert remaining(L.LINER_MODEL) == 200 - 2 * L.worst_case(api_main.LOOKUP_MODELS)
-    finally:
-        gate.set()
-        for j in list(api_main._jobs.values()):
-            j["thread"].join(3)
-    assert liner_used() == 0 and remaining(L.LINER_SEARCH) == 500
 
 
 def test_conflicting_or_inferred_values_are_shown_but_never_autofilled():

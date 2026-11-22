@@ -586,7 +586,7 @@ export function Rivals() {
               </li>
             ))}
           </ul>
-          {pendingFacts && <p className="mt-2 text-sm text-sub">후보를 더 찾고 있습니다 (보통 2분 30초 안에 끝남)</p>}
+          {pendingFacts && <p className="mt-2 text-sm text-sub">후보를 더 찾고 있습니다 (보통 3분 안에 끝남)</p>}
           <div className="mt-3">
             {shown.length > 5 && (
               <Disclosure text={`후보 ${shown.length - 5}곳 더 보기`} memoryKey={k("more")}>

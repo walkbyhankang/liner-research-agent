@@ -53,7 +53,7 @@
 
 ### 1.5 작업 id (`jobId`)
 
-- `uuid4().hex`, 소문자 16진수 32자(`^[0-9a-f]{32}$`). 지금 회사 조회 작업과 같은 모양이다.
+- `uuid4().hex`, 소문자 16진수 32자(`^[0-9a-f]{32}$`).
 - 작업 하나 = 회사 하나의 분석 한 번(= 스냅샷 파일 하나, 12.1). 열 때 실행 단락과 단락 다시 실행은 같은 작업 안에서 한다.
 
 ## 2. 엔드포인트
@@ -73,9 +73,8 @@
 | `POST /api/notice/analyze` | 공고문 자격 대조(유지) | 200 `NoticeAnalysis` | ② 상한만 |
 | `POST /api/gp/brief` | 운용사 요약(유지) | 200 `GpBrief` | ② 상한만 |
 | `GET /api/health` | 서버 상태, 오늘 사용량(확장) | 200 `HealthResponse` | ② |
-| `POST /api/company/lookup`, `GET /api/company/lookup/{jobId}` | 지금의 회사 조회(이행 기간만, 2.13) | 지금 그대로 | — |
 
-모든 새 경로는 `api/analysis.py`의 `APIRouter(prefix="/api")`에 선언돼 있고 지금은 501을 돌려준다. 요청 모양 검사(길이·형식·단락 키·분류 이름)는 선언에 있으며, 어기면 FastAPI 기본 422(`{"detail": [...]}`, 3절)다.
+모든 새 경로는 `api/analysis.py`의 `APIRouter(prefix="/api")`에 있다(처음 계약 때의 501 자리 응답은 모두 본문으로 바뀌었다). 요청 모양 검사(길이·형식·단락 키·분류 이름)는 선언에 있으며, 어기면 FastAPI 기본 422(`{"detail": [...]}`, 3절)다.
 
 ### 2.1 `GET /api/corp/search?name=`
 
@@ -206,10 +205,10 @@
 - 접속 주소: 요청 머리글 `x-forwarded-for`의 **맨 뒤 값**, 없으면 연결 주소. 맨 앞 값은 접속자가 머리글을 직접 넣어 속일 수 있고, 맨 뒤 값은 믿을 수 있는 마지막 프록시(ngrok 터널)가 붙인 값이다. 화면 프록시가 받은 `x-forwarded-for`를 그대로 넘긴다(2.14). 화면 서버·분석 서버는 `127.0.0.1`에만 열려 있어 이 머리글은 터널이나 같은 컴퓨터에서만 들어온다(오케스트레이터 결정, 2026-11-22).
 - 주소마다 위 경로를 합쳐 최근 60초에 `RATE_LIMIT_PER_MINUTE`(6)회를 넘으면 429 `rate_limited`("요청이 잠시 많았습니다. 1분 뒤 다시 눌러 주세요."), `retryAt` = 지금 + 60초. 값은 환경변수 `GROWTH_RATE_LIMIT_PER_MINUTE`로 덮어쓴다.
 
-### 2.13 `POST /api/company/lookup` (이행 기간 유지)
+### 2.13 옛 회사 조회 (지움)
 
-- **결정: 지금 화면(`CompanyForm`, `Finder`)이 쓰므로 이행 기간 동안 모양 그대로 남긴다.** 새 화면·새 서버 코드는 부르지 않는다(같은 일을 `facts` 단락이 한다).
-- 지우는 때: ④가 자금 조달 화면을 `merged` 값으로 채우게 바꿔 화면에서 이 호출이 없어지는 변경(설계 7절 작업 5)에서, 같은 커밋으로 ②가 `api/main.py`의 두 엔드포인트와 관련 테스트를, ④가 `route.ts`의 두 경로를 지운다.
+- 펀딩노트 때의 `POST /api/company/lookup`, `GET /api/company/lookup/{jobId}`는 화면이 더 이상 부르지 않아 2026-11-23에 지웠다(`api/main.py`의 두 엔드포인트와 작업 표, 관련 테스트, `route.ts`의 두 경로). 지금 이 주소는 404 `not_found`다.
+- 같은 일은 `facts` 단락이 한다. 엔진(`funding.profile.lookup`)은 `growth/facts.py`가 쓰므로 남긴다.
 
 ### 2.14 화면 프록시 (`web/app/api/[...path]/route.ts`, ④)
 
@@ -357,7 +356,7 @@
 
 - 기본 단락의 첫 실행: `startedAt` = 작업 `startedAt`. 그래서 `seconds`·`expectedSeconds`는 작업 시작부터 센 값이다(`funding_history`는 `profile`을 기다린 시간을 포함한다).
 - 열 때 실행과 다시 실행: `startedAt` = 그 요청을 받은 시각.
-- `expectedSeconds` 기본값(`EXPECTED_SECONDS`, 기준 기업 실측을 올려 잡음): `identity` 3, `official` 10, `profile` 25, `funding_history` 30, `patents` 35, `news` 45, `facts` 150, `papers`·`rivals_deep`·`sales`는 `null`. 화면은 경과가 이 값의 2배를 넘으면 "평소보다 오래 걸립니다."
+- `expectedSeconds` 기본값(`EXPECTED_SECONDS`, 기준 기업 실측을 올려 잡음. `facts`는 합친 서버 실측 약 176초 → 180): `identity` 3, `official` 10, `profile` 25, `funding_history` 30, `patents` 35, `news` 45, `facts` 180, `papers`·`rivals_deep`·`sales`는 `null`. 화면은 경과가 이 값의 2배를 넘으면 "평소보다 오래 걸립니다."
 
 ### 5.8 `paid`
 
@@ -716,11 +715,11 @@
 
 | 키 | `seconds` | `liner` | `perRival` | 근거 |
 |---|---|---|---|---|
-| `full` | 150 | 19 | — | 기준 기업 기본 분석 실측 143.5초, 19회(설계 6.5) |
+| `full` | 180 | 19 | — | 기준 기업 기본 분석 실측: 처음 조립 143.5초(설계 6.5), 합친 서버 약 176~178초. 19회 |
 | `identity` | 3 | 0 | — | 실측 1.3~1.5초 |
 | `official` | 10 | 0 | — | 실측 10.4초 |
 | `profile` | 25 | 4 | — | 실측 22.3초, 검색 3·모델 1 |
-| `facts` | 150 | 8 | — | 실측 143.5초, 검색 4·모델 4 |
+| `facts` | 180 | 8 | — | 실측 143.5초(설계 6.5)·합친 서버 172~176초, 검색 4·모델 4 |
 | `funding_history` | 10 | 2 | — | 단독 실행 실측 4.2초, Premium 2(웹 보완이 붙으면 상한 4) |
 | `news` | 20 | 3 | — | 단독 17.9초, 검색 2·모델 1 |
 | `patents` | 15 | 2 | — | 단독 8.6초, 검색 2 |

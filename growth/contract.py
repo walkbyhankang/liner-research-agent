@@ -75,9 +75,9 @@ PendingKey = Literal["employees", "revenue.web", "industry.web", "founded.web", 
 PENDING_KEYS: tuple[str, ...] = ("employees", "revenue.web", "industry.web", "founded.web", "region.web",
                                  "investors.confirmed", "rivals.facts")
 
-# 단락이 보통 끝나는 초(단락 startedAt 기준). 기준 기업 실측(설계 6.5)을 올려 잡은 값. 실측 없는 단락은 None.
+# 단락이 보통 끝나는 초(단락 startedAt 기준). 기준 기업 실측(설계 6.5, 합친 서버 facts 약 176초)을 올려 잡은 값. 실측 없는 단락은 None.
 EXPECTED_SECONDS: dict[str, int | None] = {
-    "identity": 3, "official": 10, "profile": 25, "facts": 150, "funding_history": 30, "news": 45, "patents": 35,
+    "identity": 3, "official": 10, "profile": 25, "facts": 180, "funding_history": 30, "news": 45, "patents": 35,
     "papers": None, "rivals_deep": None, "sales": None,
 }
 
@@ -955,12 +955,12 @@ class AnalysisJob(TypedDict):
 
 # 예상값(계약 10절). 서버는 실측으로 바꾸기 전까지 이 값을 그대로 보낸다.
 ESTIMATES: Estimates = {
-    "full": {"seconds": 150, "liner": 19, "perRival": None},
+    "full": {"seconds": 180, "liner": 19, "perRival": None},
     "sections": {
         "identity": {"seconds": 3, "liner": 0, "perRival": None},
         "official": {"seconds": 10, "liner": 0, "perRival": None},
         "profile": {"seconds": 25, "liner": 4, "perRival": None},
-        "facts": {"seconds": 150, "liner": 8, "perRival": None},
+        "facts": {"seconds": 180, "liner": 8, "perRival": None},
         "funding_history": {"seconds": 10, "liner": 2, "perRival": None},
         "news": {"seconds": 20, "liner": 3, "perRival": None},
         "patents": {"seconds": 15, "liner": 2, "perRival": None},

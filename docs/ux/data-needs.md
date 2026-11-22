@@ -52,7 +52,7 @@
 
 화면의 미확보 문장은 `error.code`로 고른다(`screens.md` 1.5절). `error.message`는 코드에 맞는 문장이 없을 때만 쓴다.
 
-**보통 걸리는 시간 기본값**(서버가 `expectedSeconds`를 주지 않을 때, 기준 기업 실측을 올려 잡은 값): `official` 10초, `profile` 25초, `funding_history` 30초, `patents` 35초, `news` 45초, `facts` 150초. `papers`, `rivals_deep`, `sales`는 실측이 없어 시간을 쓰지 않는다.
+**보통 걸리는 시간 기본값**(서버가 `expectedSeconds`를 주지 않을 때, 기준 기업 실측을 올려 잡은 값): `official` 10초, `profile` 25초, `funding_history` 30초, `patents` 35초, `news` 45초, `facts` 180초. `papers`, `rivals_deep`, `sales`는 실측이 없어 시간을 쓰지 않는다.
 
 ### 1.3 저장된 분석 찾기 (제안)
 
@@ -71,7 +71,7 @@
 
 | 키 | 뜻 | 예시 | 서버가 안 주면 |
 |---|---|---|---|
-| `full.seconds`, `full.liner` | 새로 분석 전체 | `150`, `19` | 2분 30초 안팎, 약 19회 |
+| `full.seconds`, `full.liner` | 새로 분석 전체 | `180`, `19` | 3분 안팎, 약 19회 |
 | `sections.news.seconds`, `.liner` | 뉴스만 새로 | `20`, `3` | 20초 안팎, 약 3회 |
 | `sections.papers.liner` | 논문 분석 | `7` | 학술 검색 6회와 모델 1회 |
 | `sections.rivals_deep.liner`, `.perRival` | 경쟁사 깊이 비교 | `34`, `7` | "경쟁사 5곳 기준 약 34회" |
@@ -263,7 +263,7 @@
 
 - 묶음 출처: "Liner 웹 검색 자료 {n}건을 모델이 정리", 상태 `inferred`(9절 질문 1).
 
-### 4.4 `facts` — 원문 확인 사실, 기존 투자자, 엔진 경쟁사 (기본, 실측 143.5초, 맨 나중)
+### 4.4 `facts` — 원문 확인 사실, 기존 투자자, 엔진 경쟁사 (기본, 실측 143.5초·합친 서버 약 176초, 맨 나중)
 
 | 지금 키 | 뜻 | 예시 | 1층 | 펼치면 |
 |---|---|---|---|---|

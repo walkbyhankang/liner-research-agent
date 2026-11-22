@@ -471,7 +471,7 @@ export function Investment() {
           <div className="mt-5">
             <p className="text-sm text-sub">투자기관 {investors.length}곳</p>
             <p className="font-medium">{investors.slice(0, 5).map((i) => i.name).join(", ")}</p>
-            {pendingFacts && <p className="mt-1 text-sm text-sub">원문에서 투자자를 더 확인하고 있습니다 (보통 2분 30초 안에 끝남)</p>}
+            {pendingFacts && <p className="mt-1 text-sm text-sub">원문에서 투자자를 더 확인하고 있습니다 (보통 3분 안에 끝남)</p>}
           </div>
           <div className="mt-4">
             {rounds.length > 3 && (

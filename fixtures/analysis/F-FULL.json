@@ -628,7 +628,7 @@
       "stage": null,
       "startedAt": "2026-11-22T20:44:00+09:00",
       "seconds": 143.5,
-      "expectedSeconds": 150,
+      "expectedSeconds": 180,
       "analyzedAt": "2026-11-22T20:46:24+09:00",
       "result": {
        "fields": [
@@ -3977,7 +3977,7 @@
     },
     "estimates": {
      "full": {
-      "seconds": 150,
+      "seconds": 180,
       "liner": 19,
       "perRival": null
      },
@@ -3998,7 +3998,7 @@
        "perRival": null
       },
       "facts": {
-       "seconds": 150,
+       "seconds": 180,
        "liner": 8,
        "perRival": null
       },
@@ -4665,7 +4665,7 @@
       "stage": null,
       "startedAt": "2026-11-22T20:44:00+09:00",
       "seconds": 143.5,
-      "expectedSeconds": 150,
+      "expectedSeconds": 180,
       "analyzedAt": "2026-11-22T20:46:24+09:00",
       "result": {
        "fields": [
@@ -8014,7 +8014,7 @@
     },
     "estimates": {
      "full": {
-      "seconds": 150,
+      "seconds": 180,
       "liner": 19,
       "perRival": null
      },
@@ -8035,7 +8035,7 @@
        "perRival": null
       },
       "facts": {
-       "seconds": 150,
+       "seconds": 180,
        "liner": 8,
        "perRival": null
       },

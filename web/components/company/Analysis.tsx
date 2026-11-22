@@ -118,7 +118,7 @@ function NotAnalyzed() {
             {busy ? "분석을 시작하는 중" : "분석 시작"}
           </button>
           <span className="text-sm text-sub">
-            보통 {elapsedText(est.seconds ?? 150)}, Liner 약 {est.liner}회
+            보통 {elapsedText(est.seconds ?? 180)}, Liner 약 {est.liner}회
           </span>
         </div>
         {err && (

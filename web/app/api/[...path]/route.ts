@@ -22,9 +22,6 @@ const ROUTES: { method: "GET" | "POST"; path: RegExp; timeoutMs: number }[] = [
   { method: "GET", path: /^health$/, timeoutMs: SHORT },
   { method: "POST", path: /^notice\/analyze$/, timeoutMs: 12 * 60_000 },
   { method: "POST", path: /^gp\/brief$/, timeoutMs: 10 * 60_000 },
-  // 이행 기간 동안 남기는 회사 조회(계약 2.13). 새 화면은 부르지 않는다
-  { method: "POST", path: /^company\/lookup$/, timeoutMs: SHORT },
-  { method: "GET", path: /^company\/lookup\/[0-9a-f]{32}$/, timeoutMs: SHORT },
   { method: "GET", path: /^corp\/search$/, timeoutMs: 90_000 },
   { method: "POST", path: /^analysis$/, timeoutMs: SHORT },
   { method: "GET", path: /^analysis\/[0-9a-f]{32}$/, timeoutMs: SHORT },

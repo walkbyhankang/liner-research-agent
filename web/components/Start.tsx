@@ -189,7 +189,7 @@ function Start() {
             홈페이지 주소도 넣기 (선택)
           </button>
         )}
-        <p className="mt-3 text-sm text-sub">공식 자료는 10초 안에 보이고, 나머지는 준비되는 대로 채웁니다. 전체는 2분 30초 안팎입니다.</p>
+        <p className="mt-3 text-sm text-sub">공식 자료는 10초 안에 보이고, 나머지는 준비되는 대로 채웁니다. 전체는 3분 안팎입니다.</p>
       </form>
 
       <Recent />
