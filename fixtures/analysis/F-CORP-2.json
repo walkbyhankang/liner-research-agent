@@ -1,6 +1,6 @@
 {
  "fixture": "F-CORP-2",
- "description": "이름 같은 2곳",
+ "description": "이름 같은 2곳(대표·시군구도 같음, 1곳은 이전 이름 있음)",
  "baseDate": "2026-11-22",
  "exchanges": [
   {
@@ -24,12 +24,18 @@
        "주식회사 가나다테크",
        "가나다테크"
       ],
+      "formerNames": [
+       {
+        "name": "주식회사 라마바코리아",
+        "changedOn": "2024-12-11"
+       }
+      ],
       "nameEn": "GANADA TECH Inc.",
       "ceo": "홍길동",
-      "founded": "2011-02-11",
-      "address": "부산광역시 해운대구 예시로 2",
-      "region": "부산",
-      "district": "해운대구",
+      "founded": "2022-01-04",
+      "address": "경기도 성남시 분당구 예시로 239 (예시동, 가나다타워) 102동 8층",
+      "region": "경기",
+      "district": "성남시 분당구",
       "homepage": "www.example.com",
       "industry": "전자집적회로 제조업",
       "mainBiz": null,
@@ -47,9 +53,10 @@
        "가나다테크 주식회사",
        "가나다테크 주식회사"
       ],
+      "formerNames": [],
       "nameEn": null,
       "ceo": "홍길동",
-      "founded": "2012-03-12",
+      "founded": "2020-06-23",
       "address": "경기도 성남시 분당구 예시로 3",
       "region": "경기",
       "district": "성남시 분당구",

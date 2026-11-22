@@ -495,7 +495,9 @@ class Manager:
             raise ApiFailure(503, "missing_config", "공공데이터 설정이 되어 있지 않습니다") from None
         except public_data.PublicDataError:
             raise ApiFailure(502, "upstream_error", "금융위원회 자료에 연결하지 못했습니다") from None
-        cands = [public_data.corp_contract(c, snapshot_at=self.snapshot_at(c["crno"])) for c in corps[:20]]
+        corps = corps[:20]
+        former = public_data.former_names(corps, use=limits.use)  # 이름이 같은 후보만, 최선 노력(실패해도 검색은 성공)
+        cands = [public_data.corp_contract(c, snapshot_at=self.snapshot_at(c["crno"]), former=former.get(c["crno"])) for c in corps]
         return {"query": q, "candidates": cands, "queriedAt": common.iso(common.now())}
 
     # ---------------- GET /api/company/{id}/analysis·job, /api/example (2.6~2.8)

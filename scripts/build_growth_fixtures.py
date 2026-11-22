@@ -93,10 +93,11 @@ def conflicting(alts, used, note=None):
 # ---------------------------------------------------------------- 단락 결과
 
 def corp(ctx: Ctx, *, crno=CRNO, name=COMPANY, exact=True, ceo="홍길동", founded="2020-09-15",
-         address="서울특별시 강남구 예시로 123", snapshot=None, idx=1):
+         address="서울특별시 강남구 예시로 123", snapshot=None, idx=1, former=None):
     region, district = C.split_address(address)
     return {"companyId": crno, "crno": crno, "bzno": f"{idx:010d}", "name": name,
-            "names": [name, name.replace("주식회사 ", "")], "nameEn": "GANADA TECH Inc." if idx == 1 else None,
+            "names": [name, name.replace("주식회사 ", "")], "formerNames": former,
+            "nameEn": "GANADA TECH Inc." if idx == 1 else None,
             "ceo": ceo, "founded": founded, "address": address, "region": region, "district": district,
             "homepage": "www.example.com", "industry": "전자집적회로 제조업" if idx == 1 else None, "mainBiz": None,
             "market": "기타", "updated": "2026-05-01", "exact": exact, "snapshotAt": snapshot}
@@ -699,7 +700,15 @@ def corp_search(ctx: Ctx, kind: str):
     elif kind == "1":
         cands, q = [mk(1, COMPANY, True)], QUERY
     elif kind == "2":
-        cands, q = [mk(1, COMPANY, True), mk(2, "가나다테크 주식회사", True)], QUERY
+        # 이름·대표·시군구가 같고 설립일만 다른 두 법인: 한쪽은 합병 뒤 이름을 바꾼 존속법인(이전 이름 있음), 다른 쪽은 이력 없음.
+        # 사업자번호·건물까지 나온 주소·이전 이름으로 구분한다(K-10). 주소 하나는 좁은 화면에서 줄이 바뀔 만큼 길다
+        same = dict(ceo="홍길동")
+        cands = [corp(ctx, crno=f"{1:013d}", name=COMPANY, exact=True, idx=1, founded="2022-01-04", **same,
+                      address="경기도 성남시 분당구 예시로 239 (예시동, 가나다타워) 102동 8층",
+                      former=[{"name": "주식회사 라마바코리아", "changedOn": "2024-12-11"}]),
+                 corp(ctx, crno=f"{2:013d}", name="가나다테크 주식회사", exact=True, idx=2, founded="2020-06-23", **same,
+                      address="경기도 성남시 분당구 예시로 3", former=[])]
+        q = QUERY
     else:
         cands = [mk(1, COMPANY, True)] + [mk(i, n, False, iso(T0 - timedelta(days=3)) if i == 3 else None) for i, n in
                                           zip(range(2, 8), ["가나다테크놀로지", "가나다테크솔루션", "가나다테크랩", "가나다테크코리아", "가나다테크서비스", "가나다테크글로벌"])]
@@ -804,7 +813,7 @@ def build() -> dict[str, dict]:
     mon, _ = make_job(money=True)
     fixture("F-MONEY", "누적 투자 {USD 2.5e8, KRW 3.0e10}(rounds_sum), 영업이익이 음수인 연도 1개.", [x("GET", jp, 200, mon)])
     for k in ("0", "1", "2", "7"):
-        desc = {"0": "법인 후보 0곳", "1": "이름 같은 1곳", "2": "이름 같은 2곳", "7": "7곳(이름 같은 1곳, 3번째 후보에 snapshotAt)"}[k]
+        desc = {"0": "법인 후보 0곳", "1": "이름 같은 1곳", "2": "이름 같은 2곳(대표·시군구도 같음, 1곳은 이전 이름 있음)", "7": "7곳(이름 같은 1곳, 3번째 후보에 snapshotAt)"}[k]
         res = corp_search(ctx, k)
         fixture(f"F-CORP-{k}", desc, [x("GET", "/api/corp/search", 200, res, query={"name": res["query"]})])
     fixture("F-DOWN", "/api/health 실패(화면 프록시가 분석 서버에 닿지 못함).", [

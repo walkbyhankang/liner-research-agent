@@ -3,7 +3,8 @@
 //
 // 실행: node scripts/mock_api.mjs [포트, 기본 8200]
 // 조종(시험 스크립트가 쓴다):
-//   POST /__control {scenario, step, corp, example, health, delayMs, notice, noticeDelayMs, gpDelayMs, salesPartial, fail500, stagedRegionLater}
+//   POST /__control {scenario, step, corp, formerNamesUnknown, example, health, delayMs, notice, noticeDelayMs, gpDelayMs, salesPartial, fail500, stagedRegionLater}
+//     formerNamesUnknown: true 면 법인 후보의 formerNames 를 모두 null 로(서버의 이름 이력 조회가 실패·상한에 걸린 경우, 계약 2.1)
 //   GET  /__log      받은 /api 요청 목록
 //   POST /__reset    상태와 기록을 처음으로
 import { createHash } from "node:crypto";
@@ -20,7 +21,7 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 const ex = (name, pred = () => true) => FIX[name].exchanges.find(pred);
 const jobOf = (name, i = 0) => clone(FIX[name].exchanges.filter((e) => e.method === "GET" && /^\/api\/(analysis\/[0-9a-f]{32}|company\/[^/]+\/analysis)$/.test(e.path))[i].response);
 
-const DEFAULT = { scenario: "F-FULL", step: 0, corp: null, example: false, health: "up", delayMs: 0, notice: "ok", noticeDelayMs: 300, gpDelayMs: 200, salesPartial: false, fail500: false, overrides: {}, newsReruns: 0 };
+const DEFAULT = { scenario: "F-FULL", step: 0, corp: null, formerNamesUnknown: false, example: false, health: "up", delayMs: 0, notice: "ok", noticeDelayMs: 300, gpDelayMs: 200, salesPartial: false, fail500: false, overrides: {}, newsReruns: 0 };
 let st = clone(DEFAULT);
 let log = [];
 
@@ -82,7 +83,9 @@ async function api(req, res, url, body) {
     if (name.length < 2) return err(res, 400, "bad_request", "이름을 2글자 이상 넣어 주세요");
     const fx = st.corp ?? (name === "없는회사" ? "F-CORP-0" : "F-CORP-1");
     if (fx === "down") return err(res, 502, "upstream_error", "금융위원회 자료에 연결하지 못했습니다");
-    return send(res, 200, { ...ex(fx).response, query: name });
+    const body = { ...clone(ex(fx).response), query: name };
+    if (st.formerNamesUnknown) for (const c of body.candidates) c.formerNames = null;
+    return send(res, 200, body);
   }
   if (p === "analysis" && req.method === "POST") {
     const cid = companyIdFor(body?.name ?? "", body?.crno);

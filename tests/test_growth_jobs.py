@@ -104,6 +104,9 @@ class World:
         self.liner_status = 200
         self.naver_status = 200
         self.fail_models = False
+        self.corps = CORPS              # 회사명 조회가 돌려줄 법인
+        self.history: dict[str, list[dict]] = {}  # 법인등록번호 조회(이름 이력)가 돌려줄 기록
+        self.history_status = 200
 
     def hit(self, k: str) -> None:
         with self.lock:
@@ -149,10 +152,16 @@ class World:
     def datagokr(self, req: httpx.Request) -> httpx.Response:
         p, q = req.url.path, req.url.params
         assert q["serviceKey"] == DATA_KEY
+        if p.endswith("getCorpOutline_V2") and "crno" in q:  # 이름 이력 조회(이름이 같은 후보만)
+            self.hit("fsc_corp_crno")
+            if self.history_status != 200:
+                return httpx.Response(self.history_status, text="down")
+            items = self.history.get(q["crno"], [])
+            return httpx.Response(200, json={"response": {"body": {"totalCount": len(items), "items": {"item": items}}}})
         if p.endswith("getCorpOutline_V2"):
             self.hit("fsc_corp")
             key = q["corpNm"].replace(" ", "")
-            items = [c for c in CORPS if key in c["corpNm"].replace(" ", "")]
+            items = [c for c in self.corps if key in c["corpNm"].replace(" ", "")]
             return httpx.Response(200, json={"response": {"body": {"totalCount": len(items), "items": {"item": items}}}})
         if p.endswith("getSummFinaStat_V2"):
             self.hit("fsc_fin")
@@ -697,6 +706,8 @@ def test_corp_search_and_news_page(world):
     out = world.manager.corp_search(" 가나다테크 ")
     assert out["query"] == "가나다테크" and [c["crno"] for c in out["candidates"]] == [CRNO, "1101110000002"]
     assert out["candidates"][0]["exact"] and not out["candidates"][1]["exact"] and out["candidates"][0]["snapshotAt"] is None
+    # 이름이 겹치지 않으면(가나다테크 / 가나다테크놀로지) 이름 이력을 부르지 않는다
+    assert "fsc_corp_crno" not in world.count and [c["formerNames"] for c in out["candidates"]] == [None, None]
     TypeAdapter(C.CorpSearchResponse).validate_python(out, strict=True)
     v = run_full(world)
     assert world.manager.corp_search("가나다테크")["candidates"][0]["snapshotAt"] == v["analyzedAt"]
@@ -708,6 +719,86 @@ def test_corp_search_and_news_page(world):
     with pytest.raises(jobs.ApiFailure) as e:
         world.manager.news_page("0" * 32, 0, 20, [])
     assert e.value.status == 404
+
+
+# 이름·대표가 같은 두 번째 법인(설립일·사업자번호·건물 주소가 다름). 합병 때 존속법인이 '라마바코리아'였고 이름만 바꾼 경우
+TWIN = "1101110000003"
+TWIN_CORP = {"crno": TWIN, "bzno": "3234567890", "corpNm": "가나다테크 주식회사", "corpEnsnNm": "GANADA TECH Inc.", "enpRprFnm": "홍길동",
+             "enpEstbDt": "20220104", "enpBsadr": "서울특별시 강남구 예시로 456 (예시동, 가나다타워) 8층", "lastOpegDt": "20261121"}
+
+
+def _rec(crno: str, name: str, first: str, last: str, en: str = "GANADA TECH Inc.") -> dict:
+    return {"crno": crno, "corpNm": name, "corpEnsnNm": en, "fstOpegDt": first, "lastOpegDt": last}
+
+
+HISTORY = {  # 법인등록번호 조회 기록(금융위 응답처럼 순서가 섞여 있고, 하루짜리 기록과 표기만 다른 기록이 끼어 있다)
+    TWIN: [_rec(TWIN, "가나다테크 주식회사", "20260803", "20261121"), _rec(TWIN, "가나다테크 주식회사", "20250310", "20260802"),
+           _rec(TWIN, "가나다테크 주식회사", "20260101", "20260101"), _rec(TWIN, "가나다테크(주)", "20251008", "20251014", "GANADA TECH INC."),
+           _rec(TWIN, "가나다테크 주식회사", "20241211", "20250309"),
+           _rec(TWIN, "주식회사 라마바코리아", "20241210", "20241210"),  # 영문명만 하루 먼저 바뀐 기록(영문명 변경은 쓰지 않는다)
+           _rec(TWIN, "주식회사 라마바코리아", "20230301", "20241209", "RAMABA Korea Inc."),
+           _rec(TWIN, "주식회사 라마바코리아", "20220111", "20230228", "RAMABA Korea Inc.")],
+    CRNO: [_rec(CRNO, "주식회사 가나다테크", "20230417", "20261121"), _rec(CRNO, "가나다테크(주)", "20220524", "20251014", "GANADA TECH INC."),
+           _rec(CRNO, "주식회사 가나다테크", "20260101", "20260101")],
+}
+
+
+def test_corp_search_adds_former_names_only_to_same_name_candidates(world):
+    world.corps, world.history = CORPS + [TWIN_CORP], HISTORY
+    out = world.manager.corp_search("가나다테크")
+    TypeAdapter(C.CorpSearchResponse).validate_python(out, strict=True)
+    by = {c["crno"]: c for c in out["candidates"]}
+    assert by[TWIN]["formerNames"] == [{"name": "주식회사 라마바코리아", "changedOn": "2024-12-11"}]  # 지금 이름 기록이 처음 시작한 날
+    assert by[CRNO]["formerNames"] == []                 # "(주)"·"주식회사" 표기 차이만 있다 → 이전 이름 아님
+    assert by["1101110000002"]["formerNames"] is None    # 가나다테크놀로지: 이름이 겹치지 않아 조회하지 않음
+    assert world.count["fsc_corp_crno"] == 2
+    # 추가 조회도 금융위 기업정보 하루 사용량에 센다
+    assert L.usage_today()["apis"][L.DATAGOKR_FSC_CORP]["used"] == world.count["fsc_corp"] + 2
+    world.manager.corp_search("가나다테크")  # 같은 요청은 캐시(24시간): 다시 부르지 않는다
+    assert world.count["fsc_corp_crno"] == 2
+
+
+def test_corp_search_succeeds_when_former_name_lookup_fails(world):
+    world.corps, world.history, world.history_status = CORPS + [TWIN_CORP], HISTORY, 503
+    out = world.manager.corp_search("가나다테크")
+    TypeAdapter(C.CorpSearchResponse).validate_python(out, strict=True)
+    assert len(out["candidates"]) == 3 and all(c["formerNames"] is None for c in out["candidates"])  # 모름(null)
+    assert world.count["fsc_corp_crno"] == 4  # 후보 2곳 × (첫 시도 + 재시도 1회)
+
+
+def test_corp_search_succeeds_when_daily_limit_blocks_former_names(world):
+    L._reset_for_tests({"GROWTH_DAILY_LIMIT_DATAGOKR_FSC_CORP": "1"})  # 회사명 조회 1회만 남김
+    world.corps, world.history = CORPS + [TWIN_CORP], HISTORY
+    out = world.manager.corp_search("가나다테크")
+    assert len(out["candidates"]) == 3 and all(c["formerNames"] is None for c in out["candidates"])
+    assert "fsc_corp_crno" not in world.count and L.usage_today()["apis"][L.DATAGOKR_FSC_CORP]["used"] == 1
+
+
+def test_corp_search_former_names_cap_per_search(world, monkeypatch):
+    monkeypatch.setattr(public_data, "HISTORY_CALLS_PER_SEARCH", 1)
+    world.corps, world.history = CORPS + [TWIN_CORP], HISTORY
+    out = world.manager.corp_search("가나다테크")
+    got = [c["formerNames"] for c in out["candidates"] if c["crno"] in (TWIN, CRNO)]
+    assert world.count["fsc_corp_crno"] == 1 and got.count(None) == 1  # 상한을 넘는 후보는 모름(null)
+
+
+def test_old_snapshot_without_former_names_still_reads(world, tmp_path):
+    """formerNames 가 생기기 전에 저장한 스냅샷: 그대로 읽히고, 응답은 계약 모양(null 로 채움)이며 파일은 다시 쓰지 않는다."""
+    v = run_full(world)
+    path = world.manager.store.path_of(v["jobId"])
+    d = json.loads(path.read_text(encoding="utf-8"))
+    ident = d["sections"]["identity"]["result"]
+    for c in [ident["corp"], *ident["otherCorps"]]:
+        c.pop("formerNames")
+    old = tmp_path / "old" / d["companyId"] / path.name
+    old.parent.mkdir(parents=True)
+    text = json.dumps(d, ensure_ascii=False)
+    old.write_text(text, encoding="utf-8")
+    m = jobs.Manager(Store(tmp_path / "old"))
+    got = m.company_analysis(d["companyId"])
+    check_contract(got)
+    assert got["sections"]["identity"]["result"]["corp"]["formerNames"] is None
+    assert old.read_text(encoding="utf-8") == text
 
 
 def test_endpoints_return_contract_bodies(world, monkeypatch):

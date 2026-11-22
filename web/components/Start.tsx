@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { Corp, CorpSearchResponse, ExampleResponse, HealthResponse, StartAnalysisResponse } from "@/lib/contract";
 import { ApiFail, api, apiOrNull } from "@/lib/api";
-import { fmtDay, fmtTime, isStale } from "@/lib/format";
+import { fmtBzno, fmtDay, fmtTime, formerNamesText, isStale } from "@/lib/format";
 import { forgetCompany, recentCompanies } from "@/lib/local";
+import { sameNameIds } from "@/lib/names";
 import { Disclosure } from "@/components/kit";
 import { SiteHeader } from "@/components/SiteHeader";
 import { setPending } from "@/components/company/context";
@@ -373,6 +374,7 @@ function Confirm({ query }: { query: string }) {
   // 이름이 정확히 같은 후보가 1곳이면 미리 고른다. 2곳 이상이면 미리 고르지 않는다(K-03, K-04)
   const exactOnes = res.candidates.filter((c) => c.exact);
   const picked = pickedState ?? (exactOnes.length === 1 ? exactOnes[0].companyId : null);
+  const twins = sameNameIds(res.candidates);
   const list = all ? res.candidates : res.candidates.slice(0, 5);
   const options = [...list.map((c) => c.companyId), NONE];
   const chosen = res.candidates.find((c) => c.companyId === picked) ?? null;
@@ -404,6 +406,14 @@ function Confirm({ query }: { query: string }) {
       <div role="radiogroup" aria-labelledby={titleId} className="mt-5 divide-y divide-rule border-y border-rule">
         {list.map((c, i) => {
           const on = picked === c.companyId;
+          // 이름이 같은 후보끼리는 대표·설립·시군구만으로 못 가를 수 있어 사업자번호·건물까지 나온 주소·이전 이름을 더 보인다(K-10)
+          const twin = twins.has(c.companyId);
+          const short = [c.region, c.district].filter(Boolean).join(" ") || "미확보";
+          const hq = twin ? (c.address ?? short) : short;
+          const bzno = twin ? (fmtBzno(c.bzno) ?? "미확보") : null;
+          const former = twin ? formerNamesText(c.formerNames) : null;
+          const label = [c.name, `대표 ${c.ceo ?? "미확보"}`, `설립 ${c.founded ?? "미확보"}`, bzno && `사업자번호 ${bzno}`, `본사 ${hq}`,
+            former && `이전 이름 ${formerNamesText(c.formerNames, ", ")}`].filter(Boolean).join(", ");
           return (
             <div
               key={c.companyId}
@@ -411,7 +421,7 @@ function Confirm({ query }: { query: string }) {
               role="radio"
               aria-checked={on}
               tabIndex={i === focusIdx ? 0 : -1}
-              aria-label={`${c.name}, 대표 ${c.ceo ?? "미확보"}, 설립 ${c.founded ?? "미확보"}, 본사 ${[c.region, c.district].filter(Boolean).join(" ") || "미확보"}`}
+              aria-label={label}
               onClick={() => setPicked(c.companyId)}
               onKeyDown={(e) => keyNav(e, i, move, () => setPicked(c.companyId))}
               className={`flex min-h-14 cursor-pointer gap-3 px-3 py-3 ${on ? "bg-ledger-soft" : "hover:bg-wash"}`}
@@ -432,11 +442,30 @@ function Confirm({ query }: { query: string }) {
                     <span className="text-sub">설립 </span>
                     {c.founded ?? "미확보"}
                   </span>
-                  <span>
-                    <span className="text-sub">본사 </span>
-                    {[c.region, c.district].filter(Boolean).join(" ") || "미확보"}
-                  </span>
+                  {bzno ? (
+                    <span data-twin="bzno">
+                      <span className="text-sub">사업자번호 </span>
+                      {bzno}
+                    </span>
+                  ) : (
+                    <span>
+                      <span className="text-sub">본사 </span>
+                      {short}
+                    </span>
+                  )}
                 </span>
+                {twin && (
+                  <span data-twin="address" className="mt-0.5 block text-sm break-words">
+                    <span className="text-sub">본사 </span>
+                    {hq}
+                  </span>
+                )}
+                {former && (
+                  <span data-twin="former" className="mt-0.5 block text-sm break-words">
+                    <span className="text-sub">이전 이름 </span>
+                    {former}
+                  </span>
+                )}
               </span>
             </div>
           );

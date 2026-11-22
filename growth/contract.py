@@ -152,12 +152,22 @@ class Value(TypedDict):
 # ---------------------------------------------------------------- 법인 (identity, /api/corp/search)
 
 @_strict
+class FormerName(TypedDict):
+    name: str               # 그때의 법인 이름(금융위 corpNm 표기 그대로)
+    changedOn: str | None   # 다음 이름으로 바뀐 날 YYYY-MM-DD(다음 이름 기록이 처음 시작한 날). 모르면 null
+
+
+@_strict
 class Corp(TypedDict):
     companyId: str          # 이 법인으로 분석할 때의 회사 id(= crno)
     crno: str               # 법인등록번호 13자리
     bzno: str | None        # 사업자등록번호 10자리
     name: str
     names: list[str]        # 금융위에 있는 다른 표기들
+    # 이전 이름(옛 상호), 최근에 바뀐 것 먼저. 표기 차이("(주)"·"주식회사"·띄어쓰기)와 영문명 변경은 넣지 않는다.
+    # /api/corp/search 에서 정규화한 이름이 같은 후보가 2곳 이상일 때 그 후보만 조회한다(2.1절): 이력이 없으면 [].
+    # null = 조회하지 않음(이름이 겹치지 않는 후보, identity·rivals_deep) 또는 조회 실패·상한. 옛 스냅샷은 읽을 때 null 로 채운다(12.1절)
+    formerNames: list[FormerName] | None
     nameEn: str | None
     ceo: str | None
     founded: str | None     # YYYY-MM-DD

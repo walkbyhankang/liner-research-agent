@@ -81,9 +81,14 @@
 - `name`: 2~60자. 서버는 앞뒤 공백을 지우고 다시 2자 미만이면 400 `bad_request`.
 - 찾는 법(지금 `research/public_data.find_corps` 규칙을 `growth`로 옮긴 것): 이름 그대로, 공백을 뺀 이름으로 금융위 기업기본정보를 부르고, `norm_name`이 같은 법인(상호·공시회사명·영문명 중 하나)을 `exact: true`, 정규화 이름을 포함하는 법인을 후보로 둔다. 같은 법인등록번호는 갱신일이 가장 최근인 것 하나로 합치고 다른 표기는 `names`에 모은다.
 - 정렬: `exact` 먼저, 그다음 `updated` 최근순. 최대 20곳.
+- **이전 이름(`formerNames`)**: 돌려줄 후보(최대 20곳) 중 `norm_name(name)`이 같은 후보가 2곳 이상이면, 그 후보마다 같은 API(getCorpOutline_V2)를 `crno`로 한 번 더 불러 이름 이력을 만든다. 회사명으로 부르면 지금 이름 기록만 오고 옛 상호 기록은 오지 않기 때문이다(합병 존속법인이 이름만 바꾼 경우 등).
+  - 이전 이름 = `corpNm`을 `norm_name`으로 견줘 지금 이름과 다른 이름. `"(주)"`·`"주식회사"`·띄어쓰기만 다른 표기는 이전 이름이 아니다. 영문명(`corpEnsnNm`) 변경은 보지 않는다. 표시 이름은 그 이름의 가장 최근 기록 표기 그대로.
+  - `changedOn` = 그 이름의 마지막 기록이 시작한 날(`fstOpegDt`) 뒤에 처음 시작한 다른 이름 기록의 시작일(예: 옛 이름 기록이 2024-12-10까지, 지금 이름 기록이 2024-12-11부터 → `"2024-12-11"`). 모르면 `null`. 목록은 최근에 바뀐 것 먼저.
+  - 이름이 겹치지 않는 검색에서는 추가로 부르지 않는다. 한 번 검색의 추가 요청은 최대 8회(재시도 포함, `growth.public_data.HISTORY_CALLS_PER_SEARCH`). 기존 `_get` 경로 그대로라 캐시 24시간, 공공데이터포털 동시 요청 묶음(`limits.slot`), 하루 상한 `datagokr.fsc_corp`에 요청마다 센다.
+  - 최선 노력: 추가 조회가 실패하거나(오류·재시도 뒤 실패) 하루 상한·검색당 상한에 걸려도 검색은 200으로 돌려주고 그 후보만 `formerNames: null`(모름)이다. 기록이 한 쪽(100건)을 넘어 `totalCount`보다 적게 받은 때도 일부 기록으로 이력을 확정하지 않고 `null`이다. 조회했는데 이력이 없으면 `[]`.
 - 응답 `CorpSearchResponse`: `{query, candidates: Corp[], queriedAt}`. `Corp`는 8.1절. `snapshotAt`은 그 법인(`companyId` = crno)으로 저장된 가장 최근 `done` 분석의 `analyzedAt`, 없으면 `null`.
 - 오류: 502 `upstream_error`("금융위원회 자료에 연결하지 못했습니다"), 503 `missing_config`("공공데이터 설정이 되어 있지 않습니다"), 429 `daily_limit`(`datagokr.fsc_corp` 하루 상한).
-- 화면: 후보 0곳 → `F-CORP-0` 화면, 이름 같은 후보 1곳뿐 → 회사 확정 건너뛰기, 고른 후보에 `snapshotAt`이 있으면 "저장된 분석 보기"(→ `/c/{companyId}`, `POST` 없음).
+- 화면: 후보 0곳 → `F-CORP-0` 화면, 이름 같은 후보 1곳뿐 → 회사 확정 건너뛰기, 고른 후보에 `snapshotAt`이 있으면 "저장된 분석 보기"(→ `/c/{companyId}`, `POST` 없음). 정규화한 이름이 같은 후보끼리는 사업자번호·`address` 전체·이전 이름을 더 보인다(`docs/ux/screens.md` 3절, K-10).
 
 ### 2.2 `POST /api/analysis`
 
@@ -494,6 +499,7 @@
 | `crno` | 글 13자리 | `corp.crno` | 개요 2층 |
 | `bzno` | 글? | `corp.bzno` | 개요 2층 |
 | `name`, `names` | 글, 글[] | `corp.name`, `corp.names` | 표시줄, 회사 확정 |
+| `formerNames` | `FormerName[]`? | (`public_data.former_names`, 2.1절) | 회사 확정(이름이 같은 후보만) |
 | `nameEn` | 글? | `corp.name_en` | 개요 2층 |
 | `ceo` | 글? | `corp.ceo` | 회사 확정, `merged.ceo` |
 | `founded` | `YYYY-MM-DD`? | `corp.founded` | 회사 확정, `merged.founded` |
@@ -506,6 +512,8 @@
 | `exact` | 참/거짓 | `corp.exact` | 미리 고르기·건너뛰기 |
 | `snapshotAt` | 시각? | (저장된 분석) | "저장된 분석 있음" |
 | (뺌) | | `corp.sme`(실측 빈 값), `corp.employees_fsc`(17절 7번) | |
+
+`FormerName = {name: 글, changedOn: YYYY-MM-DD?}` — 이전 이름(옛 상호)과 다음 이름으로 바뀐 날(다음 이름 기록이 처음 시작한 날, 모르면 `null`). `formerNames`는 최근에 바뀐 것 먼저이고, 표기 차이·영문명 변경은 넣지 않는다(2.1절). 값의 뜻: 목록 = 조회함(`[]`은 이력 없음), `null` = 조회하지 않음 또는 모름. **`/api/corp/search`에서 이름이 같은 후보만 조회한다.** `identity`의 `corp`·`otherCorps`와 `rivals_deep`의 경쟁사 `corp`는 추가로 부르지 않고 언제나 `null`이다. 이 키가 생기기 전 스냅샷은 읽을 때 `null`로 채운다(12.1절).
 
 ### 8.2 `official` — 재무 3년, 국민연금 12개월 (무료)
 
@@ -745,6 +753,7 @@
 - `results/analysis/<companyId>/latest.json` = `{"file": "<파일 이름>", "jobId": "…", "analyzedAt": "…"}`. 작업이 `done`이 될 때만 바꾼다. 2.6·2.8이 이 파일을 먼저 본다(없거나 깨졌으면 폴더를 훑는다).
 - 서버가 켜질 때 `results/analysis/*/*.json`을 읽어 `jobId → 파일` 표를 만든다. `status: "running"`인 파일은 `interrupted`로 바꾼다: `waiting`·`running` 단락 → `unavailable`(`interrupted`, `retryable: true`), `rerun.status: "running"` → `failed`(`interrupted`), `analyzedAt` = 파일의 마지막 수정 시각(한국 시간), `busy: false`. 그리고 파일을 다시 쓴다.
 - 작업 상태는 메모리 + 이 파일이다. DB는 쓰지 않는다. `results/`는 Git에서 제외돼 있다.
+- 나중에 계약에 더한 키가 없는 옛 스냅샷은 읽을 때(`Store.read`) `null`로 채워 응답이 계약 모양이 되게 한다. 이것 때문에 파일을 다시 쓰지는 않는다(상태가 바뀌어 다시 쓸 때 함께 들어간다). 지금은 `Corp.formerNames`(2026-11-23에 더함, `identity.result.corp`·`otherCorps`, `rivals_deep.result.rivals[].corp`) 하나다. 서버는 스냅샷을 읽을 때 계약 모양을 검사하지 않는다(검사는 테스트에서만 한다).
 
 ### 12.2 하루 사용량 (②)
 

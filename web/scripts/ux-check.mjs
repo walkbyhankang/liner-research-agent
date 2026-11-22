@@ -321,7 +321,7 @@ await run("confirm", async () => {
   const radios = await page.$$eval("[role=radio]", (l) => l.length);
   check("K-01", radios === 6 && t.includes("후보 2곳 더 보기") && t.includes("목록에 없음"), `${radios}개`);
   check("K-04", (await page.$eval("[role=radio][aria-checked=true]", (e) => e.innerText).catch(() => "")).startsWith("주식회사 가나다테크"));
-  check("K-05", t.includes("대표") && t.includes("설립") && t.includes("본사") && t.includes("부산 해운대구") && !t.includes("예시로"));
+  check("K-05", t.includes("대표") && t.includes("설립") && t.includes("본사") && t.includes("부산 해운대구") && !t.includes("예시로") && !t.includes("사업자번호") && !t.includes("이전 이름"));
   check("K-08 radiogroup", Boolean(await page.$("[role=radiogroup]")));
   await page.focus("[role=radio][aria-checked=true]");
   await page.keyboard.press("ArrowDown");
@@ -339,7 +339,35 @@ await run("confirm", async () => {
   page = await open(`/?name=${encodeURIComponent("가나다테크")}`);
   await page.waitForSelector("[role=radio]");
   check("K-03", !(await page.$("[role=radio][aria-checked=true]")) && (await page.$eval("button.btn-primary", (b) => b.disabled)));
-  await ctl({ corp: "F-CORP-0" });
+  // K-10: 이름이 같은 2곳은 사업자번호·건물까지 나온 주소·이전 이름(있는 곳만)으로 가른다. 390px 에서 긴 주소는 줄을 바꾸고 넘치지 않는다
+  for (const w of [1180, 390]) {
+    const p = w === 1180 ? page : await open(`/?name=${encodeURIComponent("가나다테크")}`, { width: w });
+    await p.waitForSelector("[role=radio]");
+    const rows = await p.$$eval("[role=radiogroup] [role=radio]", (l) =>
+      l.slice(0, 2).map((e) => {
+        const a = e.querySelector("[data-twin=address]");
+        return { text: e.innerText.replace(/\s+/g, " "), label: e.getAttribute("aria-label") ?? "", over: e.scrollWidth - e.clientWidth, lines: a ? Math.round(a.getBoundingClientRect().height / parseFloat(getComputedStyle(a).lineHeight)) : 0 };
+      }),
+    );
+    const [r1, r2] = rows;
+    const shown =
+      r1.text.includes("사업자번호 000-00-00001") && r1.text.includes("본사 경기도 성남시 분당구 예시로 239 (예시동, 가나다타워) 102동 8층") && r1.text.includes("이전 이름 주식회사 라마바코리아 · 2024-12 변경") &&
+      r2.text.includes("사업자번호 000-00-00002") && r2.text.includes("본사 경기도 성남시 분당구 예시로 3") && !r2.text.includes("이전 이름");
+    const labels =
+      r1.label.includes("사업자번호 000-00-00001") && r1.label.includes("본사 경기도 성남시 분당구 예시로 239 (예시동, 가나다타워) 102동 8층") && r1.label.includes("이전 이름 주식회사 라마바코리아, 2024-12 변경") &&
+      r2.label.includes("사업자번호 000-00-00002") && !r2.label.includes("이전 이름");
+    const g = await globalChecks(p, `회사 확정 이름 같음 ${w}`);
+    const wrap = w === 390 ? r1.lines >= 2 : true;
+    check(`K-10 (${w})`, shown && labels && g.hscroll <= 1 && r1.over <= 1 && r2.over <= 1 && wrap, `줄 ${r1.lines}, 넘침 ${g.hscroll}px`);
+    await sh(p, `confirm-twins-${w}`);
+  }
+  // 서버가 이름 이력을 확인하지 못하면(formerNames null) 이전 이름 줄만 없고 사업자번호·전체 주소는 그대로 보인다
+  await ctl({ formerNamesUnknown: true });
+  page = await open(`/?name=${encodeURIComponent("가나다테크")}`);
+  await page.waitForSelector("[role=radio]");
+  t = await text(page, "[role=radiogroup]");
+  check("K-10 (이력 모름)", t.includes("사업자번호 000-00-00001") && t.includes("102동 8층") && !t.includes("이전 이름"));
+  await ctl({ formerNamesUnknown: false, corp: "F-CORP-0" });
   page = await open(`/?name=${encodeURIComponent("없는회사")}`);
   await waitText(page, "법인을 찾지 못했습니다");
   t = await text(page);

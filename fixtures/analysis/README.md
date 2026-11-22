@@ -40,7 +40,7 @@
 | `F-EXAMPLE` | `isExample: true`, `GET /api/example`, 새로 분석 거절(409) |
 | `F-EMPTY` | 라운드 0, 특허 0, 중요 사건 0, 기사 0(`no_data`) |
 | `F-MONEY` | 누적 투자 USD·KRW 따로, 영업이익 음수 1개 연도 |
-| `F-CORP-0`, `-1`, `-2`, `-7` | 법인 후보 0 / 1(이름 같음) / 2(둘 다 이름 같음) / 7(이름 같은 1곳, 3번째에 `snapshotAt`) |
+| `F-CORP-0`, `-1`, `-2`, `-7` | 법인 후보 0 / 1(이름 같음) / 2(둘 다 이름 같음, 대표·시군구도 같고 설립일·사업자번호·건물 주소가 다름. 1곳은 `formerNames` "주식회사 라마바코리아"(2024-12-11 변경), 다른 곳은 `[]`, 긴 주소 1개) / 7(이름 같은 1곳, 3번째에 `snapshotAt`, 이름이 겹치지 않아 `formerNames` 모두 `null`) |
 | `F-DOWN` | `/api/health` 502 |
 | `F-INTERRUPTED` | 작업 `interrupted`, `official`·`profile`·`funding_history` done(그리고 `identity`) |
 | `F-NOTICE` | 공고문 대조: 충족 4, 미충족 1, 확인 필요 2, 판단 대상 아님 2, 질문 5, 준비 자료 3. 상한 도달(429) 응답 포함 |

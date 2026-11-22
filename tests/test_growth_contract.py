@@ -137,7 +137,7 @@ def test_no_score_or_probability_fields():
 
 def test_no_real_company_data():
     text = "\n".join(p.read_text(encoding="utf-8") for p in FILES)
-    for real in ("기준 기업", "ReferenceCo", "퓨리오사", "Furiosa", "딥엑스", "DeepX", "모빌린트", "Mobilint", "NVIDIA", "엔비디아",
+    for real in ("기준 기업", "ReferenceCo", "합병 전 법인", "FormerCo", "퓨리오사", "Furiosa", "딥엑스", "DeepX", "모빌린트", "Mobilint", "NVIDIA", "엔비디아",
                  "Qualcomm", "Groq", "뤼튼", "Wrtn", "업스테이지", "Upstage", "People Data Labs 회사 카드 (Liner Premium) ·"):
         assert real not in text, real
     urls = [v for _, f in DATA.items() for _, k, v in walk(f) if isinstance(v, str) and re.search(r"(?i)url$", k) and v]
@@ -277,6 +277,11 @@ def test_variant_fixtures():
     corp7 = get("F-CORP-7")["candidates"]
     assert len(corp7) == 7 and sum(c["exact"] for c in corp7) == 1 and sum(bool(c["snapshotAt"]) for c in corp7) == 1
     assert [len(get(f"F-CORP-{k}")["candidates"]) for k in "012"] == [0, 1, 2] and all(c["exact"] for c in get("F-CORP-2")["candidates"])
+    # 이름이 같은 2곳만 이전 이름을 조회한다(한 곳은 있음, 다른 곳은 이력 없음 []). 이름이 겹치지 않는 후보는 null
+    corp2 = get("F-CORP-2")["candidates"]
+    assert [c["formerNames"] for c in corp2] == [[{"name": "주식회사 라마바코리아", "changedOn": "2024-12-11"}], []]
+    assert len({(c["ceo"], c["region"], c["district"]) for c in corp2}) == 1 and len({c["bzno"] for c in corp2}) == 2
+    assert all(c["formerNames"] is None for c in corp7 + get("F-CORP-1")["candidates"])
     assert DATA["F-DOWN"]["exchanges"][0]["status"] >= 500
     intr = get("F-INTERRUPTED")
     assert intr["status"] == "interrupted" and sum(intr["sections"][k]["status"] == "done" for k in ("official", "profile", "funding_history")) == 3

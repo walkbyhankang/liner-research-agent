@@ -12,7 +12,9 @@
 """
 from __future__ import annotations
 
+import logging
 import re
+import threading
 import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -35,6 +37,7 @@ ACCT = {"enpSaleAmt": "매출액", "enpBzopPft": "영업이익", "iclsPalClcAmt"
         "enpTastAmt": "자산총계", "enpTdbtAmt": "부채총계", "enpTcptAmt": "자본총계", "enpCptlAmt": "자본금", "fnclDebtRto": "부채비율(%)"}
 
 Use = Callable[[str], None]
+log = logging.getLogger("growth")
 
 
 class PublicDataError(Exception):
@@ -96,6 +99,11 @@ def _get_raw(kind: str, ident: dict, url: str, params: dict, xml: bool, use: Use
                 data = r.json()
             except ValueError:
                 raise PublicDataError(common.scrub_text(f"JSON 아닌 응답: {r.text[:200]}")) from None
+            # HTTP 200 이어도 결과 코드가 00 이 아니거나 body 가 없으면 오류다(XML 과 같은 규칙). "0건"으로 읽거나 캐시하지 않는다
+            resp = data.get("response") if isinstance(data, dict) else None
+            head = resp.get("header") if isinstance(resp, dict) else None
+            if not isinstance(resp, dict) or not isinstance(resp.get("body"), dict) or (isinstance(head, dict) and str(head.get("resultCode")) != "00"):
+                raise PublicDataError(common.scrub_text(f"응답 오류: {r.text[:200]}"))
         common.cache_put(kind, ident, data)
         return data
     raise PublicDataError(common.scrub_text(f"호출 실패: {err}"))
@@ -155,12 +163,86 @@ def find_corps(name: str, english: str = "", *, use: Use | None = None) -> list[
     return out
 
 
-def corp_contract(c: dict, *, snapshot_at: str | None = None) -> dict:
-    """find_corps 한 줄 → 계약 Corp(8.1절)."""
+def name_history(crno: str, current: str, *, use: Use | None = None) -> list[dict]:
+    """법인등록번호로 금융위 기업기본정보 기록을 모두 받아 이전 이름(옛 상호)을 돌려준다(계약 Corp.formerNames).
+
+    - 이름은 norm_name 으로 견준다: "(주)"·"주식회사"·띄어쓰기만 다른 표기는 같은 이름이다. 영문명(corpEnsnNm)은 보지 않는다.
+    - changedOn: 그 이름의 마지막 기록이 시작한 날(fstOpegDt) 뒤에 처음 시작한 다른 이름 기록의 시작일. 모르면 None.
+    - 회사명 조회는 지금 이름 기록만 돌려주므로(옛 이름 기록은 안 옴) 법인등록번호로 따로 부른다. 최근에 바뀐 것 먼저.
+    """
+    total, items = _items(_get("fsc_corp", CORP_URL, {"crno": crno, "pageNo": 1, "numOfRows": HISTORY_ROWS, "resultType": "json"}, use=use))
+    if total > len(items):  # 한 쪽에 다 안 담김: 일부 기록으로 "이력 없음"을 확정하지 않는다(former_names 가 None 으로 둔다)
+        raise PublicDataError(f"이름 이력 기록이 {HISTORY_ROWS}건을 넘습니다")
+    recs = [i for i in items if re.sub(r"\D", "", i.get("crno") or "") == crno and (i.get("corpNm") or "").strip()]
+    start = lambda i: re.sub(r"\D", "", i.get("fstOpegDt") or "")  # noqa: E731
+    cur = common.norm_name(current)
+    groups: dict[str, list[dict]] = {}
+    for i in recs:
+        groups.setdefault(common.norm_name(i["corpNm"]), []).append(i)
+    out = []
+    for key, rows in groups.items():
+        if not key or key == cur:
+            continue
+        last = max(start(i) for i in rows)
+        later = [start(i) for i in recs if common.norm_name(i["corpNm"]) != key and start(i) > last] if last else []
+        shown = max(rows, key=lambda i: (i.get("lastOpegDt") or "", start(i)))["corpNm"].strip()
+        out.append({"name": shown, "changedOn": (_fmt_date(min(later)) or None) if later else None})
+    out.sort(key=lambda f: f["changedOn"] or "", reverse=True)
+    return out
+
+
+HISTORY_ROWS = 100             # 이름 이력은 한 쪽만 받는다. totalCount 가 이보다 크면 그 후보의 이전 이름은 모름(None)
+HISTORY_CALLS_PER_SEARCH = 8   # 법인 후보 검색 한 번에서 이름 이력 조회 요청 수 상한(재시도 포함)
+HISTORY_WORKERS = 4
+
+
+def former_names(corps: list[dict], *, use: Use | None = None, cap: int | None = None) -> dict[str, list[dict] | None]:
+    """정규화한 이름이 같은 후보가 2곳 이상이면 그 후보들의 이전 이름을 찾는다(회사 확정 화면 구분용, 계약 2.1절).
+
+    돌려주는 값: {crno: 이전 이름 목록 | None}. 이름이 겹치지 않으면 아무 요청도 하지 않고 {}.
+    최선 노력: 조회 실패·하루 상한·이 검색의 상한(cap, 기본 HISTORY_CALLS_PER_SEARCH)에 걸린 후보는 None(모름).
+    오류를 밖으로 내지 않는다. 요청마다(재시도 포함, 캐시 적중 제외) use 로 하루 사용량(datagokr.fsc_corp)에 센다.
+    """
+    cap = HISTORY_CALLS_PER_SEARCH if cap is None else cap
+    keys = [common.norm_name(c.get("name")) for c in corps]
+    seen: dict[str, int] = {}
+    for k in keys:
+        if k:
+            seen[k] = seen.get(k, 0) + 1
+    dup = [c for c, k in zip(corps, keys) if k and seen[k] >= 2]
+    if not dup:
+        return {}
+    out: dict[str, list[dict] | None] = {c["crno"]: None for c in dup}
+    left = [cap]
+    lock = threading.Lock()
+
+    def counted(api: str) -> None:
+        with lock:
+            if left[0] <= 0:
+                raise limits.LimitReached(api, "section", cap, cap, None)
+            left[0] -= 1
+        (use or _no_use)(api)
+
+    def one(c: dict) -> tuple[str, list[dict] | None]:
+        try:
+            return c["crno"], name_history(c["crno"], c.get("name") or "", use=counted)
+        except Exception as e:  # 이 조회는 덧붙이는 정보라서 무엇이 실패해도 검색은 그대로 돌려준다
+            log.warning("이전 이름 조회를 건너뜁니다: %s", type(e).__name__)
+            return c["crno"], None
+
+    with ThreadPoolExecutor(max_workers=HISTORY_WORKERS, thread_name_prefix="fsc-history") as ex:
+        for crno, names in ex.map(one, dup[:cap]):  # 한 곳에 요청이 적어도 1회라서 cap 곳을 넘게 조회할 일은 없다
+            out[crno] = names
+    return out
+
+
+def corp_contract(c: dict, *, snapshot_at: str | None = None, former: list[dict] | None = None) -> dict:
+    """find_corps 한 줄 → 계약 Corp(8.1절). former: former_names() 로 찾은 이전 이름(조회하지 않았으면 None)."""
     region, district = split_address(c.get("address"))
     n = common.none_if_empty
     return {"companyId": c["crno"], "crno": c["crno"], "bzno": n(c.get("bzno")), "name": c.get("name") or c["crno"],
-            "names": list(c.get("names") or []), "nameEn": n(c.get("name_en")), "ceo": n(c.get("ceo")),
+            "names": list(c.get("names") or []), "formerNames": [dict(f) for f in former] if former is not None else None,
+            "nameEn": n(c.get("name_en")), "ceo": n(c.get("ceo")),
             "founded": n(c.get("founded")), "address": n(c.get("address")), "region": region, "district": district,
             "homepage": n(c.get("homepage")), "industry": n(c.get("industry")), "mainBiz": n(c.get("main_biz")),
             "market": n(c.get("market")), "updated": n(c.get("updated")), "exact": bool(c.get("exact")),

@@ -58,6 +58,37 @@ def test_gov_windows_never_exceed_seven_days():
     assert all((e - s).days <= 6 for s, e in wins) and wins[-1][0] == date(2026, 10, 26)
 
 
+def test_former_names_unknown_when_history_exceeds_one_page(monkeypatch):
+    """기록이 한 쪽(HISTORY_ROWS)을 넘으면 받은 쪽만으로 '이력 없음([])'을 확정하지 않고 모름(None)으로 둔다"""
+    monkeypatch.setattr(common, "env", lambda k: "data-key-1234567890" if k == "DATA_GO_KR_SERVICE_KEY" else "")
+
+    def handler(req):
+        crno = req.url.params["crno"]
+        rows = [{"crno": crno, "corpNm": "주식회사 가나다", "fstOpegDt": f"2026{(i % 12) + 1:02d}01"} for i in range(public_data.HISTORY_ROWS)]
+        total = public_data.HISTORY_ROWS + 1 if crno.endswith("1") else public_data.HISTORY_ROWS
+        return httpx.Response(200, json={"response": {"body": {"totalCount": total, "items": {"item": rows}}}})
+    monkeypatch.setattr(public_data, "_http", httpx.Client(transport=httpx.MockTransport(handler)))
+    out = public_data.former_names([{"crno": "1101110000001", "name": "주식회사 가나다"}, {"crno": "1101110000002", "name": "가나다"}])
+    assert out == {"1101110000001": None, "1101110000002": []}  # 넘친 쪽은 모름, 딱 한 쪽이면 조회한 결과
+
+
+def test_error_envelope_with_http_200_is_not_read_as_empty_or_cached(monkeypatch):
+    """HTTP 200 이어도 결과 코드가 00 이 아니면 오류다: 이전 이름은 모름(None), 캐시하지 않아 다음 요청은 다시 묻는다"""
+    monkeypatch.setattr(common, "env", lambda k: "data-key-1234567890" if k == "DATA_GO_KR_SERVICE_KEY" else "")
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.params.get("crno"))
+        return httpx.Response(200, json={"response": {"header": {"resultCode": "22", "resultMsg": "LIMITED NUMBER OF SERVICE REQUESTS EXCEEDS ERROR."}}})
+    monkeypatch.setattr(public_data, "_http", httpx.Client(transport=httpx.MockTransport(handler)))
+    corps = [{"crno": "1101110000001", "name": "주식회사 가나다"}, {"crno": "1101110000002", "name": "가나다"}]
+    assert public_data.former_names(corps) == {"1101110000001": None, "1101110000002": None}
+    with pytest.raises(public_data.PublicDataError):
+        public_data.find_corps("가나다")
+    n = len(calls)
+    assert public_data.former_names(corps) == {"1101110000001": None, "1101110000002": None} and len(calls) == n + 2  # 캐시 안 됨
+
+
 def test_find_corps_counts_each_attempt_and_stops_at_section_cap(monkeypatch):
     monkeypatch.setattr(common, "env", lambda k: "data-key-1234567890" if k == "DATA_GO_KR_SERVICE_KEY" else "")
     monkeypatch.setattr(public_data, "_sleep", lambda s: None)
@@ -80,6 +111,37 @@ def test_find_corps_counts_each_attempt_and_stops_at_section_cap(monkeypatch):
     assert e.value.scope == "section" and len(seen) == 4
     b.settle({})
     assert "data-key" not in json.dumps(out)
+
+
+def test_former_names_only_for_same_names_and_capped_per_search(monkeypatch):
+    monkeypatch.setattr(common, "env", lambda k: "data-key-1234567890" if k == "DATA_GO_KR_SERVICE_KEY" else "")
+    monkeypatch.setattr(public_data, "_sleep", lambda s: None)
+    asked = []
+
+    def handler(req):
+        crno = req.url.params["crno"]
+        asked.append(crno)
+        items = [{"crno": crno, "corpNm": "주식회사 라마바", "fstOpegDt": "20200101", "lastOpegDt": "20231231"},
+                 {"crno": crno, "corpNm": "가나다 주식회사", "fstOpegDt": "20240102", "lastOpegDt": "20261121"},
+                 {"crno": crno, "corpNm": "(주)가나다", "fstOpegDt": "20250101", "lastOpegDt": "20250105"}]
+        return httpx.Response(200, json={"response": {"body": {"totalCount": 3, "items": {"item": items}}}})
+    monkeypatch.setattr(public_data, "_http", httpx.Client(transport=httpx.MockTransport(handler)))
+    # 이름이 겹치지 않으면 한 번도 부르지 않는다
+    assert public_data.former_names([{"crno": "1101110000001", "name": "주식회사 가나다"}, {"crno": "1101110000002", "name": "가나다랩"}]) == {}
+    assert asked == []
+    # 이름이 같은 후보 10곳: 기본 상한 8회까지만 부르고 나머지는 모름(None). 다른 이름(가나다랩)은 결과에 없다
+    corps = [{"crno": f"11011100000{i:02d}", "name": "주식회사 가나다" if i % 2 else "가나다 주식회사"} for i in range(1, 11)]
+    used = []
+    out = public_data.former_names(corps + [{"crno": "1101110000099", "name": "가나다랩"}], use=used.append)
+    assert public_data.HISTORY_CALLS_PER_SEARCH == 8 and len(asked) == 8 and used == [L.DATAGOKR_FSC_CORP] * 8
+    assert set(out) == {c["crno"] for c in corps} and [out[c["crno"]] for c in corps[8:]] == [None, None]
+    assert out[corps[0]["crno"]] == [{"name": "주식회사 라마바", "changedOn": "2024-01-02"}]
+    # 단락 예산(identity fsc_corp 4)으로 세면 상한을 넘는 요청은 보내지 않고 모름(None)으로 둔다
+    asked.clear()
+    b = L.reserve_section("identity")
+    out = public_data.former_names([{"crno": f"22011100000{i:02d}", "name": "가나다"} for i in range(1, 7)], use=b.use)
+    assert len(asked) == 4 and sum(v is None for v in out.values()) == 2
+    b.settle({})
 
 
 def test_public_data_missing_key_is_reported(monkeypatch):

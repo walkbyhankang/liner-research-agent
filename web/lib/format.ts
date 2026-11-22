@@ -95,6 +95,21 @@ export const num = (n: number) => whole.format(n);
 /** "YYYY-MM-DD" → "YYYYMMDD" */
 export const compactDay = (day: string) => day.replace(/-/g, "").slice(0, 8);
 
+/** 사업자등록번호 10자리 → "000-00-00000". 10자리가 아니면 받은 글 그대로, 없으면 null */
+export function fmtBzno(bzno: string | null | undefined): string | null {
+  const t = (bzno ?? "").trim();
+  if (!t) return null;
+  const d = t.replace(/\D/g, "");
+  return d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}` : t;
+}
+
+/** 이전 이름(계약 Corp.formerNames) → "주식회사 라마바코리아 · 2024-12 변경". 바뀐 날을 모르면 이름만, 여럿이면 최근 것부터 쉼표로.
+ * 없거나(빈 목록) 모르면(null) null. sep 은 이름과 날 사이(화면 읽기 이름에는 ", ") */
+export function formerNamesText(list: { name: string; changedOn: string | null }[] | null | undefined, sep = " · "): string | null {
+  if (!list || list.length === 0) return null;
+  return list.map((f) => (f.changedOn ? `${f.name}${sep}${f.changedOn.slice(0, 7)} 변경` : f.name)).join(", ");
+}
+
 /** 차트 이름표: "주식회사"·"(주)"를 떼어 짧은 칸에 회사 이름이 남게 한다(전체 이름은 화면 읽기 요약과 표에 있다) */
 export const shortCompany = (name: string) => name.replace(/^\s*(주식회사|\(주\)|㈜)\s*|\s*(주식회사|\(주\)|㈜)\s*$/g, "").trim() || name;
 

@@ -11,3 +11,11 @@ export function normName(name: string): string {
 }
 
 export const userRivalKey = (name: string) => `user:${normName(name)}`;
+
+/** 정규화한 이름이 같은 후보가 2곳 이상일 때 그 후보들의 companyId. 회사 확정 화면은 이 후보에만 사업자번호·전체 주소·이전 이름을 더 보인다 */
+export function sameNameIds(cands: { companyId: string; name: string }[]): Set<string> {
+  const keys = cands.map((c) => normName(c.name));
+  const n = new Map<string, number>();
+  for (const k of keys) if (k) n.set(k, (n.get(k) ?? 0) + 1);
+  return new Set(cands.filter((_, i) => keys[i] && (n.get(keys[i]) ?? 0) >= 2).map((c) => c.companyId));
+}

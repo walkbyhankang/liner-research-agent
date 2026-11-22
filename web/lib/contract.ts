@@ -91,12 +91,18 @@ export type Value = {
 
 // ---------------------------------------------------------------- 법인
 
+/** 이전 이름(옛 상호). changedOn = 다음 이름으로 바뀐 날(다음 이름 기록이 처음 시작한 날) YYYY-MM-DD, 모르면 null */
+export type FormerName = { name: string; changedOn: string | null };
+
 export type Corp = {
   companyId: string;
   crno: string;
   bzno: string | null;
   name: string;
   names: string[];
+  /** 이전 이름, 최근에 바뀐 것 먼저. 표기 차이·영문명 변경은 넣지 않는다. 법인 후보 검색에서 정규화한 이름이 같은 후보가
+   * 2곳 이상일 때 그 후보만 조회한다(이력 없음 []). null = 조회하지 않음(이름이 안 겹침, identity·rivals_deep) 또는 조회 실패·상한 */
+  formerNames: FormerName[] | null;
   nameEn: string | null;
   ceo: string | null;
   founded: string | null;

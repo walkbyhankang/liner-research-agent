@@ -2,8 +2,8 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import test from "node:test";
-import { ageLabel, byCurrencyTexts, daysSince, elapsedText, eok, fmtTime, isStale, moneyText, safeUrl, shortCompany, stageKo, wonDisplay, wrapSvgText, yearsSince } from "./format.ts";
-import { normName, userRivalKey } from "./names.ts";
+import { ageLabel, byCurrencyTexts, daysSince, elapsedText, eok, fmtBzno, fmtTime, formerNamesText, isStale, moneyText, safeUrl, shortCompany, stageKo, wonDisplay, wrapSvgText, yearsSince } from "./format.ts";
+import { normName, sameNameIds, userRivalKey } from "./names.ts";
 import { initialConditions, relatedTo, rivalBackers, splitExisting } from "./funding.ts";
 import { bidDeadline, gaps, sortBids, sortRows, verdictCounts } from "./review.ts";
 import { memoryBackend } from "./store.ts";
@@ -66,6 +66,25 @@ test("이름 정규화는 계약 1.4와 같고, 이름 기반 회사 id 가 가�
   assert.equal(userRivalKey("직접 넣은 회사"), "user:직접넣은회사");
   const id = `n-${createHash("sha256").update(normName("가나다테크")).digest("hex").slice(0, 16)}`;
   assert.equal(id, job("F-NOCORP").companyId);
+});
+
+test("회사 확정: 이름이 같은 후보만 사업자번호·전체 주소·이전 이름을 더 보인다(K-10)", () => {
+  const cands = (name) => fx(name).exchanges[0].response.candidates;
+  // "주식회사 가나다테크" 와 "가나다테크 주식회사" 는 같은 이름, 가나다테크놀로지 등은 다른 이름
+  assert.deepEqual([...sameNameIds(cands("F-CORP-2"))], ["0000000000001", "0000000000002"]);
+  assert.equal(sameNameIds(cands("F-CORP-7")).size, 0);
+  assert.equal(sameNameIds(cands("F-CORP-1")).size, 0);
+  assert.deepEqual([...sameNameIds([{ companyId: "a", name: "(주)라마바" }, { companyId: "b", name: "라마바 주식회사" }, { companyId: "c", name: "라마바랩" }])], ["a", "b"]);
+  assert.equal(fmtBzno("1234567890"), "123-45-67890");
+  assert.equal(fmtBzno("123-45-67890"), "123-45-67890");
+  assert.equal(fmtBzno("12345"), "12345");
+  assert.equal(fmtBzno(null), null);
+  const [renamed, plain] = cands("F-CORP-2");
+  assert.equal(formerNamesText(renamed.formerNames), "주식회사 라마바코리아 · 2024-12 변경");
+  assert.equal(formerNamesText(renamed.formerNames, ", "), "주식회사 라마바코리아, 2024-12 변경");
+  assert.equal(formerNamesText(plain.formerNames), null); // 이력 없음 []
+  assert.equal(formerNamesText(null), null); // 모름
+  assert.equal(formerNamesText([{ name: "다", changedOn: "2025-03-02" }, { name: "나", changedOn: null }]), "다 · 2025-03 변경, 나");
 });
 
 test("자금 조달 조건: 원문 확인·보도 지역과 분석 관심 분야를 채우고, 기업 유형은 고른 것만(F-01, decisions 2)", () => {
