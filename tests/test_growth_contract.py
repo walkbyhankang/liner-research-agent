@@ -345,6 +345,16 @@ def test_ts_contract_constants_match_python():
         seconds = "null" if e["seconds"] is None else e["seconds"]
         per = "null" if e["perRival"] is None else e["perRival"]
         assert f"{key}: {{ seconds: {seconds}, liner: {e['liner']}, perRival: {per} }}" in est, key
+    full = C.ESTIMATES["full"]
+    assert f"full: {{ seconds: {full['seconds']}, liner: {full['liner']}, perRival: null }}" in est
+
+
+def test_rivals_deep_estimate_matches_section_caps():
+    """깊이 비교 예상값(5곳 기준 liner, 한 곳당 perRival)은 단락 Liner 상한 식과 같다(실제 서버 검증에서 7 → 6으로 바로잡음)."""
+    liner_sum = lambda n: sum(v for k, v in L.section_caps("rivals_deep", rivals=n).items() if k in L.LINER_APIS)  # noqa: E731
+    est = C.ESTIMATES["sections"]["rivals_deep"]
+    assert est["liner"] == liner_sum(L.MAX_RIVALS) == liner_sum(5)
+    assert all(liner_sum(n + 1) - liner_sum(n) == est["perRival"] for n in range(1, 5))
 
 
 # ---------------------------------------------------------------- research/ 를 불러오지 않음

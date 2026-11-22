@@ -4,10 +4,10 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { DEFAULT_ESTIMATES, type AnalysisJob, type Article, type NewsCategory, type NewsPage, type Paper, type RivalDeep } from "@/lib/contract";
 import { api } from "@/lib/api";
-import { byCurrencyTexts, fmtDay, fmtMonthDayTime, num, todayKST, wonDisplay } from "@/lib/format";
+import { byCurrencyTexts, elapsedText, fmtDay, fmtMonthDayTime, num, todayKST, wonDisplay } from "@/lib/format";
 import { addRival, setRivalChoice } from "@/lib/local";
 import { userRivalKey } from "@/lib/names";
-import { phaseOf, retryState, summaryLine, visibleRivals } from "@/lib/view";
+import { phaseOf, retryState, rivalsCost, summaryLine, visibleRivals } from "@/lib/view";
 import { DetailRow, Disclosure, ExtLink, MoreButton, Placeholder, SourceLine, StatusWord, nb, useMore } from "@/components/kit";
 import { FinanceBars, InvestBars, NpsLine, PatentLine, type InvestBar } from "@/components/charts";
 import { useCompany } from "@/components/company/context";
@@ -475,14 +475,15 @@ function Papers() {
         </div>
       ) : (
         <div className="mt-2 space-y-3">
-          <p>회사 기술 분야 {kw}개의 논문 발표 추이와 회사가 직접 참여한 논문을 찾습니다.</p>
+          {/* 개요(profile) 전에는 기술 분야 수를 모른다. "0개", "0회"로 단정하지 않는다 */}
+          <p>회사 기술 분야{profileDone ? ` ${kw}개` : ""}의 논문 발표 추이와 회사가 직접 참여한 논문을 찾습니다.</p>
           {env.status === "unavailable" && env.error && <p className="text-sm font-medium text-amber">{env.error.message}</p>}
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" className="btn btn-primary" disabled={!profileDone || !env.retryable} onClick={run}>
               논문 분석하기
             </button>
             <span className="text-sm text-sub">
-              {est.seconds ? `보통 ${est.seconds}초, ` : ""}Liner 학술 검색 {kw}회, 모델 1회
+              {est.seconds ? `보통 ${elapsedText(est.seconds)}, ` : ""}Liner 학술 검색 {profileDone ? `${kw}회` : "최대 6회"}, 모델 1회
             </span>
           </div>
           {!profileDone && <p className="text-sm text-sub">회사 기술 분야를 받으면 실행할 수 있습니다.</p>}
@@ -669,7 +670,8 @@ function DeepCompare({ confirmed }: { confirmed: Pick[] }) {
     if (!r.ok) setErr(r.message);
     return r;
   };
-  const cost = `Liner 약 ${est.liner}회 (경쟁사 5곳 기준${est.perRival ? `, 한 곳당 약 ${est.perRival}회` : ""})`;
+  // 비용 줄과 다시 실행 확인 창은 고른 곳 수(최대 5) 기준 호출 수를 쓴다(5곳 기준 값을 그대로 보이지 않게)
+  const cost = rivalsCost(est, confirmed.length);
   const changed = result && [...result.rivalSet].sort().join("|") !== confirmed.map((r) => r.key).sort().join("|");
 
   return (
@@ -700,7 +702,7 @@ function DeepCompare({ confirmed }: { confirmed: Pick[] }) {
               다시 실행
             </button>
           )}
-          <RerunDialog open={ask} onClose={() => setAsk(false)} title="경쟁사 깊이 비교" liner={est.liner} onConfirm={run} />
+          <RerunDialog open={ask} onClose={() => setAsk(false)} title="경쟁사 깊이 비교" liner={cost.liner} onConfirm={run} />
         </>
       ) : confirmed.length === 0 ? (
         <div className="mt-2 space-y-3">
@@ -716,7 +718,7 @@ function DeepCompare({ confirmed }: { confirmed: Pick[] }) {
             <button type="button" className="btn btn-primary" onClick={() => void run()}>
               깊이 비교하기
             </button>
-            <span className="text-sm text-sub">{cost}</span>
+            <span className="text-sm text-sub">{cost.text}</span>
           </div>
         </div>
       )}

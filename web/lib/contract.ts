@@ -538,9 +538,9 @@ export const DEFAULT_ESTIMATES: AnalysisJob["estimates"] = {
     funding_history: { seconds: 10, liner: 2, perRival: null },
     news: { seconds: 20, liner: 3, perRival: null },
     patents: { seconds: 15, liner: 2, perRival: null },
-    papers: { seconds: null, liner: 7, perRival: null },
-    rivals_deep: { seconds: null, liner: 34, perRival: 7 },
-    sales: { seconds: null, liner: 0, perRival: null },
+    papers: { seconds: 30, liner: 7, perRival: null },
+    rivals_deep: { seconds: null, liner: 34, perRival: 6 },
+    sales: { seconds: 10, liner: 0, perRival: null },
   },
 };
 

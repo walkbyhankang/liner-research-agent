@@ -74,7 +74,7 @@
 | `full.seconds`, `full.liner` | 새로 분석 전체 | `180`, `19` | 3분 안팎, 약 19회 |
 | `sections.news.seconds`, `.liner` | 뉴스만 새로 | `20`, `3` | 20초 안팎, 약 3회 |
 | `sections.papers.liner` | 논문 분석 | `7` | 학술 검색 6회와 모델 1회 |
-| `sections.rivals_deep.liner`, `.perRival` | 경쟁사 깊이 비교 | `34`, `7` | "경쟁사 5곳 기준 약 34회" |
+| `sections.rivals_deep.liner`, `.perRival` | 경쟁사 깊이 비교 | `34`, `6` | "경쟁사 5곳 기준 약 34회"(고른 곳 수로 바꿔 씀: 34 − 6 × (5 − 고른 곳 수)) |
 
 시간을 실측하지 않은 단락은 `seconds`를 `null`로 두고 화면은 호출 수만 쓴다.
 

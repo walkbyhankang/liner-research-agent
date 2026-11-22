@@ -271,7 +271,7 @@ function EvidenceBody({ job, which }: { job: AnalysisJob; which: "finance" | "fu
     const r = s.patents.result;
     if (!r || !r.summary.total) return <p className="py-2">미확보: 출원인이 이 회사로 확인된 국내 특허를 찾지 못했습니다</p>;
     return (
-      <div className="py-2">
+      <div className="py-2" data-ev="patents">
         <div className="max-w-[420px]">
           <PatentLine series={[{ name: job.company.name, byYear: r.summary.byYear, mine: true }]} endYear={Number(todayKST().slice(0, 4))} />
         </div>

@@ -368,6 +368,9 @@ await run("staged", async () => {
   const ov = await secText("overview");
   check("A-04", ov.includes("홍길동") && ov.includes("2020-09-15") && ov.includes("서울 강남구") && Boolean(await page.$("#overview .ph")) && !ov.includes("더 읽기"));
   check("TE-07", (await text(page, "#tech")).includes("회사 기술 분야를 받으면 실행할 수 있습니다.") && (await page.evaluate(() => [...document.querySelectorAll("#tech button")].find((b) => b.textContent.includes("논문 분석하기"))?.disabled)));
+  // 기술 낱말을 받기 전에는 분야 수·학술 검색 수를 "0개", "0회"로 단정하지 않는다(실제 서버 검증에서 찾음)
+  const te07 = await text(page, "#tech");
+  check("TE-07 (수 단정 안 함)", !/기술 분야 0개|학술 검색 0회/.test(te07) && te07.includes("Liner 학술 검색 최대 6회"));
   await sh(page, "staged-t1-390");
   await ctl({ step: 2 });
   await wait(1800);
@@ -647,6 +650,14 @@ await run("main", async () => {
   check("RI-07", cmp[0][0] === "주식회사 가나다테크" && cmp.every((r) => r.slice(1).every((c) => /\d{4}|미확보/.test(c))) && cmp.find((r) => r[0] === "하하테크")?.[1].startsWith("미확보"), cmp.map((r) => r.join("|")).join(" / "));
   const bars = await page.$$eval("#rivals figure figcaption", (l) => l.map((f) => f.textContent));
   check("RI-08", bars.includes("USD") && (await text(page, "#rivals")).includes("금액 미확보: 하하테크"), bars.join(","));
+  // 누적 투자 막대의 글(이름·금액·기준)이 그림 상자(viewBox) 밖으로 넘쳐 잘리지 않는다(실제 서버 검증에서 긴 기준 글이 잘려 찾음)
+  const clipped = await page.$$eval("#rivals figure svg[role=img]", (svgs) =>
+    svgs.flatMap((s) => {
+      const vb = s.viewBox.baseVal;
+      return [...s.querySelectorAll("text")].map((t) => t.getBBox()).filter((b) => b.x + b.width > vb.width + 0.5 || b.y + b.height > vb.height + 0.5).map((b) => Math.round(b.x + b.width));
+    }),
+  );
+  check("RI-08 (글 넘침 없음)", clipped.length === 0, clipped.join(","));
   await sh(page, "rivals-deep-1180");
   await yesNo("아자차랩스", "yes");
   await wait(300);
@@ -895,6 +906,15 @@ await run("main", async () => {
   check("R-17", blocks === 5 && lines.every((n) => n === 2) && evReq.length === 0, `${blocks}덩어리 ${lines.join(",")} 요청 ${evReq.map((x) => x.path).join(",")}`);
   const ev = await text(rp, "#evidence");
   check("D-03 (근거 묶음)", /사업연도[^\n]*\(별도\)/.test(ev));
+  // R-25(사람 확인 기준의 자동 보조): 근거 묶음 인쇄 모양을 PDF 로 만들면 A4 1쪽이고 다섯 덩어리 제목과 출처 줄이 들어 있다
+  await rp.evaluate(() => (document.body.dataset.print = "evidence"));
+  await rp.emulateMediaType("print");
+  const evPdf = Buffer.from(await rp.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true }));
+  const evPrint = await rp.evaluate(() => [...document.querySelectorAll(".evidence-print .print-only")].map((e) => e.innerText).join("\n"));
+  await rp.emulateMediaType("screen");
+  await rp.evaluate(() => delete document.body.dataset.print);
+  const evPages = (evPdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  check("R-25 (자동 보조)", evPages === 1 && ["재무·고용 추이", "투자 이력", "특허", "최근 성과", "미팅 전에 정리할 값"].every((t) => evPrint.includes(t)) && evPrint.includes("금융위원회 요약재무제표"), `${evPages}쪽`);
   const qGroups = await rp.$$eval("[data-questions] button.disclosure", (l) => l.map((b) => `${b.textContent.trim()}:${b.getAttribute("aria-expanded")}`));
   check("R-20", qGroups.join() === "사업 개요 2:false,매출과 성장 4:false,경쟁 3:false,팀과 운영 3:false,재무 3:false,앞으로의 계획 4:false", qGroups.join());
   const ddGroups = await rp.$$eval("[data-dd] button.disclosure", (l) => l.map((b) => b.textContent.trim()));
@@ -1032,6 +1052,12 @@ await run("main", async () => {
   }));
   check("PR-01", printView.hidden);
   check("PR-02", printView.lists.every((l) => l.n <= 11) && printView.lists.some((l) => /^외 \d+개$/.test(l.last) || l.n > 5));
+  // PR-04(사람 확인 기준의 자동 보조): 노트 인쇄 PDF 가 A4 2쪽 이하. 사이트 바닥글은 인쇄하지 않는다(노트 바닥에 같은 문장이 있어 두 번 나왔다)
+  const notePdf = Buffer.from(await npr.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true }));
+  const notePages = (notePdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  const siteFoot = await npr.evaluate(() => document.querySelector("body > footer")?.getBoundingClientRect().height ?? 0);
+  check("PR-04 (자동 보조)", notePages >= 1 && notePages <= 2, `${notePages}쪽, 담은 항목 ${ef.saved?.length ?? 0}개, 대조 ${Object.keys(ef.checks ?? {}).length}건`);
+  check("PR-01 (바닥 문장 한 번)", siteFoot === 0 && (await npr.evaluate(() => (document.querySelector("[data-note]")?.innerText.match(/점수나 선정 확률은 만들지 않습니다/g) ?? []).length)) === 1);
   await npr.emulateMediaType("screen");
   const n390 = await open(`/c/${CID}/note`, { ctx, width: 390 });
   await waitText(n390, "회사 핵심 값");
@@ -1095,6 +1121,20 @@ await run("variants", async () => {
   const tile = await page.evaluate(() => [...document.querySelectorAll("ul[aria-label='핵심 값'] li")].find((l) => l.innerText.startsWith("누적 투자"))?.innerText ?? "");
   check("IN-06", tile.includes("$250.0M") && tile.includes("300억원") && !/\$[\d.]+[MB]\s*\+|합계/.test(tile), tile.replace(/\n/g, " "));
   check("D-02", !(await text(page)).match(/₩|원\s*\(\$|\$[\d.,]+억/));
+  // FI-08(사람 확인 기준의 자동 보조): 음수 영업이익 막대가 기준선 아래로 그려지고, 막대 값 글이 연도 글과 겹치지 않는다
+  const fi08 = await page.evaluate(() => {
+    const svg = document.querySelector("#finance svg[role=img]");
+    if (!svg) return null;
+    const base = Number(svg.querySelector("line")?.getAttribute("y1"));
+    const rects = [...svg.querySelectorAll("rect")].filter((r) => Number(r.getAttribute("width")) > 10 && r.getAttribute("y") !== "4");
+    const below = rects.filter((r) => Number(r.getAttribute("y")) >= base - 0.5 && Number(r.getAttribute("height")) > 1).length;
+    const box = (t) => t.getBBox();
+    const years = [...svg.querySelectorAll("text")].filter((t) => /^\d{4}$/.test(t.textContent.trim())).map(box);
+    const values = [...svg.querySelectorAll("text.num")].map(box);
+    const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    return { below, overlaps: values.filter((v) => years.some((y) => hit(v, y))).length };
+  });
+  check("FI-08 (자동 보조)", fi08 && fi08.below >= 1 && fi08.overlaps === 0, JSON.stringify(fi08));
   await sh(page, "money-1180");
   await reset({ scenario: "F-EMPTY" });
   page = await open(`/c/${CID}`);

@@ -544,6 +544,16 @@ def test_revenue_omits_basis_when_the_engine_does_not_know_it():
     assert profile.format_revenue({"value": "5", "unit": "억원", "year": "2024", "basis": "연결"}) == "5억원 (2024, 연결)"
 
 
+def test_revenue_in_plain_won_is_written_in_eok_without_changing_value_or_currency():
+    """엔진이 '248억 152만원'을 원 단위 수로 줄 때 '24801520000.0원'이 그대로 보이지 않게(실제 서버 검증에서 찾음)."""
+    assert profile.format_revenue({"value": "24801520000.0", "unit": "원", "currency": "KRW", "year": "2025"}) == "248.0억원 (2025)"
+    assert profile.format_revenue({"value": "-1,500,000,000", "unit": "원", "year": "2024", "basis": "별도"}) == "-15.0억원 (2024, 별도)"
+    assert profile.format_revenue({"value": "36000000", "unit": "원"}) == "0.4억원"
+    assert profile.format_revenue({"value": "5000000", "unit": "원"}) == "500만원"
+    assert profile.format_revenue({"value": "약 250억", "unit": "원", "year": "2025"}) == "약 250억원 (2025)"  # 수가 아니면 그대로
+    assert profile.format_revenue({"value": "12000000", "unit": "USD"}) == "12000000USD"  # 원이 아니면 바꾸지 않는다
+
+
 def test_conflicting_or_inferred_values_are_shown_but_never_autofilled():
     run = {"analysis": {"facts": [
         fact("profile", "설립일", "2012년 9월", status="conflicting"),

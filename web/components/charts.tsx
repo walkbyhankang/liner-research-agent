@@ -4,7 +4,7 @@
 // 값은 막대·점 옆에 직접 쓰고(마우스 올리기에 두지 않는다), 흑백 인쇄에서도 칠과 빗금으로 구분된다.
 // 같은 숫자는 2층 표에 있고, 차트마다 숫자를 담은 요약 문장을 화면 읽기 이름으로 단다.
 import { useId } from "react";
-import { eok, moneyText, num } from "@/lib/format";
+import { eok, moneyText, num, shortCompany, wrapSvgText } from "@/lib/format";
 
 const W = 300;
 const INK = "var(--color-ink)";
@@ -27,12 +27,14 @@ export type FinanceRow = { year: string; revenue: number | null; operatingIncome
 /** 최근 사업연도 매출(칠)과 영업이익(빗금). 음수는 기준선 아래. 없는 연도는 0 막대가 아니라 "자료 없음" */
 export function FinanceBars({ rows, small = false, label }: { rows: FinanceRow[]; small?: boolean; label?: string }) {
   const hid = useId().replace(/:/g, "");
-  const H = small ? 140 : 180;
-  const top = 34;
-  const bottom = H - 24;
   const vals = rows.flatMap((r) => [r.revenue, r.operatingIncome]).filter((v): v is number => v !== null);
   const max = Math.max(0, ...vals);
   const min = Math.min(0, ...vals);
+  // 음수 막대의 값 글은 막대 밑에 붙는다. 가장 낮은 막대 밑에도 글 한 줄 자리를 남겨 연도 글과 겹치지 않게 한다
+  const negRoom = min < 0 ? 16 : 0;
+  const H = (small ? 140 : 180) + negRoom;
+  const top = 34;
+  const bottom = H - 24 - negRoom;
   const span = max - min || 1;
   const y = (v: number) => top + ((max - v) / span) * (bottom - top);
   const base = y(0);
@@ -205,30 +207,42 @@ export type InvestBar = { name: string; amount: number; basis: string; mine: boo
 /** 통화마다 따로 그린다(환산하지 않음). 우리 회사는 잉크, 경쟁사는 빗금. 금액이 없는 회사는 막대 없이 아래에 이름만 */
 export function InvestBars({ currency, bars }: { currency: string; bars: InvestBar[] }) {
   const hid = useId().replace(/:/g, "");
-  const rowH = 40;
-  const H = bars.length * rowH + 8;
   const max = Math.max(...bars.map((b) => b.amount), 1);
   const labelW = 86;
+  // 기준 글("라운드 금액 합계 (금액이 있는 라운드 1건만 더함)")은 그림 폭을 넘으면 잘리므로 낱말 단위로 줄을 나누고, 줄 수만큼 행을 높인다
+  const rows = bars.map((b) => ({ b, lines: wrapSvgText(b.basis, W - labelW) }));
+  const rowTop: number[] = [];
+  let acc = 6;
+  for (const r of rows) {
+    rowTop.push(acc);
+    acc += 26 + 15 * Math.max(1, r.lines.length);
+  }
+  const H = acc + 2;
   const summary = `누적 투자(${currency}): ${bars.map((b) => `${b.name} ${moneyText(b.amount, currency)} (${b.basis})`).join(", ")}`;
   return (
     <svg role="img" aria-label={summary} viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full">
       <defs>
         <Hatch id={hid} />
       </defs>
-      {bars.map((b, i) => {
+      {rows.map(({ b, lines }, i) => {
         const len = Math.max(2, ((W - labelW - 70) * b.amount) / max);
-        const yy = i * rowH + 6;
+        const yy = rowTop[i];
+        const short = shortCompany(b.name);
         return (
           <g key={b.name}>
             <text x="0" y={yy + 14} fontSize="12" fill={INK} fontWeight={b.mine ? 600 : 400}>
-              {b.name.length > 7 ? `${b.name.slice(0, 7)}…` : b.name}
+              {short.length > 7 ? `${short.slice(0, 7)}…` : short}
             </text>
             <rect x={labelW} y={yy + 3} width={len} height="14" fill={b.mine ? INK : `url(#${hid})`} stroke={INK} strokeWidth={b.mine ? 0 : 1} />
             <text x={labelW + len + 6} y={yy + 14} fontSize="12" fill={INK} className="num">
               {moneyText(b.amount, currency)}
             </text>
             <text x={labelW} y={yy + 32} fontSize="12" fill={SUB}>
-              {b.basis}
+              {lines.map((l, j) => (
+                <tspan key={j} x={labelW} dy={j ? 15 : 0}>
+                  {l}
+                </tspan>
+              ))}
             </text>
           </g>
         );

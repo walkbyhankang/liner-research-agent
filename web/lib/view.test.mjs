@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { SCREEN_SECTIONS, TOC_TEXT, announcements, errorSentence, isSlow, keyTiles, overlay, phaseOf, retryState, stillChecking, summaryLine, unavailableScreens, visibleRivals } from "./view.ts";
+import { SCREEN_SECTIONS, TOC_TEXT, announcements, errorSentence, isSlow, keyTiles, overlay, phaseOf, retryState, rivalsCost, stillChecking, summaryLine, unavailableScreens, visibleRivals } from "./view.ts";
+import { DEFAULT_ESTIMATES } from "./contract.ts";
 
 const fx = (name) => JSON.parse(readFileSync(new URL(`../../fixtures/analysis/${name}.json`, import.meta.url), "utf8"));
 const job = (name, i = 0) => fx(name).exchanges.filter((e) => e.method === "GET" && /^\/api\/(analysis\/[0-9a-f]{32}|company\/[^/]+\/analysis)$/.test(e.path))[i].response;
@@ -102,4 +103,13 @@ test("새로 분석 중에는 이전 결과를 두고, 끝난 단락만 바꾼�
   const o2 = overlay(base, lost);
   assert.equal(o2.job.sections.official, base.sections.official);
   assert.equal(o2.kept.get("official").reason, "정한 시간 안에 응답이 오지 않았습니다.");
+});
+
+test("깊이 비교 비용 줄은 고른 곳 수 기준이고, 5곳 기준 값은 서버 상한(고정 4 + 한 곳당 6)과 맞는다", () => {
+  const est = DEFAULT_ESTIMATES.sections.rivals_deep;
+  assert.deepEqual(rivalsCost(est, 5), { liner: 34, text: "Liner 약 34회 (고른 5곳 기준, 한 곳당 약 6회)" });
+  assert.equal(rivalsCost(est, 2).liner, 16); // growth.limits.section_caps("rivals_deep", rivals=2) 의 Liner 합
+  assert.equal(rivalsCost(est, 1).liner, 10);
+  assert.equal(rivalsCost(est, 9).liner, 34); // 서버는 5곳까지만 받는다
+  assert.equal(rivalsCost({ liner: 34, perRival: null }, 2).text, "Liner 약 34회 (경쟁사 5곳 기준)");
 });

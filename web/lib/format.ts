@@ -94,3 +94,22 @@ export const num = (n: number) => whole.format(n);
 
 /** "YYYY-MM-DD" → "YYYYMMDD" */
 export const compactDay = (day: string) => day.replace(/-/g, "").slice(0, 8);
+
+/** 차트 이름표: "주식회사"·"(주)"를 떼어 짧은 칸에 회사 이름이 남게 한다(전체 이름은 화면 읽기 요약과 표에 있다) */
+export const shortCompany = (name: string) => name.replace(/^\s*(주식회사|\(주\)|㈜)\s*|\s*(주식회사|\(주\)|㈜)\s*$/g, "").trim() || name;
+
+/** SVG 12px 글을 대략 한글 12, 그 밖 7 단위로 재어 maxW 안에 들도록 낱말 단위로 줄을 나눈다(SVG 글은 저절로 줄바꿈하지 않는다) */
+export function wrapSvgText(text: string, maxW: number): string[] {
+  const width = (s: string) => [...s].reduce((n, ch) => n + (/[ㄱ-힣]/.test(ch) ? 12 : 7), 0);
+  const out: string[] = [];
+  let cur = "";
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const next = cur ? `${cur} ${word}` : word;
+    if (cur && width(next) > maxW) {
+      out.push(cur);
+      cur = word;
+    } else cur = next;
+  }
+  if (cur) out.push(cur);
+  return out.length ? out : [""];
+}

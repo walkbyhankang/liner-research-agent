@@ -964,9 +964,9 @@ ESTIMATES: Estimates = {
         "funding_history": {"seconds": 10, "liner": 2, "perRival": None},
         "news": {"seconds": 20, "liner": 3, "perRival": None},
         "patents": {"seconds": 15, "liner": 2, "perRival": None},
-        "papers": {"seconds": None, "liner": 7, "perRival": None},
-        "rivals_deep": {"seconds": None, "liner": 34, "perRival": 7},
-        "sales": {"seconds": None, "liner": 0, "perRival": None},
+        "papers": {"seconds": 30, "liner": 7, "perRival": None},
+        "rivals_deep": {"seconds": None, "liner": 34, "perRival": 6},
+        "sales": {"seconds": 10, "liner": 0, "perRival": None},
     },
 }
 

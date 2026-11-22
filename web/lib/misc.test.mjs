@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import test from "node:test";
-import { ageLabel, byCurrencyTexts, daysSince, elapsedText, eok, fmtTime, isStale, moneyText, safeUrl, stageKo, wonDisplay, yearsSince } from "./format.ts";
+import { ageLabel, byCurrencyTexts, daysSince, elapsedText, eok, fmtTime, isStale, moneyText, safeUrl, shortCompany, stageKo, wonDisplay, wrapSvgText, yearsSince } from "./format.ts";
 import { normName, userRivalKey } from "./names.ts";
 import { initialConditions, relatedTo, rivalBackers, splitExisting } from "./funding.ts";
 import { bidDeadline, gaps, sortBids, sortRows, verdictCounts } from "./review.ts";
@@ -40,6 +40,18 @@ test("시각·업력·오래된 분석", () => {
   assert.equal(isStale("2026-10-08T20:46:24+09:00", now), true);
   assert.equal(isStale("2026-11-22T20:46:24+09:00", now), false);
   assert.equal(elapsedText(72), "1분 12초");
+});
+
+test("누적 투자 막대의 기준 글은 그림 폭 안에서 줄을 나누고, 이름표는 법인 형태를 뗀다(실제 서버 검증에서 찾음)", () => {
+  const basis = "라운드 금액 합계 (금액이 있는 라운드 1건만 더함)";
+  const lines = wrapSvgText(basis, 214);
+  assert.ok(lines.length >= 2, lines.join("|"));
+  assert.equal(lines.join(" "), basis); // 글을 버리지 않는다
+  assert.deepEqual(wrapSvgText("People Data Labs 누적액", 214), ["People Data Labs 누적액"]);
+  assert.equal(shortCompany("주식회사 가나다테크"), "가나다테크");
+  assert.equal(shortCompany("가나다테크 주식회사"), "가나다테크");
+  assert.equal(shortCompany("(주)가나다"), "가나다");
+  assert.equal(shortCompany("주식회사"), "주식회사");
 });
 
 test("http·https 가 아닌 주소는 링크로 만들지 않는다(G-12)", () => {
