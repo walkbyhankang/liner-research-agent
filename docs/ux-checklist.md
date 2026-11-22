@@ -1,7 +1,9 @@
-# 사용자 경험 체크리스트: 중소·벤처기업 자금 찾기
+# 사용자 경험 체크리스트: 중소·벤처기업 자금 찾기 (옛 펀딩노트 점검 목록)
 
+> **옛 펀딩노트 화면의 점검 기록이다.** 그 화면과 아래 측정 도구는 성장노트로 바꾸며 지웠다. 지금 화면의 완료 기준은 `docs/ux/acceptance.md`, 자동 점검은 `web/scripts/ux-check.mjs`(방법은 `web/README.md`)를 본다.
+>
 > 2026-11-21. 경영자 시나리오 → 체크리스트 → 브라우저 측정 → 개선 → 재측정 순서로 진행했다.
-> 측정 도구: `web/scripts/ux-audit.mjs`(지표), `web/scripts/ux-scenarios.mjs`(시나리오 재현). 설치된 Chrome을 `puppeteer-core`로 조작한다.
+> 측정 도구(지금은 지움): `web/scripts/ux-audit.mjs`(지표), `web/scripts/ux-scenarios.mjs`(시나리오 재현). 설치된 Chrome을 `puppeteer-core`로 조작했다.
 
 ## 1. 경영자가 빨리 알고 싶은 것
 
