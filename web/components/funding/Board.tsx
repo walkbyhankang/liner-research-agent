@@ -75,13 +75,15 @@ function Deadline({ p, today }: { p: Program; today: string }) {
   const pd = p.period;
   if (pd.status === "접수 중") {
     const d = dday(pd.end, today) ?? 0;
-    return <span className={`num text-sm ${d <= 7 ? "font-semibold text-amber" : "font-medium"}`}>{d === 0 ? `오늘 마감, ${shortDate(pd.end)} 마감` : `D-${d}, ${shortDate(pd.end)} 마감`}</span>;
+    // 7일 안 마감은 굵게만. 호박색은 엇갈림·확인 필요에만 쓴다
+    return <span className={`num text-sm ${d <= 7 ? "font-bold text-ink" : "font-medium"}`}>{d === 0 ? `오늘 마감, ${shortDate(pd.end)} 마감` : `D-${d}, ${shortDate(pd.end)} 마감`}</span>;
   }
   if (pd.status === "접수 예정") return <span className="num text-sm">{shortDate(pd.start)} 접수 시작</span>;
   return <span className="text-sm text-sub">{pd.raw || "신청기간 미기재"}</span>;
 }
 
-const mark = "inline-flex items-center rounded border border-rule px-1.5 text-xs leading-5 text-sub";
+/** 분류·지역·개수 꼬리표. 상태 낱말과 섞이지 않게 테두리 없는 보조 글(globals.css .meta) */
+const mark = "meta";
 
 export type SaveSpec = { on: boolean; toggle: () => void; onText: string; offText: string; sr: string };
 
@@ -101,11 +103,11 @@ export function ProgramCard({ m, today, related, save, foot }: { m: ProgramMatch
   const region = m.local && p.regions.includes("전국") ? p.agencyRegion ?? "전국" : p.regions.join(", ");
   return (
     <article className={`card p-4 ${save.on ? "border-ledger" : ""}`} data-program={p.id}>
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className={mark}>{p.sub || p.category}</span>
         <span className={mark}>{region}</span>
-        {related && <span className="inline-flex items-center rounded bg-ledger-soft px-1.5 text-xs font-semibold leading-5 text-ledger">회사 사업과 관련</span>}
-        {!m.ok && <span className="tag bg-wash font-semibold text-ink">{m.excluded === "지역" ? "지금 조건과 다른 지역" : "지금 조건과 다른 대상"}</span>}
+        {related && <span className="tag">회사 사업과 관련</span>}
+        {!m.ok && <span className="tag">{m.excluded === "지역" ? "지금 조건과 다른 지역" : "지금 조건과 다른 대상"}</span>}
         <span className="ml-auto">
           <Deadline p={p} today={today} />
         </span>
@@ -127,7 +129,7 @@ export function ProgramCard({ m, today, related, save, foot }: { m: ProgramMatch
           }}
         >
           {open ? "접기" : "자세히"}
-          {!open && m.checks.length > 0 && <span className="num rounded bg-amber-soft px-1.5 text-xs text-amber">확인 {m.checks.length}</span>}
+          {!open && m.checks.length > 0 && <span className="num text-xs font-medium text-sub">확인 {m.checks.length}</span>}
         </button>
         <span className="ml-auto flex gap-2">
           <SaveButton s={save} />
@@ -190,14 +192,14 @@ export function GpCard({ g, existing, rivals, save, showBadges = true }: { g: Gp
   const first = g.funds[0];
   return (
     <article className={`card p-4 ${save.on ? "border-ledger" : ""}`} data-gp={g.gp}>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {showBadges && existing && <span className="inline-flex rounded bg-wash px-1.5 text-xs font-semibold leading-5">이미 투자함</span>}
-        {showBadges && rivals.length > 0 && <span className="inline-flex rounded bg-amber-soft px-1.5 text-xs font-semibold leading-5 text-amber">경쟁사에 투자</span>}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {showBadges && existing && <span className="tag">이미 투자함</span>}
+        {showBadges && rivals.length > 0 && <span className="tag">경쟁사에 투자</span>}
         <span className={mark}>펀드 {g.funds.length}개</span>
         <span className="num ml-auto text-sm">최근 결성 {g.latestYear}년</span>
       </div>
       <h3 className="mt-2 text-lg font-semibold">{g.gp}</h3>
-      {rivals.length > 0 && <p className="text-sm text-amber">{rivals.join(", ")}에 투자한 곳입니다.</p>}
+      {rivals.length > 0 && <p className="text-sm">{rivals.join(", ")}에 투자한 곳입니다.</p>}
       <p className="clamp-2 mt-1 text-sm">{first.name}</p>
       <p className="num text-xs text-sub">
         출자 분야 {first.field}, 만기 {first.maturity}
@@ -260,7 +262,8 @@ export function CardList<T>({ items, render, empty, keyOf, listClass = "mt-3 spa
 export function LaneHead({ lane, title, line }: { lane: "debt" | "equity"; title: string; line: string }) {
   return (
     <div className={`${lane === "debt" ? "lane-debt" : "lane-equity"} pt-3`}>
-      <h2 className="hidden text-lg font-bold lg:block">{title}</h2>
+      {/* 좁은 화면은 갈래 탭이 제목을 대신 보인다. 제목 순서(h1 → h2 → h3)는 화면 읽기에 남긴다 */}
+      <h2 className="sr-only text-lg font-bold lg:not-sr-only">{title}</h2>
       <p className="text-sm text-sub">{line}</p>
     </div>
   );

@@ -118,10 +118,11 @@ export function NpsLine({ points, small = false }: { points: NpsPoint[]; small?:
           {pts.map((p) => (
             <circle key={p.month} cx={x(idx(p.month))} cy={y(p.members)} r="2.4" fill={INK} />
           ))}
-          <text x={x(idx(first.month))} y={y(first.members) - 8} fontSize="12" fill={INK} className="num">
+          {/* 값 이름이 선과 겹쳐도 읽히게 흰 테두리를 두른다 */}
+          <text x={x(idx(first.month))} y={y(first.members) - 8} fontSize="12" fill={INK} stroke="#fff" strokeWidth="4" paintOrder="stroke" strokeLinejoin="round" className="num">
             {num(first.members)}명
           </text>
-          <text x={x(idx(last.month))} y={y(last.members) - 8} fontSize="12" fill={INK} textAnchor="end" fontWeight="600" className="num">
+          <text x={x(idx(last.month))} y={y(last.members) - 8} fontSize="12" fill={INK} stroke="#fff" strokeWidth="4" paintOrder="stroke" strokeLinejoin="round" textAnchor="end" fontWeight="600" className="num">
             {num(last.members)}명
           </text>
           <text x={x(0)} y={bottom + 16} fontSize="12" fill={SUB}>{points[0].month}</text>

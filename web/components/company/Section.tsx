@@ -39,7 +39,8 @@ export function SectionFrame({
   const fresh = env.analyzedAt && job.analyzedAt && env.analyzedAt > job.analyzedAt && phase !== "loading";
 
   return (
-    <section id={id} aria-labelledby={`h-${id}`} aria-busy={phase === "loading" || undefined} className="anchor border-t border-rule pb-8 pt-6">
+    // 단락 경계는 잉크색 1px 선과 넉넉한 위 여백으로, 단락 안의 펼치기 줄·목록 선(회색 1px)과 구분한다
+    <section id={id} aria-labelledby={`h-${id}`} aria-busy={phase === "loading" || undefined} className="anchor border-t border-ink/60 pb-10 pt-8 sm:pt-10">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <h2 id={`h-${id}`} data-anchor tabIndex={-1} className="flex flex-wrap items-center gap-2 text-base font-bold">

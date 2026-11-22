@@ -135,22 +135,45 @@ function NotAnalyzed() {
 
 function Toc({ job }: { job: AnalysisJob }) {
   const [current, setCurrent] = useState<ScreenKey>("overview");
+  const listRef = useRef<HTMLOListElement>(null);
+  // 지금 단락: 위에 붙은 줄 바로 아래(약 140px)를 지난 마지막 단락. 맨 위면 개요, 맨 아래면 경쟁사
   useEffect(() => {
-    const els = SCREEN_SECTIONS.map((s) => document.getElementById(s.key)).filter((e): e is HTMLElement => Boolean(e));
-    const io = new IntersectionObserver(
-      (entries) => {
-        const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-        if (top) setCurrent(top.target.id as ScreenKey);
-      },
-      { rootMargin: "-120px 0px -55% 0px" },
-    );
-    els.forEach((e) => io.observe(e));
-    return () => io.disconnect();
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const atEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+      let cur: ScreenKey = SCREEN_SECTIONS[0].key;
+      for (const s of SCREEN_SECTIONS) {
+        const el = document.getElementById(s.key);
+        if (el && (atEnd || el.getBoundingClientRect().top <= 140)) cur = s.key;
+      }
+      setCurrent(cur);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [job.jobId]);
+  // 좁은 화면의 가로 목차는 지금 단락이 보이게 따라 민다(세로 스크롤은 건드리지 않는다)
+  useEffect(() => {
+    const ol = listRef.current;
+    const a = ol?.querySelector<HTMLElement>("[aria-current=location]");
+    if (!ol || !a || ol.scrollWidth <= ol.clientWidth) return;
+    const r = a.getBoundingClientRect();
+    const o = ol.getBoundingClientRect();
+    if (r.left < o.left || r.right > o.right) ol.scrollBy({ left: r.left - o.left - 16 });
+  }, [current]);
   const items = SCREEN_SECTIONS.map((s) => ({ ...s, text: TOC_TEXT[phaseOf(job.sections[s.primary])] }));
   return (
     <nav aria-label="단락 목차" className="no-print sticky top-[49px] z-20 -mx-4 border-b border-rule bg-paper px-4 sm:-mx-6 sm:px-6 lg:top-[65px] lg:mx-0 lg:mt-6 lg:self-start lg:border-b-0 lg:px-0">
-      <ol className="flex gap-1 overflow-x-auto py-1 lg:flex-col lg:gap-0 lg:overflow-visible lg:py-0">
+      <ol ref={listRef} className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-0 lg:overflow-visible">
         {items.map((s) => (
           <li key={s.key} className="shrink-0">
             <a
@@ -161,12 +184,13 @@ function Toc({ job }: { job: AnalysisJob }) {
                 e.preventDefault();
                 goSection(s.key);
               }}
-              className={`flex min-h-11 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm lg:justify-between lg:rounded-none lg:border-l-2 lg:px-3 ${
-                current === s.key ? "font-semibold text-ink lg:border-ledger" : "text-sub lg:border-rule"
+              className={`flex min-h-12 items-center gap-2 whitespace-nowrap px-3 text-sm lg:min-h-11 lg:justify-between lg:border-l-2 lg:px-3 ${
+                current === s.key ? "font-semibold text-ink shadow-[inset_0_-3px_0_var(--color-ledger)] lg:border-ledger lg:shadow-none" : "text-sub lg:border-rule"
               }`}
             >
               <span>{s.label}</span>
-              <span aria-hidden className={`text-xs ${s.text === "미확보" || s.text === "일부 미확보" ? "font-semibold text-amber" : "text-sub"}`}>
+              {/* 좁은 화면에서는 끝난 단락의 "준비됨"을 빼고 확인 중·미확보만 글로 보인다. 화면 읽기 이름에는 늘 있다 */}
+              <span aria-hidden className={`text-xs ${s.text === "미확보" || s.text === "일부 미확보" ? "font-semibold text-amber" : "text-sub"} ${s.text === "준비됨" ? "hidden lg:inline" : ""}`}>
                 {s.text}
               </span>
             </a>
@@ -290,14 +314,18 @@ function TileCell({ t }: { t: Tile }) {
   );
 }
 
-/** "56.7억원"에서 단위를 한 단계 작게: 숫자와 단위는 붙여 둔다 */
+/**
+ * "56.7억원"에서 단위를 한 단계 작게: 숫자와 단위는 붙여 둔다.
+ * 웹 조사 값의 "(2025)" 같은 뒤 괄호는 큰 글로 꺾이지 않게 숫자 바로 밑 기준 줄 크기로 내린다(값 글은 그대로)
+ */
 function BigNumber({ text }: { text: string }) {
-  const m = /^([^\d]*[\d.,]+)(\D*)$/.exec(text);
-  if (!m || !m[2]) return <>{text}</>;
+  const m = /^([^\d]*[\d.,]+)(\D*?)(\s*\([^)]*\))?$/.exec(text);
+  if (!m || (!m[2] && !m[3])) return <>{text}</>;
   return (
     <>
       {m[1]}
       <span className="text-lg font-medium">{m[2]}</span>
+      {m[3] && <span className="mt-1 block text-sm font-medium tracking-normal text-sub">{m[3].trim()}</span>}
     </>
   );
 }

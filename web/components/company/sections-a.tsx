@@ -133,7 +133,7 @@ export function Overview() {
             </ul>
           </Disclosure>
         )}
-        <Disclosure text="기업 정보 더 보기" memoryKey={k("corp")}>
+        <Disclosure text="기업 정보 더 보기" openText="기업 정보 접기" memoryKey={k("corp")}>
           <dl className="divide-y divide-rule text-sm">
             {corp ? (
               <>
@@ -304,7 +304,8 @@ export function Finance() {
       summary={summaryLine(job, "finance")}
       unavailableBody={webLine}
     >
-      <div className="grid gap-8 md:grid-cols-2">
+      {/* 재무가 미확보면 그 사유를 한 줄로 먼저 두고, 국민연금 차트가 빈 반쪽 옆에 끼지 않게 한 단으로 둔다 */}
+      <div className={!loading && !fin.length ? "space-y-6" : "grid gap-8 md:grid-cols-2"}>
         <figure>
           <figcaption className="mb-2 text-sm font-semibold">매출과 영업이익</figcaption>
           {loading ? (
@@ -315,10 +316,10 @@ export function Finance() {
               <SourceLine word="confirmed" label="금융위원회 요약재무제표 (공공 API)" detail={basis} />
             </>
           ) : (
-            <p className="rounded-md bg-wash p-4 font-medium">미확보: {r?.financialsReason ?? "금융위원회 재무 자료 없음"}</p>
+            <p className="rounded-md bg-wash px-4 py-3 font-medium">미확보: {r?.financialsReason ?? "금융위원회 재무 자료 없음"}</p>
           )}
         </figure>
-        <figure>
+        <figure className={!loading && !fin.length ? "max-w-[360px]" : ""}>
           <figcaption className="mb-2 text-sm font-semibold">국민연금 가입자 수 (직원 수와 다릅니다)</figcaption>
           {loading ? (
             <Placeholder h={170} />

@@ -47,7 +47,7 @@ function Pick({ label, value, options, onChange }: { label: string; value: strin
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="mx-1 my-1 min-h-11 cursor-pointer appearance-none rounded-md border-b-2 border-ledger bg-ledger-soft px-2 font-semibold text-ledger outline-none [field-sizing:content]"
+      className="pick mx-1 my-1 min-h-11 cursor-pointer appearance-none rounded-none border-b-2 border-ledger bg-ledger-soft pl-2 font-semibold text-ledger outline-none [field-sizing:content]"
     >
       {options.map((o) => (
         <option key={o.id} value={o.id}>
@@ -163,7 +163,7 @@ export function BrowseFunding() {
         }
       />
       <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-16 pt-6 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-ledger-soft px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-rule px-4 py-3">
           <p>회사 이름을 넣으면 조건을 채우고, 공고문 자격 대조까지 이어집니다.</p>
           <Link href="/" className="btn btn-primary">
             회사 분석 시작
@@ -189,6 +189,10 @@ export function BrowseFunding() {
           <>
             <div className="mt-4">
               <QuickFilters only={only} setOnly={setOnly} counts={result.counts} region={prof.region} />
+            </div>
+            {/* 찾기·정렬은 목록 앞에 둔다(카드를 다 지나야 닿지 않게) */}
+            <div className="mt-2">
+              <FilterPanel need={prof.need} q={q} setQ={setQ} sort={sort} setSort={setSort} memoryKey="browse:filter" />
             </div>
             <LaneTabs lane={lane} setLane={setLane} debt={result.list.length} equity={result.gps.length} />
             <div className="mt-4 grid gap-8 lg:grid-cols-2">
@@ -238,7 +242,6 @@ export function BrowseFunding() {
             </section>
 
             <div className="mt-6">
-              <FilterPanel need={prof.need} q={q} setQ={setQ} sort={sort} setSort={setSort} memoryKey="browse:filter" />
               <BoardFoot meta={data.meta} memoryKey="browse" />
             </div>
           </>

@@ -234,9 +234,10 @@ function EventRow({ e, memoryKey }: { e: NonNullable<AnalysisJob["sections"]["ne
     <DetailRow
       memoryKey={memoryKey}
       head={
-        <span className="grid grid-cols-[6.5em_1fr] gap-x-3">
-          <span className="num text-sm text-sub">{e.date ?? "날짜 미상"}</span>
-          <span>
+        // 휴대폰에서는 날짜를 분류와 한 줄에 두고 제목은 전체 폭을 쓴다(날짜 칸 때문에 제목이 3줄로 꺾이지 않게)
+        <span className="block sm:grid sm:grid-cols-[6.5em_1fr] sm:gap-x-3">
+          <span className="num text-sm text-sub max-sm:mr-2">{e.date ?? "날짜 미상"}</span>
+          <span className="max-sm:contents">
             <span className="text-sm text-sub">{e.category}</span>
             <span className="clamp-2 block font-medium">{e.title}</span>
           </span>
@@ -637,7 +638,8 @@ function YesNo({ k, name }: { k: string; name: string }) {
   const c = useCompany();
   const v = c.local.rivalChoices.choices[k];
   return (
-    <div role="group" aria-label={`${name} 경쟁사 고르기`} className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+    // 넓은 화면에서는 세로선으로 줄 자세히(꺾쇠)와 떼어, 누르는 곳 셋이 한 덩어리로 보이지 않게 한다
+    <div role="group" aria-label={`${name} 경쟁사 고르기`} className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:self-center sm:border-l sm:border-rule sm:pl-4">
       <button type="button" className={`btn ${v === "yes" ? "btn-pressed" : ""}`} aria-pressed={v === "yes"} onClick={() => setRivalChoice(c.cid, k, v === "yes" ? null : "yes")}>
         맞음
       </button>

@@ -118,7 +118,8 @@ function FundingInner() {
       {cond && (
         <div className="mt-4">
           <p className="text-sm font-semibold">회사 분석 값으로 채운 조건</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          {/* 휴대폰에서는 조건 칩 4개를 한 줄로 두고 가로로 밀어 본다(4줄로 쌓여 목록이 밀리지 않게) */}
+          <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 py-1.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&>*]:shrink-0">
             <CondSelect label="지역" value={cond.region} options={regionOptions.map((r) => ({ id: r, label: r }))} onChange={(v) => set("region", v)} chosen={chosen.region} word={regionWord} />
             <CondSelect label="기업 유형" value={cond.biz} options={bizTypes} onChange={(v) => set("biz", v as BizTypeId)} chosen={chosen.biz ?? Boolean(c.local.edits.bizType)} />
             <CondSelect label="필요한 지원" value={cond.need} options={needs} onChange={(v) => set("need", v as Conditions["need"])} chosen={chosen.need} />
@@ -175,6 +176,10 @@ function FundingInner() {
           <div className="mt-4">
             <QuickFilters only={only} setOnly={(o) => setOnly(o)} counts={result.counts} region={prof.region} />
           </div>
+          {/* 찾기·정렬은 목록 앞에 둔다(카드를 다 지나야 닿지 않게) */}
+          <div className="mt-2">
+            <FilterPanel need={prof.need} q={q} setQ={setQ} sort={sort} setSort={setSort} memoryKey={`${c.cid}:fu:filter`} />
+          </div>
           <LaneTabs lane={lane} setLane={setLane} debt={result.list.length} equity={result.gps.length} />
           <div className="mt-4 grid gap-8 lg:grid-cols-2">
             <section aria-label="빌리는 돈" className={lane === "debt" ? "" : "hidden lg:block"}>
@@ -210,7 +215,6 @@ function FundingInner() {
           </div>
 
           <div className="mt-8">
-            <FilterPanel need={prof.need} q={q} setQ={setQ} sort={sort} setSort={setSort} memoryKey={`${c.cid}:fu:filter`} />
             <Disclosure text="조건은 어디서 왔나요?" memoryKey={`${c.cid}:fu:from`}>
               <ul className="space-y-1 py-2 text-sm">
                 <li>

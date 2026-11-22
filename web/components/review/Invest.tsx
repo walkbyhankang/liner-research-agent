@@ -98,8 +98,8 @@ function GpReviewCard({ item }: { item: SavedItem }) {
       {existing && <p className="mb-2 text-sm font-medium">이미 투자한 곳입니다. 후속 투자나 소개를 부탁할 때 쓰세요.</p>}
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-lg font-semibold">{gp}</h3>
-        {existing && <span className="inline-flex rounded bg-wash px-1.5 text-xs font-semibold leading-5">이미 투자함</span>}
-        {rivals.length > 0 && <span className="inline-flex rounded bg-amber-soft px-1.5 text-xs font-semibold leading-5 text-amber">경쟁사에 투자</span>}
+        {existing && <span className="tag">이미 투자함</span>}
+        {rivals.length > 0 && <span className="tag">경쟁사에 투자</span>}
       </div>
       <p className="num text-sm text-sub">
         펀드 {String(item.meta.funds ?? "")}개, 최근 결성 {String(item.meta.latestYear ?? "")}년

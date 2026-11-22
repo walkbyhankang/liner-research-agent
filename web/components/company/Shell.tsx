@@ -3,7 +3,7 @@
 // 회사 화면 틀: 머리줄과 단계 메뉴(screens 1.1), 회사 표시줄(1.2), 화면 위 띠(1.10), 값 고치기 창과 새로 분석 확인 창.
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { createContext, useContext, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BIZ_LABEL, isBizType } from "@/lib/company-values";
 import { ageLabel, daysSince, elapsedText, fmtDay, fmtTime, isStale, yearsSince } from "@/lib/format";
 import { reviewCount, setEdit } from "@/lib/local";
@@ -223,6 +223,19 @@ function CompanyBar() {
   const name = job?.company.name ?? c.knownName ?? "회사";
   const edits = c.local.edits;
   const editBtn = useRef<HTMLButtonElement>(null);
+  const barRef = useRef<HTMLElement>(null);
+
+  // 칩 상자는 같은 칩을 다시 누르거나 Esc 로 닫는다. Esc 면 초점을 연 칩으로 돌린다
+  useEffect(() => {
+    if (!openChip) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
+      barRef.current?.querySelector<HTMLElement>("[aria-controls=company-chip-box][aria-expanded=true]")?.focus();
+      setChipState(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [openChip]);
 
   const m = job?.merged;
   const regionEdit = edits.region?.value;
@@ -259,13 +272,44 @@ function CompanyBar() {
     </button>
   );
 
+  // 회사 분석이 아닌 단계(자금 조달·심사 준비·판로·노트)에서는 표시줄을 한 줄로 줄인다.
+  // 그 화면의 주인공(카드·문서)이 첫 화면에 들어오게 하려는 것이다. 사실 칩과 예시 안내 문장은 회사 분석 화면에서 본다.
+  if (!isAnalysis) {
+    return (
+      <section aria-label="회사" className="no-print border-b border-rule">
+        <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 sm:px-6">
+          <p className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="text-lg font-semibold">{name}</span>
+            {job?.isExample && <span className="tag">예시 회사</span>}
+            <span className="num whitespace-nowrap text-sm text-sub" aria-live="off">
+              {timeText}
+            </span>
+          </p>
+          <div className="flex gap-2">
+            <button type="button" ref={editBtn} className="btn px-3 sm:px-4" onClick={(e) => openEdit(e.currentTarget)} disabled={!job}>
+              값 고치기
+            </button>
+            {job && !job.isExample && (
+              <button type="button" className="btn px-3 sm:px-4" onClick={openRefresh} disabled={running}>
+                새로 분석
+              </button>
+            )}
+          </div>
+          {job?.analyzedAt && isStale(job.analyzedAt) && !running && (
+            <p className="w-full pb-1 text-sm font-medium text-amber">{daysSince(job.analyzedAt)}일 전 분석입니다. 최근 자료를 보려면 새로 분석하세요.</p>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section aria-label="회사" className="no-print border-b border-rule">
+    <section ref={barRef} aria-label="회사" className="no-print border-b border-rule">
       <div className="mx-auto max-w-[1200px] px-4 py-4 sm:px-6">
         <div className="cbar">
           <div className="cbar-name flex flex-wrap items-baseline gap-x-3 gap-y-1">
             {isAnalysis ? <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl">{name}</h1> : <p className="text-xl font-semibold">{name}</p>}
-            {job?.isExample && <span className="tag text-sm">예시 회사</span>}
+            {job?.isExample && <span className="tag">예시 회사</span>}
           </div>
           <div className="cbar-chips flex flex-wrap gap-2">
             {chip("region", regionEdit ?? (m?.region && m.region.status !== "unavailable" ? String(m.region.display) : m?.region ? "지역 미확보" : "지역 확인 중"), regionEdit ? <StatusWord w="edited" /> : null)}

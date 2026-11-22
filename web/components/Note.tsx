@@ -2,7 +2,7 @@
 
 // 노트(screens 8절): 상담·미팅 전에 한 장으로 정리해 인쇄하거나 나눈다. 노트는 내보내는 문서라 출처를 값 옆에 그대로 쓴다.
 import Link from "next/link";
-import { useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { fmtMD, fmtTime, isStale } from "@/lib/format";
 import { replaceLocal, saveMemo } from "@/lib/local";
 import { exportFile, exportName, linerTotal, noteRows, noteText, parseImport, WORD_LEGEND, type ExportFile } from "@/lib/note";
@@ -53,6 +53,26 @@ export function NoteScreen() {
   const [importErr, setImportErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuBox = useRef<HTMLDivElement>(null);
+
+  // "더 보기" 메뉴는 Esc 나 바깥을 누르면 닫는다. Esc 로 닫으면 초점은 메뉴 단추로 돌아간다
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenu(false);
+      menuBox.current?.querySelector<HTMLElement>("[aria-controls=note-menu]")?.focus();
+    };
+    const onDown = (e: PointerEvent) => {
+      if (!menuBox.current?.contains(e.target as Node)) setMenu(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [menu]);
 
 
   if (!job) {
@@ -196,9 +216,10 @@ export function NoteScreen() {
   return (
     <main className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-6 sm:px-6">
       <style>{`@media print { @page { @bottom-center { content: "${footer}, " counter(page) "/" counter(pages); font-size: 9pt; color: #586377; } } }`}</style>
-      <div className="no-print flex flex-wrap items-center justify-between gap-3">
+      {/* 제목과 단추 줄은 문서 폭에 맞춰, 단추가 문서 오른쪽 끝에 붙어 보이게 한다 */}
+      <div className="no-print flex max-w-[760px] flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">노트</h1>
-        <div className="relative flex gap-2">
+        <div ref={menuBox} className="relative flex gap-2">
           <button type="button" className="btn btn-primary" onClick={() => window.print()}>
             인쇄·PDF 저장
           </button>
@@ -278,11 +299,12 @@ export function NoteScreen() {
           <table className="mt-2 w-full text-sm">
             <tbody>
               {rows.map((r) => (
-                <tr key={r.label} className="border-b border-rule align-top">
-                  <th scope="row" className="w-[8.5em] py-2 pr-3 text-left font-normal text-sub">
+                // 휴대폰에서는 이름표를 값 위에 쌓아 값 열이 좁아지지 않게 한다(인쇄는 표 그대로)
+                <tr key={r.label} className="border-b border-rule align-top max-sm:block max-sm:py-2 print:table-row">
+                  <th scope="row" className="w-[8.5em] py-2 pr-3 text-left font-normal text-sub max-sm:block max-sm:w-auto max-sm:py-0 print:table-cell">
                     {r.label}
                   </th>
-                  <td className="py-2">
+                  <td className="py-2 max-sm:block max-sm:py-0 print:table-cell">
                     {r.pending && <span className="text-sub">확인 중</span>}
                     {r.values.map((v, i) => (
                       <span key={i} className="block">
