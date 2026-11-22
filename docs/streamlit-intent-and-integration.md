@@ -1,5 +1,7 @@
 # 기존 Streamlit 프로토타입의 의도와 자금 찾기 접목
 
+> 옛 펀딩노트(자금 찾기) 시절의 기록이다. 지금 서비스는 성장노트이며 `README.md`와 `docs/integration-design.md`를 본다.
+>
 > 2026-11-21. 루트 저장소의 코드(`app.py`, `pipeline.py`, `categories.py` 등)를 읽고 모의 실행으로 확인한 내용이다.
 > 루트와 이 워크트리의 엔진 파일은 내용이 같다. 워크트리에는 `config.py`·`liner_client.py`·`requirements.txt`에 추가분이 있다.
 
