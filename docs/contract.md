@@ -294,7 +294,7 @@
 | `result` | 단락 결과 또는 null | 8절 |
 | `error` | `SectionError` 또는 null | `{code, message, source, retryAt}` 5.3 |
 | `retryable` | 참/거짓 | 지금 `POST …/sections/{key}`를 받아 주는가(5.5) |
-| `waitingFor` | 단락 키 목록 | 아직 끝나지 않은 앞 단락(5.4). `waiting`과 실행 조건을 기다리는 `idle`에서 값이 있다 |
+| `waitingFor` | 단락 키 목록 | 아직 끝나지 않은 앞 단락(5.4). `waiting`과 실행 조건을 기다리는 `idle`에서 값이 있다. `waiting`이면 언제나 비어 있지 않다(앞 단락이 모두 끝나 곧 시작할 단락은 `running`으로 보인다) |
 | `rerun` | `Rerun` 또는 null | 다시 실행 상태(5.6) |
 | `paid` | `{search, premium, model, scholar}` | 이 단락이 보낸 Liner 요청 수(이전 실행과 다시 실행을 모두 더한 값) |
 

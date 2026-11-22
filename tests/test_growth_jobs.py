@@ -485,6 +485,19 @@ def test_snapshot_is_written_scrubbed_and_restored(world):
     assert page["items"] and page["items"][0]["id"] == "a21" and page["articleTotal"] == v["sections"]["news"]["result"]["articleTotal"]
 
 
+def test_waiting_section_whose_deps_finished_is_shown_running(world):
+    """앞 단락이 끝난 뒤 단락 스레드가 깨어나기 전의 틈: 기다릴 앞 단락이 없는 waiting 은 running 으로 보인다(빈 waitingFor 의 waiting 없음)."""
+    v = run_full(world)
+    job = jobs.Manager(Store(world.root)).get(v["jobId"])
+    with job.lock:
+        for key in ("profile", "news"):  # identity 는 끝났고, news 는 profile 을 기다린다
+            job.data["sections"][key] = jobs._envelope(key, "waiting", job.data["startedAt"])
+    s = job.view()["sections"]
+    assert s["profile"]["status"] == "running" and s["profile"]["waitingFor"] == [] and s["profile"]["stage"] == jobs.RUN_STAGE.get("profile")
+    assert s["news"]["status"] == "waiting" and s["news"]["waitingFor"] == ["profile"]
+    assert job.data["sections"]["profile"]["status"] == "waiting"  # 보이는 값만 바꾸고 작업 상태는 단락 스레드가 바꾼다
+
+
 def test_section_on_restored_older_job_does_not_move_latest_pointer_back(world):
     """서버를 다시 시작한 뒤 옛 작업 A 에서 단락(sales)을 실행해도 latest.json 은 더 새 작업 B 를 가리킨다."""
     a = run_full(world)

@@ -141,6 +141,9 @@ class Job:
                 rr["seconds"] = _secs(rr["startedAt"], now)
             env["waitingFor"] = ([dep for dep in DEPENDS_ON[key] if secs[dep]["status"] not in TERMINAL_SECTION_STATUSES]
                                  if env["status"] in ("waiting", "idle") else [])
+            if env["status"] == "waiting" and not env["waitingFor"]:
+                # 앞 단락이 끝나고 이 단락 스레드가 깨어나기 전의 틈: 곧 running 이 되므로 그렇게 보인다(waitingFor 가 빈 waiting 은 없다, 계약 5.4)
+                env["status"], env["stage"] = "running", RUN_STAGE.get(key)
         m = merge.merged(secs, query=d["query"], crno=d["company"]["crno"], job_running=d["status"] == "running")
         for key, env in secs.items():
             env["retryable"] = retryable(key, env, secs, m, ex)
