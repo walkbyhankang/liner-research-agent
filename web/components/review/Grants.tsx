@@ -156,9 +156,9 @@ export function Grants() {
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-rule p-5">
-          <p>아직 담은 공고가 없습니다. 자금 조달에서 공고나 판로 지원사업을 담으면 여기서 공고문과 자격을 대조합니다.</p>
+          <p>아직 담은 공고가 없습니다. 자금·판로에서 공고나 판로 지원사업을 담으면 여기서 공고문과 자격을 대조합니다.</p>
           <Link href={`/c/${c.cid}/funding`} className="btn btn-primary mt-3">
-            자금 조달에서 고르기
+            자금·판로에서 고르기
           </Link>
         </div>
       ) : (

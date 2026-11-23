@@ -1,6 +1,6 @@
 "use client";
 
-// 자금 조달(screens 5절): 회사 분석 값으로 조건을 채우고 공고·운용사·판로 기회를 고르고 담는다. 유료 호출 없음(판로 갈래의 나라장터 조회는 무료).
+// 자금·판로(screens 5절, 2026-11-23 "자금 조달"에서 이름을 바꿈): 회사 분석 값으로 조건을 채우고 공고·운용사·판로 기회를 고르고 담는다. 유료 호출 없음(판로 갈래의 나라장터 조회는 무료).
 // 갈래 셋(2026-11-23 화면 구조 개편): 빌리는 돈 / 투자받는 돈 / 판로. 넓은 화면은 앞 둘을 나란히, 판로는 그 아래 단. 중간·좁은 화면은 탭 셋.
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -23,7 +23,7 @@ const oneOf = <T extends string>(v: string | null, allowed: readonly T[]): T | n
 export function CompanyFunding() {
   const c = useCompany();
   // 회사 값과 이 브라우저 자료를 받은 뒤에 조건을 정한다. 그 뒤 회사 값이 바뀌어도 사용자가 본 조건은 자동으로 바꾸지 않는다(F-13)
-  if (c.phase === "loading" || !c.local.loaded) return <main className="mx-auto w-full max-w-[1200px] px-4 pt-6 sm:px-6"><h1 className="text-2xl font-semibold">자금 조달</h1></main>;
+  if (c.phase === "loading" || !c.local.loaded) return <main className="mx-auto w-full max-w-[1200px] px-4 pt-6 sm:px-6"><h1 className="text-2xl font-semibold">자금·판로</h1></main>;
   return <FundingInner />;
 }
 
@@ -122,11 +122,13 @@ function FundingInner() {
 
   return (
     <main className="mx-auto w-full max-w-[1200px] px-4 pb-24 pt-6 sm:px-6">
-      <h1 className="text-2xl font-semibold">자금 조달</h1>
-      {(!job || !ready) && <p className="mt-2">회사 값을 받는 중입니다. 조건을 직접 골라도 됩니다.</p>}
+      <h1 className="text-2xl font-semibold">자금·판로</h1>
+      {(!job || !ready) && <p className="mt-2 lg:max-w-[760px]">회사 값을 받는 중입니다. 조건을 직접 골라도 됩니다.</p>}
 
+      {/* 넓은 화면 가로 폭(visual-plan 7절): 조건·안내·거르기·바닥 글은 글 폭 760, 두 갈래 나란히(data-wide)만 틀 전체(내용 1152).
+          1024 미만은 지금 배치 그대로(모든 폭 제한에 lg: 를 붙였다) */}
       {cond && (
-        <div className="mt-4">
+        <div className="mt-4 lg:max-w-[760px]">
           <p className="text-sm font-semibold">회사 분석 값으로 채운 조건</p>
           {/* 휴대폰에서는 조건 칩 4개를 한 줄로 두고 가로로 밀어 본다(4줄로 쌓여 목록이 밀리지 않게) */}
           <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 py-1.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&>*]:shrink-0">
@@ -166,7 +168,7 @@ function FundingInner() {
       )}
 
       {cond && !cond.biz && (
-        <div className="mt-5 rounded-lg border border-edge p-4">
+        <div className="mt-5 rounded-lg border border-edge p-4 lg:max-w-[760px]">
           <p className="font-semibold">기업 유형을 골라 주세요</p>
           <p className="mt-1 text-sm">공공 자료에 기업 유형 근거가 없어 자동으로 채우지 않습니다. 한 번 고르면 바로 목록이 나옵니다.</p>
           <div className="mt-3">
@@ -175,11 +177,15 @@ function FundingInner() {
         </div>
       )}
       {cond && cond.biz && (!cond.region || !cond.field) && (
-        <p className="mt-5 rounded-md bg-wash p-4">지역과 관심 투자 분야를 고르면 목록이 나옵니다.</p>
+        <p className="mt-5 rounded-md bg-wash p-4 lg:max-w-[760px]">지역과 관심 투자 분야를 고르면 목록이 나옵니다.</p>
       )}
 
-      {error && <LoadError />}
-      {!data && !error && prof && <p className="mt-6 text-sub">공고와 펀드 목록을 불러오는 중입니다</p>}
+      {error && (
+        <div className="lg:max-w-[760px]">
+          <LoadError />
+        </div>
+      )}
+      {!data && !error && prof && <p className="mt-6 text-sub lg:max-w-[760px]">공고와 펀드 목록을 불러오는 중입니다</p>}
 
       {/* 갈래 탭(중간·좁은 화면)은 기업 유형을 고르기 전에도 둔다. 판로 갈래의 입찰공고는 기업 유형 없이 찾는다 */}
       {cond && <LaneTabs lane={lane} setLane={setLane} debt={result ? result.list.length : null} equity={result ? result.gps.length : null} />}
@@ -187,7 +193,7 @@ function FundingInner() {
       {result && split && prof && data && (
         <>
           {/* 빠른 거르기·거르기와 정렬은 빌리는 돈·투자받는 돈에만 걸린다. 좁은 화면은 탭 아래에 두어 판로 탭으로 바꿀 때 탭 위 내용이 바뀌지 않게 한다 */}
-          <div className={lane === "sales" ? "hidden lg:block" : ""}>
+          <div className={`lg:max-w-[760px] ${lane === "sales" ? "hidden lg:block" : ""}`}>
             <div className="mt-4">
               <QuickFilters only={only} setOnly={(o) => setOnly(o)} counts={result.counts} region={prof.region} />
             </div>
@@ -196,7 +202,7 @@ function FundingInner() {
               <FilterPanel need={prof.need} q={q} setQ={setQ} sort={sort} setSort={setSort} memoryKey={`${c.cid}:fu:filter`} />
             </div>
           </div>
-          <div className={`mt-4 grid gap-8 lg:grid-cols-2 ${lane === "sales" ? "hidden lg:grid" : ""}`}>
+          <div className={`mt-4 grid gap-8 lg:grid-cols-2 ${lane === "sales" ? "hidden lg:grid" : ""}`} data-wide>
             <section aria-label="빌리는 돈" className={lane === "debt" ? "" : "hidden lg:block"}>
               <LaneHead lane="debt" title={`빌리는 돈 ${result.list.length}건`} line={`${needLabel(prof.need)} ${result.scoped}건 중 다른 지역 ${result.byRegion}건, 대상 아님 ${result.byTarget}건 제외`} />
               <CardList
@@ -239,7 +245,7 @@ function FundingInner() {
       {result && split && prof && data && (
         <>
 
-          <div className="mt-8">
+          <div className="mt-8 lg:max-w-[760px]">
             <Disclosure text="조건은 어디서 왔나요?" memoryKey={`${c.cid}:fu:from`}>
               <ul className="space-y-1 py-2 text-sm">
                 <li>

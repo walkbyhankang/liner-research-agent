@@ -136,19 +136,19 @@
 
 | 필드 | 뜻 | 모양 | 예시(가짜) | 쓰는 곳 | 출처 규칙(설계 문서 4.1) |
 |---|---|---|---|---|---|
-| `region` | 시·도 | `Value` | "서울" | 표시줄, 자금 조달 조건 | 금융위 주소 → 없으면 `facts` 본사 소재지 |
+| `region` | 시·도 | `Value` | "서울" | 표시줄, 자금·판로 조건 | 금융위 주소 → 없으면 `facts` 본사 소재지 |
 | `district` | 시·군·구 | 글 | "강남구" | 개요 "본사", 회사 확정 | 금융위 주소 |
 | `founded` | 설립일 | `Value`(엇갈림 가능) | "2020-09-15" | 표시줄 업력, 개요 | 금융위 → 웹 값은 엇갈림으로 나란히 |
-| `bizType` | 기업 유형: `venture` / `sme` / `micro` | `Value` | "창업·벤처기업"(추정) | 표시줄, 자금 조달 조건 | **정해진 규칙 없음. 9절 질문** |
+| `bizType` | 기업 유형: `venture` / `sme` / `micro` | `Value` | "창업·벤처기업"(추정) | 표시줄, 자금·판로 조건 | **정해진 규칙 없음. 9절 질문** |
 | `industry` | 업종 | `{official: Value, web: Value}` | 금융위 "미확보", 웹 "AI 반도체 설계"(보도) | 개요, 대조 | 둘 다 표시 |
 | `employees` | 직원 수 | `Value` | "120명"(보도) | 개요, 대조 | 웹 조사. 국민연금은 여기 넣지 않음 |
 | `revenue` | 매출 | `{official: Value, web: Value}` | 공식 "56.7억원, 2022 사업연도, 별도", 웹 "약 100억원"(보도) | 핵심 값, 대조 | 금융위 최근 연도(연결 우선) + 웹 값 나란히 |
 | `npsLatest` | 국민연금 가입자 최근 값 | `Value`(`reference`) | "118명, 2026-10" | 핵심 값, 대조 메모 | 국민연금 |
 | `patentCount` | 출원인 확인 국내 특허 수 | `Value` | "11건, 등록 8건" | 핵심 값, 대조 메모 | 특허 공개 원문 |
-| `investors` | 합친 투자기관 목록 | 배열(아래) | | 투자 단락, 자금 조달 "이미 투자함" | 엔진 투자자 + Premium 카드(이름·도메인 일치만) + 웹 보완 |
+| `investors` | 합친 투자기관 목록 | 배열(아래) | | 투자 단락, 자금·판로 "이미 투자함" | 엔진 투자자 + Premium 카드(이름·도메인 일치만) + 웹 보완 |
 | `rivals` | 합친 국내 경쟁사 후보 | 배열(아래) | | 경쟁사 단락, 심사 준비 | `profile` 국내 경쟁사 + `facts` 경쟁사, 국내만, 한글·영문 같은 회사는 하나로 |
-| `techKeywords` | 기술 낱말 | `[{ko, en}]` | `[{"ko": "신경망 가속기", "en": "NPU"}]` | 자금 조달 "회사 사업과 관련", 논문 검색어 | `profile` |
-| `fundField` | 관심 투자 분야 id(`web/lib/finder.ts`의 `fundFields`) | `Value` | `"ai"`(추정) | 자금 조달 조건 | `profile.fund_field`를 id로 바꿈 |
+| `techKeywords` | 기술 낱말 | `[{ko, en}]` | `[{"ko": "신경망 가속기", "en": "NPU"}]` | 자금·판로 "회사 사업과 관련", 논문 검색어 | `profile` |
+| `fundField` | 관심 투자 분야 id(`web/lib/finder.ts`의 `fundFields`) | `Value` | `"ai"`(추정) | 자금·판로 조건 | `profile.fund_field`를 id로 바꿈 |
 | `bidKeywords` | 나라장터 검색어 | 글 배열(최대 6) | `["가속기", "반도체"]` | 판로 | `profile.bid_keywords` |
 | `pending` | 아직 확인 중인 부분 | 글 배열 | `["investors.confirmed", "employees"]` | 진행 줄 "아직 확인 중", 단락 안 "확인 중" 줄 | |
 
@@ -164,7 +164,7 @@
 | `lead` | 리드·주요 투자자 표기가 있었나 | `true` |
 | `sources` | 출처 목록 `[{org, name, kind, url}]` | |
 
-- 기존 투자자 판정(자금 조달 "이미 투자함")은 `status`가 `confirmed`·`reported`인 것만 쓴다(지금 `splitInvestors` 규칙). 이름만 비슷한 "관련 법인" 카드의 투자자는 넣지 않는다.
+- 기존 투자자 판정(자금·판로 "이미 투자함")은 `status`가 `confirmed`·`reported`인 것만 쓴다(지금 `splitInvestors` 규칙). 이름만 비슷한 "관련 법인" 카드의 투자자는 넣지 않는다.
 
 **`rivals[]`**
 
@@ -254,7 +254,7 @@
 | `profile.tech_keywords[]` | `{ko, en}`(실측 9개) | | 안 보임(`merged.techKeywords`) | |
 | `profile.gov_keywords[]` | 지원사업 낱말(실측 14개) | | 안 보임("회사 사업과 관련" 판정) | |
 | `profile.bid_keywords[]` | 나라장터 낱말(실측 6개) | | 판로 검색어 칩 | |
-| `profile.fund_field` | 관심 투자 분야(실측 "AI") | "AI" | 자금 조달 조건(`merged.fundField`) | |
+| `profile.fund_field` | 관심 투자 분야(실측 "AI") | "AI" | 자금·판로 조건(`merged.fundField`) | |
 | `profile.stage` | 기업 단계 추정 | "후기·상장 준비" | 안 씀 | |
 | `profile.name_ko`, `name_en`, `aliases[]`, `is_korean`, `founders` | 이름, 별칭 | | 안 씀 | |
 | `sources[]` | `{title, url, date}`(실측 25건) | | 묶음 출처 줄 "{n}건" | "근거 자료 {n}건 보기" |
@@ -384,7 +384,7 @@
 | `rivals[].news` | 경쟁사 뉴스 | 안 씀 | 안 씀 |
 | `rivals_summary.{이름}{business, products_tech, recent_changes[]}` | 경쟁사 요약 | | 사업 2줄, 제품·기술 1줄, 변화 3줄 |
 | (제안) 경쟁사 특허 `{name, total, by_year}` | 4.7절 요약만 | 확인된 특허 | "특허 연도 비교 보기" |
-| (제안) `rivalInvestors[]` `{rival, investors[]}` | 경쟁사 투자기관 이름 | 자금 조달 "경쟁사에 투자" 판정 | |
+| (제안) `rivalInvestors[]` `{rival, investors[]}` | 경쟁사 투자기관 이름 | 자금·판로 "경쟁사에 투자" 판정 | |
 | (제안) `rivalSet` | 이 결과를 만든 경쟁사 열쇠 목록 | 고르기가 바뀌었는지 판정 | |
 
 **경쟁사 조건이라면?에 넘기는 값**(제안): 업종 = 경쟁사 요약의 사업 한 줄, 설립 = 금융위 설립일, 매출 = 금융위 최근 연도 매출(연도 포함), 투자 이력 = 누적 투자(통화 그대로). 국민연금 가입자 수는 직원 수 칸에 넣지 않고 메모에 "국민연금 가입자 {n}명(직원 수와 다름)"으로 넣는다. 추정·엇갈림 값은 비워 보낸다(지금 `rivalCompany` 규칙).
@@ -409,7 +409,7 @@
 | `링크`, `공고일` | 공고 주소, 공고일 | | | 3층 "공고 열기" |
 | `calls`, `errors[]`, `error_count`, `skipped`, `period` | 호출 수, 실패, 기간 | | 요약·묶음 출처 줄, `partial` 사유 "{error_count}건" | |
 
-- 판로 지원사업은 서버를 부르지 않는다. 자금 조달과 같은 `/data/programs.json`에서 `category`가 "내수"(실측 스냅샷 83건), "수출"(138건)인 공고를 같은 지역·대상 규칙(`matchProgram`)으로 거른다.
+- 판로 지원사업은 서버를 부르지 않는다. 자금·판로와 같은 `/data/programs.json`에서 `category`가 "내수"(실측 스냅샷 83건), "수출"(138건)인 공고를 같은 지역·대상 규칙(`matchProgram`)으로 거른다.
 - 묶음 출처: "조달청 나라장터 입찰공고 (공공 API)" + "{period} 조회", 상태 `confirmed`.
 
 ---
@@ -418,9 +418,9 @@
 
 | 데이터 | 어디서 | 화면 | 바뀌는 점 |
 |---|---|---|---|
-| 기업마당 공고 `Program` | `/data/programs.json` | 자금 조달, 판로 | 없음 |
-| 모태 자펀드 `Fund` | `/data/funds.json` | 자금 조달 | 없음 |
-| 기준일 `Meta` | `/data/meta.json` | 자금 조달 바닥 | 없음 |
+| 기업마당 공고 `Program` | `/data/programs.json` | 자금·판로(빌리는 돈·판로 갈래) | 없음 |
+| 모태 자펀드 `Fund` | `/data/funds.json` | 자금·판로 | 없음 |
+| 기준일 `Meta` | `/data/meta.json` | 자금·판로 바닥 | 없음 |
 | 공고문 자격 대조 `Analysis` | `POST /api/notice/analyze` `{programId, company}` | 심사 준비 | `company`에 `merged` 값과 고친 값을 넣고, 메모(`notes`)에 특허 수와 국민연금 가입자 수(직원 수와 다르다는 말 포함)를 넣는다(설계 문서 3.5) |
 | 운용사 요약 `Brief` | `POST /api/gp/brief` `{gp, company}` | 심사 준비 | 없음. `facts[].kind` 값 목록 확인 필요(9절 질문 4) |
 | 서버 상태 | `GET /api/health` | 시작 화면 "분석 시작" 활성 여부 | 없음 |

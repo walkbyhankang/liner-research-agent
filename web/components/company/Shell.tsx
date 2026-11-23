@@ -155,14 +155,16 @@ function StepNav() {
   const job = c.job;
   const officialReady = !job || isTerminal(job.sections.official);
   const running = Boolean(job && job.status === "running");
-  // 단계(2026-11-23 화면 구조 개편): 회사 분석 · 경쟁사 분석 · 자금 조달 · 심사 준비 · 노트. 판로는 자금 조달의 갈래다(screens 5.2).
+  // 단계(2026-11-23 화면 구조 개편): 회사 분석 · 경쟁사 분석 · 자금·판로 · 심사 준비 · 노트. 판로는 자금·판로의 셋째 갈래다(screens 5.2).
+  // "자금 조달"에서 "자금·판로"로 바꿨다(2026-11-23 사용자 결정: 판로는 돈이 아니고, 판로 안 "공공 조달"과 "자금 조달"의 "조달"이 뜻이 달라 헷갈림).
   // 좁은 화면은 짧은 이름(short)을 보이고 화면 읽기 이름은 늘 전체 이름이다(보이는 글이 이름 안에 들어 있다, WCAG 2.5.3).
-  // 단계 옆 개수(screens 1.1): 경쟁사 분석 = 비교 대상, 자금 조달 = 거기서 담은 것 전체(같은 공고는 하나, 입찰공고 포함),
+  // 단계 옆 개수(screens 1.1): 경쟁사 분석 = 비교 대상, 자금·판로 = 거기서 담은 것 전체(같은 공고는 하나, 입찰공고 포함),
   // 심사 준비 = 담은 항목 전체(입찰공고 제외). 0이면 붙이지 않는다. 회사 분석·노트에는 붙이지 않는다
   const items = [
     { href: base, label: "회사 분석", short: "회사", current: path === base, disabled: false, n: 0, sr: "", unit: "개" },
     { href: `${base}/rivals`, label: "경쟁사 분석", short: "경쟁사", current: path.startsWith(`${base}/rivals`), disabled: false, n: pickedRivals(job, c.local.rivalChoices).length, sr: "비교 대상", unit: "곳" },
-    { href: `${base}/funding`, label: "자금 조달", short: "자금", current: path.startsWith(`${base}/funding`), disabled: !officialReady, n: fundingCount(c.local), sr: "담은 자금·판로 후보", unit: "개" },
+    // 좁은 화면에서도 "자금·판로" 그대로(390·360 폭, 개수 두 자리여도 메뉴가 넘치거나 줄이 꺾이지 않음을 쟀다, screens 1.1)
+    { href: `${base}/funding`, label: "자금·판로", short: "자금·판로", current: path.startsWith(`${base}/funding`), disabled: !officialReady, n: fundingCount(c.local), sr: "담은 후보", unit: "개" },
     { href: `${base}/review`, label: "심사 준비", short: "심사", current: path.startsWith(`${base}/review`), disabled: false, n: reviewCount(c.local), sr: "담은 항목", unit: "개" },
     { href: `${base}/note`, label: "노트", short: "노트", current: path.startsWith(`${base}/note`), disabled: false, n: 0, sr: "", unit: "개" },
   ];
@@ -283,7 +285,7 @@ function CompanyBar() {
     </button>
   );
 
-  // 회사 분석이 아닌 단계(경쟁사 분석·자금 조달·심사 준비·노트)에서는 표시줄을 한 줄로 줄인다.
+  // 회사 분석이 아닌 단계(경쟁사 분석·자금·판로·심사 준비·노트)에서는 표시줄을 한 줄로 줄인다.
   // 그 화면의 주인공(카드·문서)이 첫 화면에 들어오게 하려는 것이다. 사실 칩과 예시 안내 문장은 회사 분석 화면에서 본다.
   if (!isAnalysis) {
     return (

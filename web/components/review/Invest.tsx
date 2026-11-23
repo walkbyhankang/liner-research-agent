@@ -33,7 +33,7 @@ export function Invest() {
         </h2>
         {gps.length === 0 ? (
           <div className="mt-2 rounded-lg border border-dashed border-rule p-5">
-            <p>담은 운용사가 없습니다. 자금 조달에서 운용사를 담으면 여기서 요약을 볼 수 있습니다.</p>
+            <p>담은 운용사가 없습니다. 자금·판로에서 운용사를 담으면 여기서 요약을 볼 수 있습니다.</p>
             <Link href={`/c/${c.cid}/funding?lane=invest`} className="btn mt-3">
               운용사 고르기
             </Link>

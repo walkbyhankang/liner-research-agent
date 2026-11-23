@@ -445,7 +445,7 @@
 
 ### 7.4 기업 유형 (`bizType`, `bizTypeHint`)
 
-- `bizType`은 언제나 `unavailable`("근거 자료 없음")이다(decisions 2번, 자동으로 채우지 않는다). 화면은 표시줄과 자금 조달 맨 위에 고르기를 둔다.
+- `bizType`은 언제나 `unavailable`("근거 자료 없음")이다(decisions 2번, 자동으로 채우지 않는다). 화면은 표시줄과 자금·판로 맨 위에 고르기를 둔다.
 - `bizTypeHint`: `founded`에 값이 있고 `funding_history.result.rounds`가 1건 이상이면 `{id: "venture", reason: "설립 {YYYY-MM}, 투자 라운드 {n}건"}`, 아니면 `null`. 화면은 고르기 옆에 "창업·벤처기업으로 보입니다(추정)"과 `reason`을 보이고, 누를 때만 적용한다.
 
 ### 7.5 업종·직원 수·매출 (`industry`, `employees`, `revenue`)
@@ -466,9 +466,9 @@
 | 칸 | 만드는 법 | 쓰는 곳 |
 |---|---|---|
 | `techKeywords` | `profile.result.techKeywords` 그대로 | 논문 검색어. **회사 분석 화면에는 보이지 않는다**(OV-05) |
-| `programKeywords` | `govKeywords` + `techKeywords[].ko` + `coreTech`, 앞뒤 공백 지우고 같은 것 합침, 순서 유지, 최대 30 | 자금 조달·판로 "회사 사업과 관련"(공고 제목·요약·태그에 들어 있나) |
+| `programKeywords` | `govKeywords` + `techKeywords[].ko` + `coreTech`, 앞뒤 공백 지우고 같은 것 합침, 순서 유지, 최대 30 | 자금·판로(빌리는 돈·판로 갈래) "회사 사업과 관련"(공고 제목·요약·태그에 들어 있나) |
 | `bidKeywords` | `profile.result.bidKeywords` 앞 6개. 비었으면 `programKeywords` 중 6자 이하 앞 5개 | 판로 검색어 칩, `sales` 요청 기본값 |
-| `fundField` | `profile.result.fundField`(id). `display` = `finder.ts` `fundFields` 이름(`FUND_FIELD_LABEL`), `raw` = id, `inferred`, 출처 `liner_profile` | 자금 조달 "관심 투자 분야" 칩 |
+| `fundField` | `profile.result.fundField`(id). `display` = `finder.ts` `fundFields` 이름(`FUND_FIELD_LABEL`), `raw` = id, `inferred`, 출처 `liner_profile` | 자금·판로 "관심 투자 분야" 칩 |
 
 ### 7.8 투자기관 (`investors`)
 
@@ -476,7 +476,7 @@
 - 같은 곳 묶기: `norm_name`이 같으면 한 줄. 영문·한글 표기를 서로 맞추는 대응표는 만들지 않는다(설계 4.1 한계, 화면에 적는다).
 - 한 줄 `MergedInvestor`: `key`(= `norm_name`), `name`(먼저 들어온 표기: 투자 이력 → `facts`), `aliases`(다른 표기), `status`(`facts`에 `confirmed` 기록이 하나라도 있으면 `confirmed`, 아니면 `reported`), `roundCount`·`roundLabels`·`lastDate`·`lead`(투자 이력 값, `facts`에만 있으면 그 기록 수·"{라운드} {YYYY-MM}"·날짜·`false`), `foundIn`, `sources`(투자 이력은 `pdl`, `facts`는 `web_page`/`web_snippet`).
 - 정렬: `lead` 먼저 → `roundCount` 많은 순 → `lastDate` 최근순. 화면 1층 "이름 5곳"은 이 순서 앞 5곳.
-- 자금 조달 "이미 투자함"은 이 목록 이름과 운용사 이름을 `finder.ts`의 `gpKey`로 견준다(지금 규칙). 이 목록에는 `confirmed`·`reported`만 있다.
+- 자금·판로 "이미 투자함"은 이 목록 이름과 운용사 이름을 `finder.ts`의 `gpKey`로 견준다(지금 규칙). 이 목록에는 `confirmed`·`reported`만 있다.
 
 ### 7.9 경쟁사 (`rivals`)
 
@@ -684,7 +684,7 @@
 | `patents` `{total, registered, byYear}`, `patentsReason` | (경쟁사 특허 요약) | 8.7 `summary`에서 셋만 |
 | `summary` `{business, productsTech, recentChanges}` | `rivals_summary.{이름}`의 `business`, `products_tech`, `recent_changes` | 최대 5줄 |
 | `errors` | `errors`, `public.errors` | 짧은 글 |
-| `rivalInvestors[]` `{rivalKey, rivalName, investors}` | (새로) | `funding.investors`가 있는 경쟁사마다. 자금 조달 "경쟁사에 투자" 판정(`gpKey`로 견줌) |
+| `rivalInvestors[]` `{rivalKey, rivalName, investors}` | (새로) | `funding.investors`가 있는 경쟁사마다. 자금·판로 "경쟁사에 투자" 판정(`gpKey`로 견줌) |
 | `rivalSet` | (새로) | 요청한 `key` 목록 |
 | (뺌) | `news`(경쟁사 뉴스 목록) | 요약 모델 입력으로만 쓴다 |
 
@@ -716,7 +716,7 @@
 - 개요의 대표·설립·본사는 `merged.ceo`·`founded`·`headquarters`, 직원 수는 `merged.employees`(`null`이면 "확인 중").
 - 핵심 값 4칸: 매출 = `merged.revenue.official`(없으면 `.web`), 국민연금 가입자 = `merged.npsLatest` + `official.result.nps.summary.change`, 누적 투자 = `funding_history.result.summary.cumulative.byCurrency`(통화마다 따로) + `roundCount`·`latest`, 국내 특허 = `merged.patentCount` + `patents.result.summary.registered`.
 - 회사 표시줄 칩: 지역 = `merged.region`, 업력 = `merged.founded.raw`(엇갈림이면 `values[usedIndex].raw`, `usedIndex`가 null이면 "업력 엇갈림"), 기업 유형 = 사용자 고르기(`merged.bizType`는 늘 미확보) + `bizTypeHint`.
-- 자금 조달 조건: 지역 = `merged.region.raw`(`confirmed`·`reported`일 때만), 관심 투자 분야 = `merged.fundField.raw`, 회사 사업과 관련 = `merged.programKeywords`, 이미 투자함 = `merged.investors`, 경쟁사에 투자 = `rivals_deep.result.rivalInvestors`.
+- 자금·판로 조건: 지역 = `merged.region.raw`(`confirmed`·`reported`일 때만), 관심 투자 분야 = `merged.fundField.raw`, 회사 사업과 관련 = `merged.programKeywords`, 이미 투자함 = `merged.investors`, 경쟁사에 투자 = `rivals_deep.result.rivalInvestors`.
 - 저장된 분석과 진행 중 작업이 동시에 있으면(새로 분석 중) 저장된 분석을 보이고, 새 작업의 단락이 끝 상태가 되면 그 단락만 바꾼다. 새 작업의 단락이 `unavailable`이면 이전 결과를 두고 사유를 단락 바닥에 쓴다(screens 1.7). 합친 값(`merged`)도 같은 규칙이다: 새 값이 `null`(확인 중)이거나 `unavailable`인데 이전 값이 `unavailable`이 아니면 이전 값을 쓴다(`industry`·`revenue`는 `official`·`web` 하나씩). 이전 결과를 둔 단락이 채우는 목록(`funding_history`·`facts` → `investors`, `profile`·`facts` → `rivals`, `profile` → `techKeywords`·`programKeywords`·`bidKeywords`)은 이전 목록을 쓴다.
 
 ## 10. 예상값 (`estimates`)

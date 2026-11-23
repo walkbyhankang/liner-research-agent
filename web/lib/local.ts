@@ -120,8 +120,8 @@ export const savedKey = (cid: string, kind: SavedKind, itemId: string) => [cid, 
 export const isSaved = (l: Local, kind: SavedKind, itemId: string) => l.saved.some((s) => s.kind === kind && s.itemId === itemId);
 /** 심사 준비로 가는 담은 항목 수(공고, 운용사, 판로 지원사업). 입찰공고는 노트에만 담긴다 */
 /**
- * 담은 공고(자금 조달에서 담은 공고 + 판로 지원사업). 수출·내수 공고는 두 화면에 모두 나와 같은 공고를 두 번 담을 수 있으므로
- * 공고 id 로 하나로 센다. 나중에 담은 쪽을 남긴다(담을 때 저장한 마감일이 더 새것이라 마감 연장이 반영된다. 같은 시각이면 자금 조달 쪽).
+ * 담은 공고(자금·판로 빌리는 돈에서 담은 공고 + 판로 지원사업). 수출·내수 공고는 두 화면에 모두 나와 같은 공고를 두 번 담을 수 있으므로
+ * 공고 id 로 하나로 센다. 나중에 담은 쪽을 남긴다(담을 때 저장한 마감일이 더 새것이라 마감 연장이 반영된다. 같은 시각이면 빌리는 돈 쪽).
  * 심사 준비 목록·개수와 "지금 확인할 것"이 같은 셈을 쓴다.
  */
 export function savedNotices(saved: readonly SavedItem[]): SavedItem[] {
@@ -134,9 +134,9 @@ export function savedNotices(saved: readonly SavedItem[]): SavedItem[] {
   return [...out.values()];
 }
 export const reviewCount = (l: Pick<Local, "saved">) => savedNotices(l.saved).length + l.saved.filter((s) => s.kind === "gp").length;
-/** 자금 조달 단계 옆 개수(screens 1.1): 그 화면에서 담은 것 전체. 심사 준비 개수에 노트에만 담는 입찰공고를 더한 수 */
+/** 자금·판로 단계 옆 개수(screens 1.1): 그 화면에서 담은 것 전체. 심사 준비 개수에 노트에만 담는 입찰공고를 더한 수 */
 export const fundingCount = (l: Pick<Local, "saved">) => reviewCount(l) + l.saved.filter((s) => s.kind === "bid").length;
-/** 자금 조달 화면에서 이 공고를 담았는가. 빌리는 돈(program)과 판로 갈래(salesProgram)의 같은 공고는 담기 상태가 하나다(screens 5절) */
+/** 자금·판로 화면에서 이 공고를 담았는가. 빌리는 돈(program)과 판로 갈래(salesProgram)의 같은 공고는 담기 상태가 하나다(screens 5절) */
 export const isNoticeSaved = (l: Local, itemId: string) => isSaved(l, "program", itemId) || isSaved(l, "salesProgram", itemId);
 
 export function toggleSaved(cid: string, item: Omit<SavedItem, "savedAt">): boolean {
@@ -152,7 +152,7 @@ export function toggleSaved(cid: string, item: Omit<SavedItem, "savedAt">): bool
 
 /**
  * 공고를 뺀다(두 종류 program·salesProgram 을 한 번에). 심사 준비는 빌리는 돈·판로 갈래에서 담은 같은 공고를 하나로 보이므로(savedNotices)
- * 빼기도 두 종류를 함께 지운다. 자금 조달 화면의 담기 단추도 2026-11-23부터 같은 공고의 담기 상태를 하나로 다루어, 뺄 때 이 함수를 쓴다
+ * 빼기도 두 종류를 함께 지운다. 자금·판로 화면의 담기 단추도 2026-11-23부터 같은 공고의 담기 상태를 하나로 다루어, 뺄 때 이 함수를 쓴다
  * (funding/Board.tsx noticeSave). 담을 때만 그 갈래의 종류 하나를 저장한다(toggleSaved). 실패하면 false — 부르는 쪽이 다시 누르라고 알린다.
  */
 export async function removeNotice(cid: string, itemId: string): Promise<boolean> {

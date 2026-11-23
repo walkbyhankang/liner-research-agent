@@ -112,7 +112,7 @@ function UnavailableHead({ env, envKey, label }: { env: AnyEnv; envKey: SectionK
   const job = c.job!;
   return (
     <div className="mt-2 space-y-3" id={env.error?.code === "interrupted" ? "first-stopped" : undefined}>
-      <p className="max-w-[680px] text-lg">{errorSentence(env.error)}</p>
+      <p className="max-w-[680px] text-lg lg:max-w-[760px]">{errorSentence(env.error)}</p>
       <div className="no-print flex flex-wrap items-center gap-2">
         {env.error?.code === "no_corp" && (
           <Link href={`/?name=${encodeURIComponent(job.query)}`} className="btn">

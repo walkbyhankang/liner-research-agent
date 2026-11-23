@@ -1,7 +1,7 @@
 "use client";
 
 // 판로 갈래(screens 5.2, 옛 판로 화면 7절): 나라장터 입찰공고(갈래가 처음 화면에 들어올 때 무료 조회)와 판로 지원사업(기업마당, 화면에서 거름).
-// 2026-11-23 화면 구조 개편으로 자금 조달의 셋째 갈래가 됐다. 내용과 문구는 옛 판로 화면 그대로이고, 화면 제목 대신 갈래 머리를 쓴다.
+// 2026-11-23 화면 구조 개편으로 자금·판로(옛 이름 자금 조달)의 셋째 갈래가 됐다. 내용과 문구는 옛 판로 화면 그대로이고, 화면 제목 대신 갈래 머리를 쓴다.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BizTypeId, Bid } from "@/lib/contract";
 import { matchProgram, notExpired, withStatus, type Profile } from "@/lib/finder";
@@ -38,7 +38,7 @@ function useSeen<T extends Element>() {
 }
 
 /**
- * 판로 갈래. region·biz 는 자금 조달 화면의 지금 조건(사용자가 바꾼 것 포함)이다. 기업 유형 고르기는 화면 위 한 곳에만 둔다.
+ * 판로 갈래. region·biz 는 자금·판로 화면의 지금 조건(사용자가 바꾼 것 포함)이다. 기업 유형 고르기는 화면 위 한 곳에만 둔다.
  * 나라장터 조회는 갈래가 처음 화면에 들어올 때 한 번(무료, F-20)
  */
 export function SalesLane({ region, biz, className = "" }: { region: string | null; biz: BizTypeId | null; className?: string }) {
@@ -83,7 +83,8 @@ export function SalesLane({ region, biz, className = "" }: { region: string | nu
   const open = items.filter((b) => b.status === "open").length;
 
   return (
-    <section ref={ref} id="lane-sales" aria-label="판로" className={`scroll-mt-16 ${className}`} data-lane="sales">
+    // 넓은 화면에서도 판로 단은 글 폭 760(나란히 견주는 곳이 아니다. 머리 윗선·목록·지원사업 카드 모두 760, visual-plan 7절)
+    <section ref={ref} id="lane-sales" aria-label="판로" className={`scroll-mt-16 lg:max-w-[760px] ${className}`} data-lane="sales">
       {/* 갈래 머리: 넓은 화면은 제목과 판로 색 3px 윗선, 좁은 화면은 "판로" 탭이 제목을 대신한다(빌리는 돈·투자받는 돈과 같은 규칙) */}
       <div className="lane-sales pt-3">
         <h2 className="sr-only text-lg font-bold lg:not-sr-only">판로</h2>
@@ -294,8 +295,8 @@ function SalesPrograms({ region, biz }: { region: string | null; biz: BizTypeId 
       </h3>
       {error && <LoadError />}
       {!prof ? (
-        // 기업 유형 고르기는 자금 조달 화면 위 "기업 유형을 골라 주세요" 한 곳에만 둔다(같은 고르기가 두 번 나오지 않게)
-        <p className="mt-3 max-w-[680px]">{region ? "기업 유형을 고르면 판로 지원사업이 나옵니다." : "지역과 기업 유형을 고르면 판로 지원사업이 나옵니다."}</p>
+        // 기업 유형 고르기는 자금·판로 화면 위 "기업 유형을 골라 주세요" 한 곳에만 둔다(같은 고르기가 두 번 나오지 않게)
+        <p className="mt-3 max-w-[680px] lg:max-w-[760px]">{region ? "기업 유형을 고르면 판로 지원사업이 나옵니다." : "지역과 기업 유형을 고르면 판로 지원사업이 나옵니다."}</p>
       ) : lists ? (
         <>
           <div role="tablist" aria-label="판로 지원사업 갈래" className="mt-3 flex gap-2">
@@ -311,7 +312,7 @@ function SalesPrograms({ region, biz }: { region: string | null; biz: BizTypeId 
           <div>
             <CardList
               key={cat}
-              listClass="mt-3 grid gap-3 lg:grid-cols-2"
+              listClass="mt-3 grid gap-3"
               items={lists[cat]}
               keyOf={(m) => m.program.id}
               empty="이 조건에 맞는 판로 지원사업이 없습니다."

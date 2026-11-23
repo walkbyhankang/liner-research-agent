@@ -15,11 +15,14 @@ export function Wordmark() {
   );
 }
 
-/** 회사가 없는 화면(/, /funding)의 머리줄 */
+/**
+ * 회사가 없는 화면(/, /funding)의 머리줄. 높이는 회사 화면 머리줄과 같은 48px + 아래 선 1px(screens 1.1, 2026-11-23 맞춤).
+ * 오른쪽 내용이 좁은 폭에서 줄을 바꾸면 최소 높이라 늘어날 수 있다. 이 머리줄은 위에 붙지 않는다(회사 화면 머리줄은 붙는다)
+ */
 export function SiteHeader({ right }: { right?: ReactNode }) {
   return (
     <header className="no-print border-b border-rule bg-paper">
-      <div className="mx-auto flex min-h-14 max-w-[1200px] items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="mx-auto flex min-h-12 max-w-[1200px] items-center justify-between gap-4 px-4 sm:px-6">
         <Wordmark />
         {right}
       </div>

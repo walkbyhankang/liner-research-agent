@@ -1,4 +1,4 @@
-// 자금 조달 화면 규칙(screens 5절). 지금 finder.ts 의 대조 규칙(matchProgram, groupFunds, gpKey …)을 그대로 쓰고,
+// 자금·판로 화면 규칙(screens 5절). 지금 finder.ts 의 대조 규칙(matchProgram, groupFunds, gpKey …)을 그대로 쓰고,
 // 회사 분석 값으로 조건을 채우는 것, 이미 투자한 운용사를 따로 묶는 것, "회사 사업과 관련" 표시만 더한다.
 import type { BizTypeId, FundFieldId, Merged, MergedInvestor, RivalsDeepResult } from "./contract.ts";
 import { fundFields, isExistingInvestor, regionOptions, sorter, type GpGroup, type Program, type ProgramMatch, type SortMode } from "./finder.ts";

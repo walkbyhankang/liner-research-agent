@@ -329,9 +329,9 @@ export function NoteScreen() {
 
         {empty ? (
           <section className="mt-6" data-part="empty">
-            <p>담은 항목이 없습니다. 자금 조달에서 공고, 운용사, 판로 기회를 담으면 노트에 모입니다.</p>
+            <p>담은 항목이 없습니다. 자금·판로에서 공고, 운용사, 판로 기회를 담으면 노트에 모입니다.</p>
             <Link href={`/c/${c.cid}/funding`} className="link no-print">
-              자금 조달로 가기
+              자금·판로로 가기
             </Link>
           </section>
         ) : (

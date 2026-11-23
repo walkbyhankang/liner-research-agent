@@ -34,7 +34,7 @@ export function RivalsScreen() {
   const head = (
     <>
       <h1 className="text-2xl font-semibold">경쟁사 분석</h1>
-      <p className="mt-2 max-w-[680px]">경쟁사 후보 가운데 비교 대상을 정하면, 그 회사들의 재무·고용·투자·특허를 우리 회사와 같은 항목으로 나란히 봅니다.</p>
+      <p className="mt-2 max-w-[680px] lg:max-w-[760px]">경쟁사 후보 가운데 비교 대상을 정하면, 그 회사들의 재무·고용·투자·특허를 우리 회사와 같은 항목으로 나란히 봅니다.</p>
     </>
   );
   if (!job || !layout) {
@@ -71,9 +71,10 @@ export function RivalsScreen() {
 }
 
 /** 덩어리 틀: 잉크 1px 윗줄 아래 제목(h2 18px 굵게) → (있으면) 한 줄 요약(21px). 회사 분석 단락 경계와 같은 모양 */
-function Block({ id, title, summary, right, children, maxWidth = "760px" }: { id: string; title: string; summary?: ReactNode; right?: ReactNode; children: ReactNode; maxWidth?: string }) {
+/** wide: 나란히 견주는 곳(비교 표 덩어리)만 글 폭 760 을 넘어 틀 전체(내용 1152)까지 쓴다. data-wide 로 표시한다(visual-plan 7절) */
+function Block({ id, title, summary, right, children, maxWidth = "760px", wide = false }: { id: string; title: string; summary?: ReactNode; right?: ReactNode; children: ReactNode; maxWidth?: string; wide?: boolean }) {
   return (
-    <section id={id} aria-labelledby={`h-${id}`} className="mt-8 border-t border-ink pt-6 sm:pt-8" style={{ maxWidth }}>
+    <section id={id} aria-labelledby={`h-${id}`} className="mt-8 border-t border-ink pt-6 sm:pt-8" style={{ maxWidth }} data-wide={wide || undefined}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 id={`h-${id}`} className="text-lg font-bold leading-snug">
           {title}
@@ -363,6 +364,7 @@ function Compare({ job, fold }: { job: AnalysisJob; fold: ReactNode }) {
       id="compare"
       title="나란히 비교"
       maxWidth={`max(760px, calc(${tableW} * 15 / 16))`}
+      wide
       right={result && env.analyzedAt ? <span className="num text-sm text-sub">{fmtMonthDayTime(env.analyzedAt)} 실행</span> : null}
     >
       {/* 비교 먼저 배치: 머리 바로 아래 비교 대상 한 줄(펼치면 정하기). 그 아래 다시 받기(지금 비교 대상으로, 유료라 누를 때만) */}
@@ -703,12 +705,12 @@ function Backers({ job, result }: { job: AnalysisJob; result: RivalsDeepResult }
   const c = useCompany();
   const { data } = usePublicData();
   const gps = useMemo(() => [...new Set((data?.funds ?? []).map((f) => f.gp))], [data]);
-  // 우리 회사 투자기관(원문 확인·보도만, 자금 조달 "이미 투자함"과 같은 기준)
+  // 우리 회사 투자기관(원문 확인·보도만, 자금·판로 "이미 투자함"과 같은 기준)
   const ours = job.merged.investors.filter((i) => i.status === "confirmed" || i.status === "reported").flatMap((i) => [i.name, ...i.aliases]);
   return (
     <Block id="backers" title="경쟁사에 투자한 곳">
       <p className="flex flex-wrap items-center gap-x-2">
-        <span>비교 대상 경쟁사의 투자 라운드 자료에 나온 투자기관입니다. 자금 조달 투자받는 돈에서 이름이 같은 모태펀드 운용사에 &lsquo;경쟁사에 투자&rsquo;를 붙입니다.</span>
+        <span>비교 대상 경쟁사의 투자 라운드 자료에 나온 투자기관입니다. 자금·판로의 투자받는 돈에서 이름이 같은 모태펀드 운용사에 &lsquo;경쟁사에 투자&rsquo;를 붙입니다.</span>
         <Link href={`/c/${c.cid}/funding?lane=invest`} className="link">
           투자받는 돈에서 보기
         </Link>

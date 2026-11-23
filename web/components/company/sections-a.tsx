@@ -445,7 +445,7 @@ export function Investment() {
       <ul className="list-disc space-y-1 py-2 pl-5 text-sm">
         <li>투자 DB와 기사에 실린 라운드만 보입니다. 결과가 적다고 투자 이력이 없다는 뜻은 아닙니다.</li>
         <li>금액은 통화를 바꾸지 않고 자료에 적힌 그대로 보여 줍니다.</li>
-        <li>투자기관 이름이 영문이면 자금 조달의 모태펀드 운용사(한글 이름)와 맞춰 보지 못할 수 있습니다.</li>
+        <li>투자기관 이름이 영문이면 자금·판로의 모태펀드 운용사(한글 이름)와 맞춰 보지 못할 수 있습니다.</li>
       </ul>
     </Disclosure>
   );
@@ -476,7 +476,7 @@ export function Investment() {
           <>
             <SourceLine word="reported" label="People Data Labs 회사 카드 (Liner Premium)" detail={`${fmtDay(r.queriedAt)} 조회`} />
             {!pendingFacts && confirmedCount > 0 && <p className="text-xs text-sub">원문 확인 {confirmedCount}곳. 기사·공식 자료 원문 (Liner 검색)</p>}
-            <NextLine text="투자기관은 자금 조달의 운용사 목록에서 '이미 투자한 곳'으로 따로 표시합니다." href={`/c/${c.cid}/funding?lane=invest`} linkText="운용사 목록 보기" />
+            <NextLine text="투자기관은 자금·판로의 운용사 목록에서 '이미 투자한 곳'으로 따로 표시합니다." href={`/c/${c.cid}/funding?lane=invest`} linkText="운용사 목록 보기" />
           </>
         ) : null
       }

@@ -45,7 +45,8 @@ export function ReviewScreen() {
   ];
   return (
     <main className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-6 sm:px-6">
-      <div className="max-w-[720px]">
+      {/* 넓은 화면 글 폭 760(모든 단계 화면 같은 규칙, visual-plan 7절). 1024 미만은 지금 그대로 720 */}
+      <div className="max-w-[720px] lg:max-w-[760px]">
         <h1 className="text-2xl font-semibold">심사 준비</h1>
         <div role="tablist" aria-label="심사 준비 갈래" className="no-print sticky top-[49px] z-20 -mx-4 mt-4 flex border-b border-rule bg-paper px-4 sm:static sm:mx-0 sm:px-0">
           {items.map(([id, label, n], i) => (

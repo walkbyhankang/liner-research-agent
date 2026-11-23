@@ -415,7 +415,7 @@ await run("staged", async () => {
   const busyTiles = await page.$$eval("ul[aria-label='핵심 값'] a[aria-busy=true]", (l) => l.length);
   check("A-01", (await all5("확인 중")) === 5 && busyTiles === 4 && (await text(page)).includes("분석 중") && !(await page.$("#rivals")));
   const fund = await page.$eval("nav[aria-label=단계] [aria-disabled=true]", (e) => e.innerText).catch(() => "");
-  check("A-02", fund.includes("자금 조달") && fund.includes("준비 중"));
+  check("A-02", fund.includes("자금·판로") && fund.includes("준비 중"));
   const overlay = await page.evaluate(() => [...document.querySelectorAll("body *")].some((e) => { const s = getComputedStyle(e); const r = e.getBoundingClientRect(); return s.position === "fixed" && r.width * r.height > innerWidth * innerHeight * 0.5 && s.display !== "none"; }));
   await openDisclosure(page, "상태 표시 안내");
   check("G-05", !overlay && (await disclosure(page, "상태 표시 안내")) === "true" && !(await page.$eval("button.btn", (b) => b.disabled).catch(() => true)));
@@ -462,13 +462,13 @@ await run("staged", async () => {
   const live = await page.$$eval("[data-live] p", (l) => l.map((p) => p.textContent));
   const want = ["재무·고용 단락이 준비됐습니다.", "개요 단락이 준비됐습니다.", "투자 단락이 준비됐습니다.", "기술 단락이 준비됐습니다.", "최근 동향 단락이 준비됐습니다.", "회사 분석이 끝났습니다."];
   check("C-21", want.every((w) => live.filter((x) => x === w).length === 1) && live.length === want.length, live.join(" / "));
-  // A-29: 분석이 엇갈린 값을 가진 채 끝나도, 끝나는 순간 "지금 확인할 것"이 생기며 아래(자금 후보 줄·개요 제목)를 밀지 않는다(첫 화면, 1180·390)
+  // A-29: 분석이 엇갈린 값을 가진 채 끝나도, 끝나는 순간 "지금 확인할 것"이 생기며 아래(자금·판로 줄·개요 제목)를 밀지 않는다(첫 화면, 1180·390)
   for (const w of [1180, 390]) {
     await reset({ scenario: "F-STAGED", step: 5, stagedConflict: true });
     const pa = await open(`/c/${CID}`, { width: w });
     await waitText(pa, "분석 중");
     await wait(800);
-    const pos = () => pa.evaluate(() => ({ fund: Math.round([...document.querySelectorAll("a,span")].find((e) => e.textContent.trim() === "자금 후보 보기" || e.textContent.trim().startsWith("자금 후보 준비"))?.getBoundingClientRect().top ?? -1), ov: Math.round(document.getElementById("h-overview")?.getBoundingClientRect().top ?? -1), y: scrollY, ck: document.querySelector("[data-checknow]")?.getBoundingClientRect().height.toFixed(1), band: document.querySelector("ul[aria-label='핵심 값']")?.getBoundingClientRect().bottom.toFixed(1) }));
+    const pos = () => pa.evaluate(() => ({ fund: Math.round([...document.querySelectorAll("a,span")].find((e) => e.textContent.trim() === "자금·판로 보기" || e.textContent.trim().startsWith("자금·판로 준비"))?.getBoundingClientRect().top ?? -1), ov: Math.round(document.getElementById("h-overview")?.getBoundingClientRect().top ?? -1), y: scrollY, ck: document.querySelector("[data-checknow]")?.getBoundingClientRect().height.toFixed(1), band: document.querySelector("ul[aria-label='핵심 값']")?.getBoundingClientRect().bottom.toFixed(1) }));
     const before = await pos();
     const frame0 = await text(pa, "[data-checknow]");
     // A-32: 항목 줄이 옆으로 넘쳐도 스크롤 막대가 높이를 차지하지 않는다(일반 스크롤 막대 환경에서 넘침이 생기고 사라질 때 아래가 밀리지 않게)
@@ -641,7 +641,7 @@ await run("resume", async () => {
   await page.browserContext().close();
 });
 
-// ================================================================ 회사 분석 단락(F-FULL), 경쟁사, 자금 조달, 심사 준비, 판로, 노트를 한 브라우저로 이어서
+// ================================================================ 회사 분석 단락(F-FULL), 경쟁사, 자금·판로(판로 갈래 포함), 심사 준비, 노트를 한 브라우저로 이어서
 const finder = await import("../lib/finder.ts");
 await run("main", async () => {
   await reset({ scenario: "F-FULL" });
@@ -1075,7 +1075,7 @@ await run("main", async () => {
   await wait(300);
   // C-23: 단계 메뉴 옆 개수(screens 1.1). 자금 조달 = 거기서 담은 공고·운용사, 심사 준비 = 담은 항목, 0이면 붙이지 않음
   const navNames = await fp.$$eval("nav[aria-label=단계] a", (l) => l.map((a) => a.getAttribute("aria-label") || a.innerText.trim()));
-  check("C-23", navNames.join(" / ") === "회사 분석 / 경쟁사 분석, 비교 대상 2곳 / 자금 조달, 담은 자금·판로 후보 3개 / 심사 준비, 담은 항목 3개 / 노트", navNames.join(" / "));
+  check("C-23", navNames.join(" / ") === "회사 분석 / 경쟁사 분석, 비교 대상 2곳 / 자금·판로, 담은 후보 3개 / 심사 준비, 담은 항목 3개 / 노트", navNames.join(" / "));
   // C-24: 단계 메뉴 다섯(판로 없음). 넓은 화면은 전체 이름, 390 폭은 짧은 이름이 한 줄에 다 보인다(메뉴 안 가로 밀림 없음)
   {
     const wide = await fp.$$eval("nav[aria-label=단계] li", (l) => l.map((x) => x.innerText.replace(/\d+/g, "").trim()));
@@ -1085,10 +1085,10 @@ await run("main", async () => {
       const nav = document.querySelector("nav[aria-label=단계]");
       return { texts: [...nav.querySelectorAll("li")].map((x) => x.innerText.replace(/\d+/g, "").trim()), over: nav.scrollWidth - nav.clientWidth, names: [...nav.querySelectorAll("li > a, li > [role=link]")].map((x) => x.getAttribute("aria-label")) };
     });
-    check("C-24", wide.join() === "회사 분석,경쟁사 분석,자금 조달,심사 준비,노트" && narrow.texts.join() === "회사,경쟁사,자금,심사,노트" && narrow.over <= 0 && narrow.names.every((n, i) => n?.startsWith(wide[i])), `${wide.join()} | ${narrow.texts.join()} 넘침 ${narrow.over}px`);
+    check("C-24", wide.join() === "회사 분석,경쟁사 분석,자금·판로,심사 준비,노트" && narrow.texts.join() === "회사,경쟁사,자금·판로,심사,노트" && narrow.over <= 0 && narrow.names.every((n, i) => n?.startsWith(wide[i])), `${wide.join()} | ${narrow.texts.join()} 넘침 ${narrow.over}px`);
     await n390.close();
   }
-  await globalChecks(fp, "자금 조달 1180");
+  await globalChecks(fp, "자금·판로 1180");
   {
     const off = await dueAlign(fp);
     check("F-16 (1180)", off.length >= 5 && new Set(off).size === 1 && off[0] >= 0, off.join(","));
@@ -1099,7 +1099,7 @@ await run("main", async () => {
     await pw.waitForSelector("[role=tablist][aria-label=갈래]");
     const tabs = await pw.$$eval("[role=tablist][aria-label=갈래] [role=tab]", (l) => l.map((t) => `${t.textContent}:${t.getAttribute("aria-selected")}`));
     check(`F-11 (${w})`, tabs.length === 3 && tabs[1].startsWith("투자받는 돈") && tabs[1].endsWith("true") && tabs[2] === "판로:false", tabs.join(","));
-    await globalChecks(pw, `자금 조달 ${w}`);
+    await globalChecks(pw, `자금·판로 ${w}`);
     {
       const off = await dueAlign(pw);
       check(`F-16 (${w})`, off.length >= 5 && new Set(off).size === 1 && off[0] >= 0, off.join(","));
@@ -1177,7 +1177,7 @@ await run("main", async () => {
     const pre = count((await getLog()).slice(l0), "POST", /sections\/sales$/);
     // 판로 단이 화면에 들어오면 1회 부르는 것은 아래 P-01(옛 판로 주소로 열면 판로 단으로 스크롤한다)에서 본다
     check("F-20", lay.side && lay.below && lay.line && pre === 0, `${JSON.stringify(lay)} 판로 단이 보이기 전 나라장터 요청 ${pre}회`);
-    await globalChecks(pf, "자금 조달 판로 단 1180");
+    await globalChecks(pf, "자금·판로 판로 단 1180");
     await pf.close();
   }
   // ---------------------------------------------------------- 심사 준비
@@ -1388,9 +1388,9 @@ await run("main", async () => {
   // C-23: 판로 갈래에서 판로 지원사업 1건과 입찰공고 1건을 더 담으면 자금 조달 5개(입찰공고 포함), 심사 준비 4개(입찰공고 제외)
   check(
     "C-23 (판로)",
-    (await attr(sp, `nav[aria-label=단계] a[href="/c/${CID}/funding"]`, "aria-label")) === "자금 조달, 담은 자금·판로 후보 5개" && (await attr(sp, `nav[aria-label=단계] a[href="/c/${CID}/review"]`, "aria-label")) === "심사 준비, 담은 항목 4개",
+    (await attr(sp, `nav[aria-label=단계] a[href="/c/${CID}/funding"]`, "aria-label")) === "자금·판로, 담은 후보 5개" && (await attr(sp, `nav[aria-label=단계] a[href="/c/${CID}/review"]`, "aria-label")) === "심사 준비, 담은 항목 4개",
   );
-  await globalChecks(sp, "자금 조달 판로 1180");
+  await globalChecks(sp, "자금·판로 판로 1180");
   await sh(sp, "sales-1180");
   const rp3 = await open(`/c/${CID}/review`, { ctx });
   await waitText(rp3, "담은 공고 3건");
@@ -1412,7 +1412,7 @@ await run("main", async () => {
     await ps.waitForSelector("[role=tablist][aria-label=갈래]");
     const stabs = await ps.$$eval("[role=tablist][aria-label=갈래] [role=tab]", (l) => l.map((t) => `${t.textContent}:${t.getAttribute("aria-selected")}`));
     await waitText(ps, "입찰공고");
-    await globalChecks(ps, `자금 조달 판로 ${w}`);
+    await globalChecks(ps, `자금·판로 판로 ${w}`);
     await sh(ps, `funding-sales-${w}`);
     check(`F-11 (판로 ${w})`, stabs.length === 3 && stabs[2] === "판로:true", stabs.join(","));
     await ps.close();
@@ -1947,10 +1947,10 @@ await run("browse", async () => {
   const rp = await open(`/c/${CID}/review`, { ctx });
   await waitText(rp, "담은 공고");
   check("F0-04", (await text(rp)).includes("담은 공고 0건"));
-  check("R-03", (await text(rp)).includes("아직 담은 공고가 없습니다.") && (await text(rp)).includes("자금 조달에서 고르기"));
+  check("R-03", (await text(rp)).includes("아직 담은 공고가 없습니다.") && (await text(rp)).includes("자금·판로에서 고르기"));
   const np = await open(`/c/${CID}/note`, { ctx });
   await waitText(np, "회사 핵심 값");
-  check("N-10", (await text(np)).includes("담은 항목이 없습니다.") && (await text(np)).includes("자금 조달로 가기") && (await text(np)).includes("메모"));
+  check("N-10", (await text(np)).includes("담은 항목이 없습니다.") && (await text(np)).includes("자금·판로로 가기") && (await text(np)).includes("메모"));
   // 운용사만 담았으면 투자 갈래(R-01)
   const fp = await open(`/c/${CID}/funding?lane=invest`, { ctx });
   await waitText(fp, "기업 유형을 골라 주세요");
@@ -2030,6 +2030,90 @@ await run("first-screen-shift", async () => {
     check(`A-23 (첫 화면 밀림 ${w})`, !worst || Math.abs(worst.dy) <= 8, worst ? `${worst.dy}px ${worst.what}` : "0px");
     await page.browserContext().close();
   }
+});
+
+// L-01·L-02: 넓은 화면(1024 이상) 가로 폭 규칙(visual-plan 7절, screens 1.13). 다섯 단계 화면에서
+// - 내용 첫 줄(h1, 회사 분석은 본문 첫 덩어리) 왼쪽 끝 = 회사 이름 줄 왼쪽 끝
+// - 넓은 곳([data-wide]: 경쟁사 비교 표 덩어리, 자금·판로의 두 갈래 나란히) 밖의 p·li·h2 오른쪽 끝 ≤ 왼쪽 + 760(+1)
+// - 넓은 곳은 경쟁사 분석(비교 자료 있음)과 자금·판로에 있다. 회사 분석 목차는 본문 오른쪽(간격 48 이상)이고 틀(1152) 안이다
+await run("layout-width", async () => {
+  await reset({ scenario: "F-FULL", deep: "two" });
+  const ctx = await browser.createBrowserContext();
+  const fs0 = await open(`/c/${CID}/funding`, { ctx });
+  await waitText(fs0, "기업 유형을 골라 주세요");
+  await click(fs0, "창업·벤처기업", { exact: true });
+  await wait(500);
+  await fs0.close();
+  const screens = [["회사 분석", ""], ["경쟁사 분석", "/rivals"], ["자금·판로", "/funding"], ["심사 준비", "/review"], ["노트", "/note"]];
+  const fails = [];
+  const notes = [];
+  for (const w of [1024, 1280, 1440]) {
+    for (const [name, path] of screens) {
+      const pg = await open(`/c/${CID}${path}`, { ctx, width: w });
+      await pg.waitForSelector("main h1, main > *", { timeout: 8000 }).catch(() => null);
+      await wait(1500);
+      const m = await pg.evaluate(() => {
+        const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== "hidden"; };
+        const nameEl = document.querySelector("section[aria-label=회사]")?.querySelector("h1, span.text-lg");
+        const main = document.querySelector("main");
+        const h1 = main.querySelector("h1");
+        const first = h1 && vis(h1) ? h1 : [...main.children].find(vis);
+        const left = first.getBoundingClientRect().left;
+        const inFixed = (e) => { for (let x = e; x; x = x.parentElement) if (getComputedStyle(x).position === "fixed") return true; return false; };
+        let worst = { rel: 0, text: "" };
+        for (const e of main.querySelectorAll("p, li, h2")) {
+          if (!vis(e) || e.closest("[data-wide]") || inFixed(e)) continue;
+          const rel = e.getBoundingClientRect().right - left;
+          if (rel > worst.rel) worst = { rel: Math.round(rel), text: e.innerText.replace(/\s+/g, " ").slice(0, 24) };
+        }
+        const wide = [...main.querySelectorAll("[data-wide]")].filter(vis).map((e) => Math.round(e.getBoundingClientRect().width));
+        const toc = document.querySelector("nav[aria-label='단락 목차']");
+        const tr = toc ? toc.getBoundingClientRect() : null;
+        return { name: nameEl ? nameEl.getBoundingClientRect().left : null, left, worst, wide, toc: tr ? { l: tr.left, r: tr.right } : null, mainR: main.getBoundingClientRect().right, hs: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+      });
+      const tag = `${name} ${w}`;
+      if (m.name === null || Math.abs(m.name - m.left) > 1) fails.push(`${tag} 왼쪽 ${Math.round(m.left)}≠이름 ${m.name === null ? "없음" : Math.round(m.name)}`);
+      if (m.worst.rel > 761) fails.push(`${tag} 글 오른쪽 +${m.worst.rel}(${m.worst.text})`);
+      if (m.hs > 1) fails.push(`${tag} 가로 넘침 ${m.hs}`);
+      if ((path === "/rivals" || path === "/funding") && !m.wide.length) fails.push(`${tag} 넓은 곳 없음`);
+      if (path === "" && (!m.toc || m.toc.l < m.mainR + 47 || m.toc.r > m.name + 1152 + 1)) fails.push(`${tag} 목차 ${m.toc ? `${Math.round(m.toc.l)}-${Math.round(m.toc.r)}` : "없음"}, 본문 끝 ${Math.round(m.mainR)}`);
+      notes.push(`${tag}: +${m.worst.rel}${m.wide.length ? ` 넓은 곳 ${m.wide.join("/")}` : ""}`);
+      if (OUT && w >= 1280) await sh(pg, `layout-${path.replace("/", "") || "analysis"}-${w}`, true);
+      await pg.close();
+    }
+  }
+  check("L-01 (넓은 화면 왼쪽 선·글 폭 760·넓은 곳)", fails.length === 0, fails.slice(0, 4).join(" | ") || notes.filter((n) => n.includes("1280")).join(" · "));
+  await ctx.close();
+});
+
+// L-02: 머리줄 높이는 모든 화면 48 + 선 1(screens 1.1). 1280 폭에서 로고의 왼쪽·위 위치도 같다. /funding 오른쪽 링크는 머리줄 안에서 44px 이상
+await run("header-height", async () => {
+  await reset({ scenario: "F-FULL" });
+  const ctx = await browser.createBrowserContext();
+  const fails = [];
+  const seen = {};
+  for (const w of [1280, 390, 360]) {
+    for (const path of ["/", "/funding", `/c/${CID}`, `/c/${CID}/rivals`]) {
+      const pg = await open(path, { ctx, width: w });
+      await pg.waitForSelector("header", { timeout: 8000 }).catch(() => null);
+      await wait(600);
+      const m = await pg.evaluate(() => {
+        const h = document.querySelector("header");
+        const hr = h.getBoundingClientRect();
+        const logo = [...document.querySelectorAll('a[href="/"]')].find((a) => a.textContent.includes("성장노트") && a.getBoundingClientRect().height > 0)?.getBoundingClientRect();
+        const right = [...h.querySelectorAll("a")].filter((a) => a.textContent.includes("회사 분석 시작")).map((a) => { const r = a.getBoundingClientRect(); return { h: r.height, w: r.width, inside: r.top >= hr.top - 0.5 && r.bottom <= hr.bottom + 0.5 }; });
+        return { h: Math.round(hr.height), logo: logo ? { x: Math.round(logo.left), y: Math.round(logo.top) } : null, right };
+      });
+      if (w !== 360 && m.h !== 49) fails.push(`${path} ${w} 머리줄 ${m.h}`);
+      if (w === 1280) (seen.logo ??= []).push(`${path} ${m.logo ? `${m.logo.x},${m.logo.y}` : "없음"}`);
+      for (const r of m.right) if (r.h < 43.5 || r.w < 43.5 || !r.inside) fails.push(`${path} ${w} 회사 분석 시작 ${Math.round(r.w)}x${Math.round(r.h)} 안 ${r.inside}`);
+      await pg.close();
+    }
+  }
+  await ctx.close();
+  const logos = new Set((seen.logo ?? []).map((x) => x.split(" ").pop()));
+  if (logos.size !== 1) fails.push(`1280 로고 위치 ${seen.logo.join(" | ")}`);
+  check("L-02 (머리줄 높이 49·로고 위치)", fails.length === 0, fails.slice(0, 4).join(" | ") || (seen.logo ?? []).join(" · "));
 });
 
 // PR-06: 인쇄한 차트 안 글이 7pt(9.33px) 이상이다. 근거 묶음 인쇄 모양을 A4 본문 폭(182mm = 688px)으로 그려 잰다

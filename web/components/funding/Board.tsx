@@ -1,6 +1,6 @@
 "use client";
 
-// 자금 조달 목록(빌리는 돈 / 투자받는 돈)과 카드. 대조 규칙은 lib/finder.ts 그대로 쓴다.
+// 자금·판로 목록(빌리는 돈 / 투자받는 돈)과 카드. 대조 규칙은 lib/finder.ts 그대로 쓴다.
 // 이 화면은 유료 호출을 하지 않는다(F-09). 자격 대조·운용사 요약은 심사 준비에서 한다.
 import Link from "next/link";
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -132,7 +132,7 @@ const mark = "meta";
 export type SaveSpec = { on: boolean; toggle: () => unknown; onText: string; offText: string; sr: string };
 
 /**
- * 자금 조달 화면의 공고 담기(screens 5절 "같은 공고가 두 갈래에 나올 때"). 빌리는 돈(program)과 판로 갈래(salesProgram)의 같은 공고는
+ * 자금·판로 화면의 공고 담기(screens 5절 "같은 공고가 두 갈래에 나올 때"). 빌리는 돈(program)과 판로 갈래(salesProgram)의 같은 공고는
  * 담기 상태가 하나다: 어느 갈래에서 담아도 둘 다 "담음", 빼면 두 종류를 함께 뺀다(심사 준비의 빼기와 같은 removeNotice)
  */
 export function noticeSave(cid: string, local: Local, p: Program, kind: "program" | "salesProgram"): SaveSpec {

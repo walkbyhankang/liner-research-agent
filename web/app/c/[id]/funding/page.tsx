@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CompanyFunding } from "@/components/funding/CompanyFunding";
 
-export const metadata: Metadata = { title: "자금 조달" };
+export const metadata: Metadata = { title: "자금·판로" };
 
 export default function CompanyFundingPage() {
   return (

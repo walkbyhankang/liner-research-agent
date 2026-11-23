@@ -103,7 +103,7 @@ export function openValues(job: AnalysisJob): OpenValue[] {
  * - 엇갈린 값·미확보 값: 분석이 진행 중이면 세지 않는다. 새로 분석 중에는 보이는 job 이 저장된 분석(done) 위에 새 결과를 얹은 것이라
  *   진행 중 작업(live)의 상태로도 본다(새 결과가 오는 동안 개수가 흔들리지 않게).
  * - 마감 임박·미충족 요건: 담은 공고(savedNotices, 두 화면에서 담은 같은 공고는 하나)로 센다. 분석 진행과 상관없다.
- *   마감 임박은 마감일이 14일 안이면 아직 접수 전이어도 센다(screens 4.0.3: 자금 조달 거르기 isSoon 은 접수 중 목록을 줄이는 것이고,
+ *   마감 임박은 마감일이 14일 안이면 아직 접수 전이어도 센다(screens 4.0.3: 자금·판로 거르기 isSoon 은 접수 중 목록을 줄이는 것이고,
  *   여기는 이미 담은 공고를 놓치지 않게 하는 것이라 일부러 다르다).
  */
 export function checkNowCounts(job: AnalysisJob, live: AnalysisJob | null, saved: readonly SavedItem[], checks: Record<string, CheckRecord>, today: string | null) {

@@ -1,6 +1,6 @@
 "use client";
 
-// 회사 분석 화면(screens 4절): 진행 줄 → 핵심 값 네 칸(재무제표식 숫자 띠) → 자금 후보 줄 → 상태 표시 안내 → 단락 5개 → 경쟁사 분석 줄.
+// 회사 분석 화면(screens 4절): 진행 줄 → 핵심 값 네 칸(재무제표식 숫자 띠) → 자금·판로 줄 → 상태 표시 안내 → 단락 5개 → 경쟁사 분석 줄.
 // 경쟁사는 2026-11-23 화면 구조 개편으로 단락이 아니라 경쟁사 분석 화면(/c/[id]/rivals)이다. 여기에는 그 입구 한 줄만 둔다.
 // 단락은 정해진 순서로 자리를 잡고 도착하는 대로 그 자리만 채운다. 전체를 덮는 대기 화면은 없다.
 import Link from "next/link";
@@ -51,9 +51,12 @@ export function AnalysisScreen() {
   if (!job) return <LoadingSkeleton />;
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:grid lg:grid-cols-[184px_minmax(0,1fr)] lg:gap-12">
+    // 넓은 화면(1024px 이상): 본문 760 + 간격 48 + 목차 184. 본문이 회사 이름 줄과 같은 왼쪽 선에서 시작하고 목차는 본문 오른쪽에 붙는다
+    // (2026-11-23 가로 폭 정리, visual-plan 7절). 목차는 DOM 에서 본문 앞에 둔다: 좁은 화면에서는 단계 메뉴 아래 붙는 가로 줄로 본문 위에 보이고,
+    // 넓은 화면에서도 단락으로 건너뛰는 길잡이라 키보드·화면 읽기가 본문보다 먼저 만나는 것이 자연스럽다. 넓은 화면의 오른쪽 자리는 격자 칸으로만 옮긴다
+    <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:grid lg:grid-cols-[minmax(0,760px)_184px] lg:gap-12">
       <Toc job={job} />
-      <main className="min-w-0 max-w-[760px] pb-10">
+      <main className="min-w-0 max-w-[760px] pb-10 lg:col-start-1 lg:row-start-1">
         <ProgressLine job={job} />
         <KeyStrip job={job} />
         <CheckNow job={job} />
@@ -87,7 +90,8 @@ function LoadingSkeleton() {
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6" aria-busy="true">
       <p className="sr-only">분석을 불러오는 중입니다</p>
-      <div className="max-w-[760px] lg:ml-[232px]">
+      {/* 불러오는 중 뼈대도 본문과 같은 자리(회사 이름 줄과 같은 왼쪽 선, 폭 760) */}
+      <div className="max-w-[760px]">
         <Placeholder h={120} />
         <div className="mt-6 space-y-3">
           <Placeholder h={20} w="40%" />
@@ -182,7 +186,7 @@ function Toc({ job }: { job: AnalysisJob }) {
   }, [current]);
   const items = SCREEN_SECTIONS.map((s) => ({ ...s, text: TOC_TEXT[phaseOf(job.sections[s.primary])] }));
   return (
-    <nav aria-label="단락 목차" className="no-print sticky top-[49px] z-20 -mx-4 border-b border-rule bg-paper px-4 sm:-mx-6 sm:px-6 lg:top-[65px] lg:mx-0 lg:mt-6 lg:self-start lg:border-b-0 lg:px-0">
+    <nav aria-label="단락 목차" className="no-print sticky top-[49px] z-20 -mx-4 border-b border-rule bg-paper px-4 sm:-mx-6 sm:px-6 lg:col-start-2 lg:row-start-1 lg:top-[65px] lg:mx-0 lg:mt-6 lg:self-start lg:border-b-0 lg:px-0">
       <ol ref={listRef} className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-0 lg:overflow-visible">
         {items.map((s) => (
           <li key={s.key} className="shrink-0">
@@ -379,7 +383,7 @@ const VALUE_SECTION: Record<string, ScreenKey> = {
  * 이 방문에서 분석이 진행되는 것을 봤으면 틀을 끝까지 두고 항목은 한 줄로 둔다(끝나는 순간 아래가 밀리지 않게).
  * - 엇갈린 값·미확보 값: 합친 회사 값(merged)의 상태로 센다. 미팅 근거 묶음 "미팅 전에 정리할 값"과 같은 셈(openValues). 분석이 진행 중이면(새로 분석 포함) 세지 않는다.
  * 셈 자체는 lib/review.ts checkNowCounts(단위 시험이 있다).
- * - 마감 임박 담은 공고: 이 브라우저에 담은 공고(판로 지원사업 포함) 가운데 마감이 오늘부터 14일 안(자금 조달 "마감 임박"과 같은 기준).
+ * - 마감 임박 담은 공고: 이 브라우저에 담은 공고(판로 지원사업 포함) 가운데 마감이 오늘부터 14일 안(자금·판로 "마감 임박"과 같은 기준).
  * - 미충족 요건: 공고문 자격 대조를 한 담은 공고의 "미충족" 요건 수(심사 준비 "부족한 요건"과 같은 셈). 대조한 것이 없으면 없음.
  * 값 항목은 누르면 아래에 목록이 펼쳐지고(값마다 그 단락으로 가는 링크), 공고 항목은 심사 준비로 간다.
  */
@@ -392,7 +396,7 @@ function CheckNow({ job }: { job: AnalysisJob }) {
   const open: OpenValue["kind"] | null = openConflict ? "conflict" : openMissing ? "missing" : null;
   const running = job.status === "running" || c.live?.status === "running";
   // 이 방문에서 분석(새로 분석 포함)이 진행되는 것을 봤으면 묶음 틀을 끝까지 둔다. 끝나는 순간 묶음이 새로 생기거나 사라지면
-  // 그 아래(자금 후보 줄·단락)가 밀리기 때문이다. 처음부터 끝난 분석을 열었고 셀 것이 없으면 묶음을 그리지 않는다
+  // 그 아래(자금·판로 줄·단락)가 밀리기 때문이다. 처음부터 끝난 분석을 열었고 셀 것이 없으면 묶음을 그리지 않는다
   const [seenRunning, setSeenRunning] = useState(running);
   if (running && !seenRunning) setSeenRunning(true); // 그리는 중 상태 맞추기(React 권장 방식, 효과 없이)
   // 분석이 진행되는 동안에는 펼친 값 목록을 닫는다. 열어 둔 채면 끝나는 순간 목록이 다시 펼쳐지며 아래를 민다(사용자가 다시 열면 된다)
@@ -519,15 +523,15 @@ function FundingRow({ job }: { job: AnalysisJob }) {
   const ready = isTerminal(job.sections.official);
   return (
     <div className="no-print mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <p>이 회사 값으로 받을 수 있는 자금 후보를 찾습니다.</p>
+      <p>이 회사 값으로 받을 수 있는 자금과 판로 기회를 찾습니다.</p>
       {ready ? (
         <Link href={`/c/${c.cid}/funding`} className="btn btn-primary">
-          자금 후보 보기
+          자금·판로 보기
         </Link>
       ) : (
         <span className="flex items-center gap-2">
           <button type="button" className="btn" disabled>
-            자금 후보 보기
+            자금·판로 보기
           </button>
           <span className="text-sm text-sub">공식 자료를 받으면 열립니다</span>
         </span>
