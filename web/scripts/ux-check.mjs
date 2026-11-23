@@ -1786,7 +1786,9 @@ await run("variants", async () => {
     await addOne("가상추가하나");
     await wait(300);
     const st = () => pm.evaluate(() => ({
-      max: document.querySelector("[data-rival-max]")?.textContent.trim() ?? null,
+      // 상한 안내 줄은 늘 있고(role=status, 빈 채) 다 찼을 때만 글이 들어간다. 글이 없으면 null
+      max: document.querySelector("[data-rival-max]")?.textContent.trim() || null,
+      live: document.querySelector("[data-rival-max]")?.getAttribute("role") ?? null,
       input: document.querySelector("#pick form input")?.disabled,
       add: [...document.querySelectorAll("#pick form button")].find((b) => b.textContent.trim() === "추가")?.disabled,
       nav: document.querySelector('nav[aria-label=단계] a[href$="/rivals"]')?.getAttribute("aria-label"),
@@ -1798,15 +1800,20 @@ await run("variants", async () => {
     await press("카타파", "out");
     await wait(300);
     const four = await st();
-    await addOne("가상추가둘");
-    await wait(300);
+    // RI-23: 키보드로(입력에 쓰고 Enter) 다섯째를 직접 추가하면 입력이 막혀도 초점이 상한 안내 줄로 간다(사라지지 않는다)
+    await pm.focus("#pick form input");
+    await pm.keyboard.type("가상추가둘");
+    await pm.keyboard.press("Enter");
+    await wait(400);
+    const kb = await pm.evaluate(() => ({ max: document.activeElement?.hasAttribute("data-rival-max") ?? false, role: document.querySelector("[data-rival-max]")?.getAttribute("role"), body: document.activeElement === document.body }));
+    check("RI-23", kb.max && kb.role === "status" && !kb.body, JSON.stringify(kb));
     await openDisclosure(pm, "제외한 후보", "#pick");
     const full2 = await st();
     const kata = full2.groups["카타파 비교 대상"] ?? "";
     check(
       "RI-21",
       full1.max === "비교 대상은 최대 5곳입니다." && full1.input && full1.add && full1.nav === "경쟁사 분석, 비교 대상 5곳" && full1.cost &&
-        four.max === null && !four.input && !four.add &&
+        four.max === null && four.live === "status" && !four.input && !four.add &&
         full2.max === "비교 대상은 최대 5곳입니다." && kata === "포함:false:막힘/제외:true:됨" && full2.groups["마바사 비교 대상"] === "포함:true:됨/제외:false:됨" && !full2.t.includes("앞의 5곳만"),
       `${JSON.stringify({ max: full1.max, input: full1.input, add: full1.add, nav: full1.nav })} | 4곳 ${four.max} | ${kata} | ${full2.groups["마바사 비교 대상"]}`,
     );
@@ -1814,6 +1821,26 @@ await run("variants", async () => {
     check("RI-22", old.length === 0 && full2.t.includes("비교 대상 정하기") && full2.t.includes("경쟁사 직접 추가") && full2.t.includes("비교 대상 5곳(경쟁사 후보 4곳 중 3곳, 직접 추가 2곳)"), old.join(",") || "옛 용어 없음");
     await globalChecks(pm, "경쟁사 분석 비교 대상 5곳 1180");
     await sh(pm, "rivals-max-1180", true);
+    // RI-24: 이미 직접 추가한 이름을 다시 넣어(아무것도 늘지 않음) 초점 옮김 표시가 남지 않는다 → 그 뒤 후보 "포함"으로 상한이 차도 누른 단추의 초점을 빼앗지 않는다
+    await press("마바사", "in"); // 포함을 다시 눌러 풀기 → 4곳(마바사는 아직 안 정함, 같은 목록에 남는다)
+    await wait(300);
+    await pm.focus("#pick form input");
+    await pm.keyboard.type("가상추가하나");
+    await pm.keyboard.press("Enter");
+    await wait(300);
+    const dup = await st();
+    await pm.evaluate(() => [...document.querySelectorAll("#pick [role=group]")].find((g) => g.getAttribute("aria-label") === "마바사 비교 대상")?.querySelectorAll("button")[0].focus());
+    await pm.keyboard.press("Enter");
+    await wait(400);
+    const keep = await pm.evaluate(() => {
+      const a = document.activeElement;
+      return { group: a?.closest("[role=group]")?.getAttribute("aria-label") ?? null, text: a?.textContent.trim() ?? null, pressed: a?.getAttribute("aria-pressed") ?? null, note: a?.hasAttribute("data-rival-max") ?? false, max: document.querySelector("[data-rival-max]")?.textContent.trim() || null };
+    });
+    check(
+      "RI-24",
+      dup.max === null && !dup.input && keep.group === "마바사 비교 대상" && keep.text === "포함" && keep.pressed === "true" && !keep.note && keep.max === "비교 대상은 최대 5곳입니다.",
+      `같은 이름 다시 추가 후 ${dup.max} | ${JSON.stringify(keep)}`,
+    );
     await pm.close();
   }
   // RI-16: 경쟁사 5곳 비교 표. 820 폭은 표 상자 안에서만 옆으로 밀리고 첫 열이 붙어 있으며, 모든 폭에서 문서 가로 넘침·작은 누르는 곳이 없다

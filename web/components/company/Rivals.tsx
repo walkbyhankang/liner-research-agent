@@ -154,6 +154,13 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
   const choose = (key: string, v: "yes" | "no" | null) => setRivalChoice(c.cid, key, v, seed);
   // 비교 대상은 최대 MAX_RIVALS 곳(서버 계약 2.4). 다 차면 아직 포함하지 않은 후보의 "포함"과 직접 추가를 막는다(포함한 곳의 "제외"는 된다)
   const full = pickedRivals(job, c.local.rivalChoices).length >= MAX_RIVALS;
+  // 직접 추가로 상한이 차면 초점이 있던 입력·단추가 막혀 초점이 사라진다. 그때는 초점을 상한 안내 줄로 옮긴다(키보드·화면 읽기 사용자가 위치를 잃지 않게)
+  const maxNote = useRef<HTMLParagraphElement>(null);
+  const focusMaxNote = useRef(false);
+  useEffect(() => {
+    if (full && focusMaxNote.current) maxNote.current?.focus();
+    focusMaxNote.current = false;
+  }, [full]);
 
   const row = (r: (typeof candidates)[number], memo: string) => (
     <div className="flex flex-col gap-2 py-1 sm:flex-row sm:items-start">
@@ -189,7 +196,11 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
         e.preventDefault();
         const n = name.trim();
         if (n.length < 2 || full) return;
-        addRival(c.cid, userRivalKey(n), n, seed);
+        const key = userRivalKey(n);
+        // 이미 직접 추가한 이름이면 addRival 이 아무것도 바꾸지 않는다(local.ts). 그때 초점 옮김 표시를 켜 두면, 나중에 "포함"으로 상한이 찰 때
+        // 누른 단추의 초점을 빼앗는다. 실제로 한 곳이 늘어 상한이 찰 때만 켠다
+        if (!eff.added.some((a) => a.key === key) && pickedRivals(job, c.local.rivalChoices).length + 1 >= MAX_RIVALS) focusMaxNote.current = true;
+        addRival(c.cid, key, n, seed);
         setName("");
       }}
     >
@@ -246,11 +257,10 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
               ))}
             </ul>
           )}
-          {full && (
-            <p id={`${c.cid}-rival-max`} className="mt-2 text-sm font-medium" data-rival-max>
-              비교 대상은 최대 {MAX_RIVALS}곳입니다.
-            </p>
-          )}
+          {/* 상한 안내는 늘 빈 채로 두고(role=status) 다 찼을 때 글만 채운다. 글을 담은 채 새로 나타난 status 는 화면 읽기가 알리지 않는 경우가 많다 */}
+          <p ref={maxNote} id={`${c.cid}-rival-max`} role="status" tabIndex={-1} className={full ? "mt-2 text-sm font-medium" : undefined} data-rival-max>
+            {full ? `비교 대상은 최대 ${MAX_RIVALS}곳입니다.` : null}
+          </p>
           {pendingFacts && <p className="mt-2 text-sm text-sub">후보를 더 찾고 있습니다 (보통 3분 안에 끝남)</p>}
           {compact ? (
             <div className="mt-3 space-y-3">

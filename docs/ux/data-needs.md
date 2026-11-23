@@ -65,7 +65,7 @@
 | `POST /api/analysis/{jobId}/sections/{key}` | 열 때 실행(`papers`, `rivals_deep`, `sales`)과 단락만 새로(`news`, 미확보로 끝난 기본 단락) | 202. 상태는 1.1절로 묻는다 |
 
 - `POST /api/analysis/{jobId}/sections/{key}`를 기본 단락에도 쓰는 것은 설계 문서에 없는 확장이다(설계 문서는 열 때 실행 단락만). 지원하지 않으면 화면은 `retryable: false`로 보고 "이 단락 다시 분석"을 숨긴다.
-- 열 때 실행 단락의 요청 본문: `rivals_deep` `{rivals: [{name, nameEn?, crno?}]}`(사용자가 "맞음"으로 고른 국내 경쟁사), `sales` `{keywords: ["…"]}`(최대 6개), `papers` 본문 없음.
+- 열 때 실행 단락의 요청 본문: `rivals_deep` `{rivals: [{name, nameEn?, crno?}]}`(사용자가 "포함"한 비교 대상 경쟁사, 최대 5곳), `sales` `{keywords: ["…"]}`(최대 6개), `papers` 본문 없음.
 
 ### 1.4 예상값 (`estimates`, 제안)
 
