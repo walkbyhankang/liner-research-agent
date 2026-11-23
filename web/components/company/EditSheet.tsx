@@ -164,7 +164,7 @@ export function EditSheet({ open, onClose }: { open: boolean; onClose: () => voi
                 </div>
               );
             })}
-            <p className="text-sm">비워 둔 칸은 자격 대조에서 &lsquo;확인 필요&rsquo;로 나옵니다. 확인된 특허 수와 국민연금 가입자 수는 대조할 때 함께 보냅니다.</p>
+            <p className="text-sm">비워 둔 칸은 자격 대조에서 &lsquo;확인 필요&rsquo;로 나옵니다. 검색으로 확인한 특허 수와 국민연금 가입자 수는 대조할 때 함께 보냅니다.</p>
             {editedCount > 0 &&
               (ask === "reset" ? (
                 <div className="rounded-md border border-rule p-3" role="alert">

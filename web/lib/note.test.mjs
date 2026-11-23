@@ -10,7 +10,7 @@ const local = { loaded: true, edits: { industry: { value: "고친 업종", updat
 
 test("회사 핵심 값은 9줄, 줄마다 상태 낱말과 출처(N-02), 고친 값은 직접 입력", () => {
   const rows = noteRows(job("F-FULL"), local.edits, "2026-11-22");
-  assert.deepEqual(rows.map((r) => r.label), ["지역", "업력(설립일)", "기업 유형", "업종", "매출(사업연도·기준)", "국민연금 가입자(월)", "직원 수", "누적 투자", "국내 특허"]);
+  assert.deepEqual(rows.map((r) => r.label), ["지역", "업력(설립일)", "기업 유형", "업종", "매출(사업연도·기준)", "국민연금 가입자(월)", "직원 수", "누적 투자", "검색으로 확인한 특허"]);
   assert.equal(rows[1].values[0].text, "업력 6년 (설립 2020-09-15)");
   assert.equal(rows[3].values[0].word, "edited");
   assert.equal(rows[4].values[0].text, "56.7억원 (2024 사업연도, 별도)");

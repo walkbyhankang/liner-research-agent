@@ -8,7 +8,7 @@
 //
 // 문구는 docs/ux/screens.md 6.2절 그대로다. 판정·합계·비율을 만들지 않는다(사용자가 누르는 "준비함"만 있다).
 import type { AnalysisJob } from "./contract.ts";
-import type { ScreenKey } from "./view.ts";
+import { PATENT_LABEL, type ScreenKey } from "./view.ts";
 
 /** 관련 자료 한 줄. to 가 있으면 누르면 그 단락(회사 분석)이나 경쟁사 분석 화면("rivals")으로 간다 */
 export type Related = { text: string; to: ScreenKey | "rivals" | null };
@@ -50,7 +50,7 @@ export const QUESTIONS: Question[] = [
   { id: "q6", group: "매출과 성장", text: "앞으로 3~5년 동안 가장 큰 성장 기회는 어디인가요?", related: none },
   { id: "q7", group: "경쟁", text: "어떤 회사에 계약을 놓치고, 그 이유는 무엇인가요?", related: (c) => (c.confirmedRivals ? [{ text: `비교 대상 경쟁사 ${c.confirmedRivals}곳`, to: "rivals" }] : []) },
   { id: "q8", group: "경쟁", text: "다른 회사가 쉽게 따라 하기 어려운 강점은 무엇인가요?", related: (c) => [
-    ...(patents(c) ? [{ text: `확인된 특허 ${patents(c)}건`, to: "tech" as const }] : []),
+    ...(patents(c) ? [{ text: `${PATENT_LABEL} ${patents(c)}건`, to: "tech" as const }] : []),
     ...(coreTech(c) ? [{ text: "핵심 기술", to: "overview" as const }] : []),
   ] },
   { id: "q9", group: "경쟁", text: "고객은 우리 회사와 다른 선택지를 어떤 기준으로 비교하나요?", related: (c) => (c.deepDone ? [{ text: "경쟁사 비교 자료", to: "rivals" }] : []) },
@@ -91,7 +91,7 @@ export const DD_ITEMS: DdItem[] = [
   { id: "d11", group: "법무", text: "법인 등기부등본", related: (c) => (c.job.company.crno ? [{ text: "법인등록번호 확인 (금융위원회)", to: "overview" }] : []) },
   { id: "d12", group: "법무", text: "주주명부와 지분 구조 (투자 계약서 포함)", related: (c) => (rounds(c) ? [{ text: `투자 라운드 ${rounds(c)}건, 투자기관 ${c.job.merged.investors.length}곳 (보도)`, to: "investment" }] : []) },
   { id: "d13", group: "법무", text: "진행 중인 소송과 분쟁 내역", related: none },
-  { id: "d14", group: "법무", text: "지식재산권 목록 (특허, 상표)", related: (c) => (patents(c) ? [{ text: `확인된 국내 특허 ${patents(c)}건`, to: "tech" }] : []) },
+  { id: "d14", group: "법무", text: "지식재산권 목록 (특허, 상표)", related: (c) => (patents(c) ? [{ text: `${PATENT_LABEL} ${patents(c)}건`, to: "tech" }] : []) },
   { id: "d15", group: "법무", text: "인허가와 인증 내역", related: none },
   { id: "d16", group: "운영", text: "주요 공급처와 외주 의존 현황", related: none },
   { id: "d17", group: "운영", text: "사업장과 설비 현황", related: (c) => (c.job.merged.headquarters?.display ? [{ text: `본사 ${c.job.merged.headquarters.display}`, to: "overview" }] : []) },

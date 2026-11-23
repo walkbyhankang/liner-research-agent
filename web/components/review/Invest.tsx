@@ -12,7 +12,7 @@ import { rivalBackers } from "@/lib/funding";
 import { putBrief, setPrep, toggleSaved, type SavedItem } from "@/lib/local";
 import { DD_GROUPS, DD_ITEMS, QUESTIONS, QUESTION_GROUPS, groupCounts, relatedHref, type PrepContext, type Related } from "@/lib/prep";
 import { pickedRivals } from "@/lib/view";
-import { evidenceFinance, evidenceFunding, evidenceNews, evidencePatents, openValues } from "@/lib/review";
+import { PATENT_MISSING, evidenceFinance, evidenceFunding, evidenceNews, evidencePatents, openValues } from "@/lib/review";
 import { runTask } from "@/lib/tasks";
 import { useTask } from "@/lib/useTask";
 import { DetailRow, Disclosure, ExtLink, SourceLine, StatusWord, useNow } from "@/components/kit";
@@ -271,7 +271,7 @@ function EvidenceBody({ job, which }: { job: AnalysisJob; which: "finance" | "fu
   }
   if (which === "patents") {
     const r = s.patents.result;
-    if (!r || !r.summary.total) return <p className="py-2">미확보: 출원인이 이 회사로 확인된 국내 특허를 찾지 못했습니다</p>;
+    if (!r || !r.summary.total) return <p className="py-2">{PATENT_MISSING}</p>;
     return (
       <div className="py-2" data-ev="patents">
         <div className="max-w-[420px]">

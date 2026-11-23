@@ -5,7 +5,7 @@ import test from "node:test";
 import { ageLabel, byCurrencyTexts, daysSince, elapsedText, eok, fmtBzno, fmtTime, formerNamesText, isStale, moneyText, msToNextKstMidnight, safeUrl, shortCompany, stageKo, todayKST, wonDisplay, wrapSvgText, yearsSince } from "./format.ts";
 import { normName, sameNameIds, userRivalKey } from "./names.ts";
 import { initialConditions, relatedTo, rivalBackers, splitExisting } from "./funding.ts";
-import { bidDeadline, checkNowCounts, gaps, noticeEnd, sortBids, sortRows, verdictCounts } from "./review.ts";
+import { PATENT_MISSING, bidDeadline, checkNowCounts, evidencePatents, gaps, noticeEnd, openValues, sortBids, sortRows, verdictCounts } from "./review.ts";
 import { fundingCount, reviewCount, savedNotices } from "./local.ts";
 import { memoryBackend } from "./store.ts";
 import { createHash } from "node:crypto";
@@ -246,4 +246,13 @@ test("날이 바뀌면(서울 자정) 오늘 날짜와 마감 임박 셈이 바�
   // 15일 남은 공고는 다음 날 14일 창에 들어온다
   assert.deepEqual(checkNowCounts(saved, null, s("2026-12-07"), {}, "2026-11-22").soon, []);
   assert.deepEqual(checkNowCounts(saved, null, s("2026-12-07"), {}, "2026-11-23").soon, [14]);
+});
+
+test("특허 수는 미팅 근거 묶음·미팅 전에 정리할 값에서도 '검색으로 확인한 특허'이고 옛 이름 '국내 특허'를 쓰지 않는다(A-35, R-18)", () => {
+  assert.equal(evidencePatents(job("F-FULL")).text, "검색으로 확인한 특허 11건 (출원인 확인, 등록 8건)");
+  assert.equal(evidencePatents(job("F-EMPTY")).text, PATENT_MISSING);
+  assert.doesNotMatch(PATENT_MISSING, /국내 특허/);
+  const labels = openValues(job("F-EMPTY")).map((o) => o.label);
+  assert.ok(labels.includes("검색으로 확인한 특허"), labels.join());
+  assert.ok(!labels.includes("국내 특허"));
 });

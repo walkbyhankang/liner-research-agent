@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DEFAULT_ESTIMATES, type AnalysisJob } from "@/lib/contract";
 import { elapsedText } from "@/lib/format";
-import { SCREEN_SECTIONS, TOC_TEXT, isTerminal, keyTiles, phaseOf, pickedRivals, stillChecking, unavailableScreens, visibleRivals, type ScreenKey, type Tile, type Word } from "@/lib/view";
+import { SCREEN_SECTIONS, TOC_TEXT, PATENT_LABEL, isTerminal, keyTiles, phaseOf, pickedRivals, stillChecking, unavailableScreens, visibleRivals, type ScreenKey, type Tile, type Word } from "@/lib/view";
 import { checkNowCounts, type OpenValue } from "@/lib/review";
 import { Chevron, Disclosure, Placeholder, StatusWord, VerdictMark, nb, useOpen } from "@/components/kit";
 import { restoreAnchor, useCompany, useTicker } from "@/components/company/context";
@@ -305,10 +305,19 @@ function KeyStrip({ job }: { job: AnalysisJob }) {
   );
 }
 
+/**
+ * 칸마다 값이 오면 붙는 상태 낱말(view.ts keyTiles 와 같음). 확인 중·미확보일 때 이 낱말 폭을 보이지 않게 미리 잡아,
+ * 값이 와서 낱말이 붙어도 이름표가 꺾이는 줄 수가 바뀌지 않게 한다(아래 TileCell)
+ */
+const TILE_WORD: Record<Tile["key"], Word> = { revenue: "confirmed", nps: "reference", invest: "reported", patents: "confirmed" };
+
 function TileCell({ t }: { t: Tile }) {
   // 칸 높이는 값이 다 왔을 때(기준 줄 2줄 + 나중에 오는 "웹 조사" 줄)에 맞춰 미리 잡는다. 늦게 오는 줄이 띠 높이를 바꿔 아래가 밀리지 않게.
   // 실측(업스테이지·기준 기업, 2026-11-23): 끝난 칸 내용 높이 최대 1180 폭 167px, 820 폭 140px, 390 폭 162px.
   // 글 크기 조정(숫자 32~36px, 이름표·기준 15px) 뒤 다시 잼: 기준 기업·가짜 F-FULL 최대 1180 폭 165px, 820 폭 141px, 390 폭 161px
+  // 특허 칸 이름 "검색으로 확인한 특허"(2026-11-23) 뒤: 칸 안쪽 폭이 좁은 640 미만(147px 안팎)과 1024 이상(157px)에서는 이름표(128px)와
+  // 상태 낱말(52px)이 한 줄에 들지 않아 이름표가 두 줄로 꺾인다. 그래서 그 폭에서는 네 칸 모두 이름표 줄을 두 줄 높이(48px)로 잡고
+  // 아래에 붙여(표 머리처럼) 숫자가 네 칸에서 같은 높이에 오게 한다. 칸 최소 높이도 그만큼(24px) 올린다: 164 → 188, 168 → 192
   return (
     <a
       href={`#${t.anchor}`}
@@ -317,12 +326,20 @@ function TileCell({ t }: { t: Tile }) {
         goSection(t.anchor);
       }}
       aria-busy={t.loading || undefined}
-      className="block h-full min-h-[164px] px-3 py-3 hover:bg-wash sm:min-h-[144px] sm:px-4 lg:min-h-[168px]"
+      className="block h-full min-h-[188px] px-3 py-3 hover:bg-wash sm:min-h-[144px] sm:px-4 lg:min-h-[192px]"
     >
       {/* 위계: 이름표(15 굵게) → 숫자(32~36 가장 굵게, 단위는 18로 붙임) → 기준(15 보조 글, 숫자 바로 밑) */}
-      <span className="flex items-start justify-between gap-2">
+      <span className="flex min-h-12 items-end justify-between gap-2 sm:min-h-0 sm:items-start lg:min-h-12 lg:items-end" data-tile-head>
         <span className="text-sm font-semibold">{t.label}</span>
-        {t.word && <StatusWord w={t.word} />}
+        {t.word ? (
+          <StatusWord w={t.word} />
+        ) : (
+          // 확인 중·미확보: 올 낱말의 폭만 보이지 않게 잡는다(화면 읽기·복사에 나오지 않음). flex 로 감싸야 줄 상자(27px)가 생기지 않고
+          // 실제 낱말(24px)과 높이가 같다
+          <span aria-hidden className="invisible flex">
+            <StatusWord w={TILE_WORD[t.key]} />
+          </span>
+        )}
       </span>
       {t.loading ? (
         <span className="mt-1 block space-y-2">
@@ -375,7 +392,7 @@ function BigNumber({ text }: { text: string }) {
 /** 회사 값 이름 → 그 값이 보이는 단락(openValues 의 이름표) */
 const VALUE_SECTION: Record<string, ScreenKey> = {
   지역: "overview", 본사: "overview", 대표: "overview", 설립: "overview", "업종(금융위)": "overview", "업종(웹 조사)": "overview", "직원 수": "overview",
-  "매출(공식)": "finance", "매출(웹 조사)": "finance", "국민연금 가입자": "finance", "국내 특허": "tech",
+  "매출(공식)": "finance", "매출(웹 조사)": "finance", "국민연금 가입자": "finance", [PATENT_LABEL]: "tech",
 };
 
 /**

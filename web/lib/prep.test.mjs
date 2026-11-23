@@ -29,6 +29,9 @@ test("관련 자료는 분석에 있는 값만 붙이고, 없으면 빈 목록�
   assert.equal(d12, `투자 라운드 10건, 투자기관 ${job.merged.investors.length}곳 (보도)`);
   const ectx = { job: empty, confirmedRivals: 0, deepDone: false, papersDone: false };
   assert.deepEqual(DD_ITEMS.find((d) => d.id === "d14").related(ectx), []);
+  // 특허 수는 모든 화면에서 "검색으로 확인한 특허"(2026-11-23 사용자 지시)
+  assert.deepEqual(DD_ITEMS.find((d) => d.id === "d14").related(ctx).map((r) => r.text), ["검색으로 확인한 특허 11건"]);
+  assert.ok(rel("q8").includes("검색으로 확인한 특허 11건"));
 });
 
 test("목록 글에 판정·점수 낱말이 없다", () => {

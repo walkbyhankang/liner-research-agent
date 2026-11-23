@@ -4,7 +4,7 @@ import { STATUS_LABEL, sourceLine, type AnalysisJob, type Value } from "./contra
 import { BIZ_LABEL, EDIT_FIELDS, isBizType, type Edits } from "./company-values.ts";
 import { ageLabel, byCurrencyTexts, compactDay, fmtTime, yearsSince } from "./format.ts";
 import type { Local } from "./local.ts";
-import { wordText, type Word } from "./view.ts";
+import { PATENT_LABEL, wordText, type Word } from "./view.ts";
 
 export type NoteValue = { text: string; word: Word; source: string | null };
 export type NoteRow = { label: string; values: NoteValue[]; pending: boolean };
@@ -56,7 +56,7 @@ export function noteRows(job: AnalysisJob, edits: Edits, today: string): NoteRow
       pending: false,
     });
   }
-  rows.push(valueRow("국내 특허", m.patentCount));
+  rows.push(valueRow(PATENT_LABEL, m.patentCount));
   return rows;
 }
 

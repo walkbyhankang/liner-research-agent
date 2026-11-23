@@ -3,7 +3,7 @@
 import { NOTICE_COMPANY_LIMITS, type AnalysisJob, type BizTypeId, type NoticeCompany, type RivalsDeepResult, type Value } from "./contract.ts";
 import { wonDisplay } from "./format.ts";
 import { rivalCompany } from "./rival.ts";
-import { firmStatus } from "./view.ts";
+import { PATENT_LABEL, firmStatus } from "./view.ts";
 
 export const EDIT_FIELDS = ["region", "bizType", "founded", "industry", "employees", "revenue", "need", "notes"] as const;
 export type EditField = (typeof EDIT_FIELDS)[number];
@@ -37,12 +37,12 @@ export function foundedForCheck(v: Value | null): { value: string; note: string 
 
 type JobLike = Pick<AnalysisJob, "company" | "merged" | "sections">;
 
-/** 자동 메모: 확인된 특허 수, 국민연금 가입자 수(직원 수와 다르다는 말 포함) */
+/** 자동 메모: 검색으로 확인한 특허 수, 국민연금 가입자 수(직원 수와 다르다는 말 포함) */
 export function autoNotes(job: JobLike): string[] {
   const out: string[] = [];
   const pc = job.merged.patentCount;
   const reg = job.sections.patents.result?.summary.registered;
-  if (pc && pc.status !== "unavailable" && typeof pc.raw === "number" && pc.raw > 0) out.push(`확인된 국내 특허 ${pc.raw}건(출원인 확인, 등록 ${reg ?? 0}건)`);
+  if (pc && pc.status !== "unavailable" && typeof pc.raw === "number" && pc.raw > 0) out.push(`${PATENT_LABEL} ${pc.raw}건(출원인 확인, 등록 ${reg ?? 0}건)`);
   const nps = job.merged.npsLatest;
   if (nps && nps.status !== "unavailable" && typeof nps.raw === "number") out.push(`국민연금 가입자 ${nps.raw}명(${nps.source?.asOf ?? ""}, 직원 수와 다름)`);
   return out;

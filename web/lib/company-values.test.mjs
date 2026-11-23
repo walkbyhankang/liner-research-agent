@@ -13,7 +13,7 @@ test("분석 값만으로 만든 회사 값: 원문 확인·보도 값만, 국�
   assert.deepEqual(c, {
     name: "주식회사 가나다테크", region: "서울", biz: "", founded: "2020-09", industry: "전자집적회로 제조업", employees: "약 120명 (2026-06 기준)",
     revenue: "56.7억원 (2024 사업연도, 별도)", need: "",
-    notes: "확인된 국내 특허 11건(출원인 확인, 등록 8건), 국민연금 가입자 132명(2026-10, 직원 수와 다름)",
+    notes: "검색으로 확인한 특허 11건(출원인 확인, 등록 8건), 국민연금 가입자 132명(2026-10, 직원 수와 다름)",
   });
   assert.ok(!c.employees.includes("132"));
 });
@@ -23,7 +23,7 @@ test("고친 값이 먼저이고, 기업 유형은 고른 것만 쓴다(추정 �
   assert.equal(c.biz, "venture");
   assert.equal(c.need, "운전자금 3억 원");
   assert.equal(c.industry, "고친 업종");
-  assert.ok(c.notes.startsWith("세금 체납 없음, 확인된 국내 특허 11건"));
+  assert.ok(c.notes.startsWith("세금 체납 없음, 검색으로 확인한 특허 11건"));
   assert.equal(noticeCompany(job("F-FULL"), {}).biz, "");
 });
 

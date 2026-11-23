@@ -10,7 +10,7 @@ import { EDIT_LABEL, filledCount, noticeCompany, rivalNoticeCompany } from "@/li
 import { dday, shortDate, type Program } from "@/lib/finder";
 import { putCheck, putRivalCheck, removeNotice, rivalCheckOf, savedNotices, type CheckRecord, type SavedItem } from "@/lib/local";
 import { gaps, noticeEnd, sortRows, verdictCounts } from "@/lib/review";
-import { pickedRivals } from "@/lib/view";
+import { PATENT_LABEL, pickedRivals } from "@/lib/view";
 import { runTask } from "@/lib/tasks";
 import { useTask } from "@/lib/useTask";
 import { elapsedText } from "@/lib/format";
@@ -141,7 +141,7 @@ export function Grants() {
             <ul className="text-sm">
               {typeof job.merged.patentCount?.raw === "number" && (
                 <li className="flex flex-wrap items-center gap-2">
-                  확인된 특허 {job.merged.patentCount.raw}건 <StatusWord w="confirmed" />
+                  {PATENT_LABEL} {job.merged.patentCount.raw}건 <StatusWord w="confirmed" />
                 </li>
               )}
               {typeof job.merged.npsLatest?.raw === "number" && (

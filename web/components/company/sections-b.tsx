@@ -5,7 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { DEFAULT_ESTIMATES, type AnalysisJob, type Article, type NewsCategory, type NewsPage, type Paper } from "@/lib/contract";
 import { api } from "@/lib/api";
 import { elapsedText, fmtDay, fmtMonthDayTime, num, todayKST } from "@/lib/format";
-import { phaseOf, retryState, summaryLine } from "@/lib/view";
+import { PATENT_LABEL, phaseOf, retryState, summaryLine } from "@/lib/view";
 import { DetailRow, Disclosure, ExtLink, MoreButton, Placeholder, SourceLine, StatusWord, useMore } from "@/components/kit";
 import { PatentLine } from "@/components/charts";
 import { useCompany } from "@/components/company/context";
@@ -302,7 +302,7 @@ export function Tech() {
       ) : (
         <>
           <figure>
-            <figcaption className="mb-2 text-sm font-semibold">출원연도별 국내 특허 (최근 5년)</figcaption>
+            <figcaption className="mb-2 text-sm font-semibold">출원연도별 {PATENT_LABEL} (최근 5년)</figcaption>
             <div className="max-w-[360px]">
               <PatentLine series={[{ name: job.company.name, byYear: r?.summary.byYear ?? {}, mine: true }]} endYear={endYear} />
             </div>

@@ -13,12 +13,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { DEFAULT_ESTIMATES, type AnalysisJob, type RivalDeep, type RivalsDeepResult } from "@/lib/contract";
-import { COMPARE_ITEMS, COMPARE_SOURCES, cellLinks, compareColumns, type Cell, type CellLink, type CompareColumn, type CompareItem } from "@/lib/compare";
+import { COMPARE_ITEMS, COMPARE_LIMITS, COMPARE_SOURCES, cellLinks, compareColumns, type Cell, type CellLink, type CompareColumn, type CompareItem } from "@/lib/compare";
 import { elapsedText, fmtDay, fmtMonthDayTime, fmtTime, shortCompany, todayKST } from "@/lib/format";
 import { isExistingInvestor } from "@/lib/finder";
 import { addRival, setRivalChoice } from "@/lib/local";
 import { userRivalKey } from "@/lib/names";
-import { MAX_RIVALS, effectiveRivalChoices, errorSentence, phaseOf, pickedRivals, rivalsCost, visibleRivals, type PickedRival } from "@/lib/view";
+import { MAX_RIVALS, PATENT_LABEL, effectiveRivalChoices, errorSentence, phaseOf, pickedRivals, rivalsCost, visibleRivals, type PickedRival } from "@/lib/view";
 import { DetailRow, Disclosure, DownIcon, ExtLink, Placeholder, SourceLine, StatusWord, nb, useMore, useOpen } from "@/components/kit";
 import { FinanceBars, InvestBars, NpsLine, PatentLine, type InvestBar } from "@/components/charts";
 import { useCompany, useTicker } from "@/components/company/context";
@@ -436,13 +436,15 @@ function Compare({ job, fold }: { job: AnalysisJob; fold: ReactNode }) {
       </div>
 
       <CompareTable cols={cols} jump={jump} />
-      {/* 칸마다 상태 낱말과 짧은 출처가 있으므로 기관·자료 이름 전체는 펼쳐 본다. 기준 시각 한 줄은 늘 보인다 */}
+      {/* 표 아래 순서(screens 4B.2): 기준 줄(늘 보임) → 항목별 한계 → 칸별 원문 → 항목별 출처 → 그림으로 보기.
+          칸마다 상태 낱말과 짧은 출처가 있으므로 기관·자료 이름 전체는 펼쳐 본다. 숫자를 읽는 법(한계)이 확인 자료(원문·출처)보다 먼저 온다 */}
       <div className="mt-3 max-w-[760px]">
         <p className="source">
           <span className="text-sub">
             우리 회사 {fmtTime(job.analyzedAt) || "분석 중"} 분석{result ? `, 경쟁사 ${fmtTime(result.queriedAt)} 조회` : ""}. 회사마다 기준 연도가 다를 수 있습니다.
           </span>
         </p>
+        <CompareLimits />
         <CompareLinks cols={cols} open={linksOpen} onOpenChange={setLinksOpen} back={back?.target ?? null} onBack={goBack} />
         <Disclosure text={`항목별 출처 ${COMPARE_SOURCES.length}줄 보기`} memoryKey={`${c.cid}:cmp:sources`} className="mt-2">
           <div className="py-2">
@@ -648,6 +650,39 @@ function CellLinkView({ links, at }: { links: CellLink[]; at: CellAt }) {
 }
 
 /**
+ * 표 아래 "항목별 한계 {n}줄 보기"(screens 4B.2, 2026-11-23 사용자 지시): 숫자를 읽을 때 알아야 할 한계를 출처와 따로 둔다.
+ * 기준 줄 바로 아래 첫 펼치기 줄이라 표가 먼저 읽히고 한계는 표 바로 아래에서 찾는다. 항목마다 이어 쓴 머리(굵은 항목 이름 + 문장)
+ * 한 줄이라 끌어 복사해도 "{항목} {한계}" 한 줄씩 남는다.
+ * 인쇄: 종이에서는 펼칠 수 없고 한계 없이 숫자만 남으면 잘못 읽히므로, 접힘과 상관없이 같은 목록을 "항목별 한계" 머리와 함께 찍고 펼치기 줄은 뺀다
+ */
+function CompareLimits() {
+  const c = useCompany();
+  const list = (
+    // 항목 사이 12px: 줄 사이(15px 글, 줄 간격 1.7 → 약 10px)보다 넓어야 여러 줄 항목이 한 덩어리씩 읽힌다
+    <dl className="space-y-3 text-sm">
+      {COMPARE_LIMITS.map((l) => (
+        <div key={l.label} data-limit={l.label}>
+          <dt className="inline font-semibold">{l.label}</dt> <dd className="inline">{l.text}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+  return (
+    <>
+      <Disclosure text={`항목별 한계 ${COMPARE_LIMITS.length}줄 보기`} memoryKey={`${c.cid}:cmp:limits`} className="no-print mt-2">
+        <div className="py-2" data-compare-limits>
+          {list}
+        </div>
+      </Disclosure>
+      <div className="print-only mt-3" data-compare-limits-print>
+        <p className="text-sm font-semibold">항목별 한계</p>
+        <div className="mt-1">{list}</div>
+      </div>
+    </>
+  );
+}
+
+/**
  * 표 아래 "칸별 원문 {N}건 보기"(screens 4B.2): 회사마다(표 열 순서), 그 안에서 항목마다(표 줄 순서) 원문 목록. 링크가 달린 칸이 없으면 줄도 없다.
  * 칸의 "원문 n건"이 이 줄을 펼치고 "{회사} {항목} 원문 {n}건" 머리(tabindex -1)로 초점을 옮긴다. 옮겨 간 자리에서 어느 회사인지 보이도록 머리마다 회사 이름을 둔다.
  */
@@ -717,7 +752,7 @@ function Charts({ job, rivals }: { job: AnalysisJob; rivals: RivalDeep[] }) {
         {noAmount.length > 0 && <p className="text-sm">금액 미확보: {noAmount.join(", ")}</p>}
       </div>
       <div>
-        <p className="text-sm font-semibold">출원연도별 국내 특허</p>
+        <p className="text-sm font-semibold">출원연도별 {PATENT_LABEL}</p>
         <div className="max-w-[460px]">
           <PatentLine
             endYear={Number(todayKST().slice(0, 4))}

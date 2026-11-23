@@ -97,6 +97,15 @@ export const firmStatus = (v: Value | null | undefined) => Boolean(v && (v.statu
 
 // ---------------------------------------------------------------- 핵심 값 네 칸
 
+/**
+ * 특허 값의 이름(2026-11-23 사용자 지시): 회사가 가진 전체 특허 수가 아니라 Liner 웹 검색으로 찾은 Google Patents 공개 문서 가운데
+ * 출원인이 원문에서 그 회사로 확인된 건수다(growth/patents.py). "국내 특허 11건"이 전체 보유 수로 읽혀 이름에 뜻을 담는다.
+ * 이 값(merged.patentCount, patents 단락 건수)을 가리키는 모든 화면 글이 이 이름을 쓴다: 핵심 값 칸, 기술 단락 요약, 경쟁사 분석 비교 표 줄(compare.ts),
+ * "지금 확인할 것"·미팅 전에 정리할 값(review.ts openValues), 미팅 근거 묶음 특허 줄, 투자 미팅 예상 질문·실사 자료(prep.ts), 노트(note.ts),
+ * 자격 대조에 함께 보내는 값(Grants.tsx, 회사 정보 수정 창, company-values.ts 자동 메모). 문장 안에서는 "검색으로 확인한 특허 {n}건"
+ */
+export const PATENT_LABEL = "검색으로 확인한 특허";
+
 export type Tile = {
   key: "revenue" | "nps" | "invest" | "patents";
   label: string;
@@ -170,13 +179,13 @@ export function keyTiles(job: AnalysisJob): Tile[] {
     }
   }
 
-  // 국내 특허
+  // 검색으로 확인한 특허(PATENT_LABEL)
   const pc = m.patentCount;
-  if (!pc) tiles.push(blank("patents", "국내 특허", "tech", true));
-  else if (pc.status === "unavailable") tiles.push({ ...blank("patents", "국내 특허", "tech", false), missing: `미확보: ${pc.reason ?? "출원인이 확인된 특허를 찾지 못함"}` });
+  if (!pc) tiles.push(blank("patents", PATENT_LABEL, "tech", true));
+  else if (pc.status === "unavailable") tiles.push({ ...blank("patents", PATENT_LABEL, "tech", false), missing: `미확보: ${pc.reason ?? "출원인이 확인된 특허를 찾지 못함"}` });
   else {
     const reg = s.patents.result?.summary.registered;
-    tiles.push({ key: "patents", label: "국내 특허", anchor: "tech", loading: false, big: [pc.display ?? ""], basis: [`출원인 확인${typeof reg === "number" ? `, 등록 ${reg}건` : ""}`], word: pc.status, missing: null, extra: null });
+    tiles.push({ key: "patents", label: PATENT_LABEL, anchor: "tech", loading: false, big: [pc.display ?? ""], basis: [`출원인 확인${typeof reg === "number" ? `, 등록 ${reg}건` : ""}`], word: pc.status, missing: null, extra: null });
   }
   return tiles;
 }
@@ -218,7 +227,7 @@ export function summaryLine(job: AnalysisJob, key: ScreenKey): string | null {
     case "tech": {
       const r = s.patents.result;
       if (!r || !r.summary.total) return null;
-      return `출원인이 확인된 국내 특허 ${r.summary.total}건 (등록 ${r.summary.registered}건)`;
+      return `${PATENT_LABEL} ${r.summary.total}건 (출원인 확인, 등록 ${r.summary.registered}건)`;
     }
   }
 }

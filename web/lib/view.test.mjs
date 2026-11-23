@@ -17,7 +17,8 @@ test("단락 순서는 개요, 재무·고용, 투자, 최근 동향, 기술이�
 
 test("핵심 값은 네 칸이고 기준이 숫자에 붙는다(A-14, D-03)", () => {
   const t = keyTiles(job("F-FULL"));
-  assert.deepEqual(t.map((x) => x.label), ["매출", "국민연금 가입자", "누적 투자", "국내 특허"]);
+  // 특허 칸 이름은 전체 보유 수로 읽히지 않게 "검색으로 확인한 특허"(2026-11-23 사용자 지시, 비교 표 줄 이름과 같음)
+  assert.deepEqual(t.map((x) => x.label), ["매출", "국민연금 가입자", "누적 투자", "검색으로 확인한 특허"]);
   assert.deepEqual(t[0].big, ["56.7억원"]);
   assert.equal(t[0].basis[0], "2024 사업연도, 별도");
   assert.equal(t[0].extra, "웹 조사: 약 100억원 (2025, 별도)");
@@ -81,7 +82,7 @@ test("한 줄 요약은 빈 값이 있으면 그 부분만 뺀다", () => {
   const j = job("F-FULL");
   assert.equal(summaryLine(j, "finance"), "매출 2024 사업연도 56.7억원(별도), 국민연금 가입자 2026-10 132명(12개월 +28명)");
   assert.equal(summaryLine(j, "news"), "최근 12개월 중요 사건 14개, 기사 693건");
-  assert.equal(summaryLine(j, "tech"), "출원인이 확인된 국내 특허 11건 (등록 8건)");
+  assert.equal(summaryLine(j, "tech"), "검색으로 확인한 특허 11건 (출원인 확인, 등록 8건)");
   assert.equal(summaryLine(job("F-EMPTY"), "investment"), null);
 });
 

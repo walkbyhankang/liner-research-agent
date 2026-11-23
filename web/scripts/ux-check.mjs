@@ -552,13 +552,13 @@ await run("refresh-list", async () => {
 await run("saved", async () => {
   await reset({ scenario: "F-FULL" });
   let page = await open(`/c/${CID}`);
-  await waitText(page, "출원인이 확인된 국내 특허");
+  await waitText(page, "검색으로 확인한 특허 11건");
   await wait(800);
   await ctl({ delayMs: 5000 });
   const n0 = (await getLog()).length;
   const t0 = Date.now();
   page = await open(`/c/${CID}`, { ctx: page.browserContext() });
-  const fast = await waitText(page, "출원인이 확인된 국내 특허 11건", 1500);
+  const fast = await waitText(page, "검색으로 확인한 특허 11건", 1500);
   const ms = Date.now() - t0;
   const filled = await page.evaluate(() => ["overview", "finance", "investment", "news", "tech"].every((k) => !document.getElementById(k)?.innerText.includes("확인 중")));
   const posts = count((await getLog()).slice(n0), "POST", /\/api\/analysis$/);
@@ -594,7 +594,7 @@ await run("saved", async () => {
   check("A-19", (await page.$$eval("#finance svg[role=img]", (l) => l.length)) === 2 && (await text(page, "#overview")).includes("데이터센터") && (await text(page, "#investment")).includes("시리즈 C"));
   await reset({ scenario: "F-FULL" });
   page = await open(`/c/${CID}#tech`);
-  await waitText(page, "출원인이 확인된 국내 특허");
+  await waitText(page, "검색으로 확인한 특허 11건");
   await wait(600);
   const tt = await page.$eval("#tech", (e) => e.getBoundingClientRect().top);
   check("A-22", tt >= -2 && tt < 200, `${Math.round(tt)}px`);
@@ -629,7 +629,7 @@ await run("resume", async () => {
   const savedPath = `company/${CID}/analysis`;
   await reset({ scenario: "F-FULL" });
   let page = await withPending();
-  const shown = await waitText(page, "출원인이 확인된 국내 특허 11건");
+  const shown = await waitText(page, "검색으로 확인한 특허 11건");
   check("A-24 (끝난 작업 id)", shown && !(await text(page)).includes("아직 분석하지 않은 회사입니다.") && sent(page, `analysis/${OLD}`) === 1 && sent(page, savedPath) >= 1 && (await pendingJob(page)) === null);
   await page.browserContext().close();
   await reset({ scenario: "F-STAGED", step: 2 });
@@ -652,16 +652,16 @@ await run("main", async () => {
   await reset({ scenario: "F-FULL" });
   const page = await open(`/c/${CID}`);
   const ctx = page.browserContext();
-  await waitText(page, "출원인이 확인된 국내 특허");
+  await waitText(page, "검색으로 확인한 특허 11건");
   await wait(500);
   await globalChecks(page, "회사 분석 1180");
   const full = await text(page);
   check("A-21", (await text(page, "h1")) === "주식회사 가나다테크");
   const tiles = await page.$$eval("ul[aria-label='핵심 값'] > li", (l) => l.map((x) => x.innerText.split("\n")[0]));
-  check("A-14", tiles.join(",") === "매출,국민연금 가입자,누적 투자,국내 특허" && !/지역|업력|설립|기업 유형/.test(tiles.join()), tiles.join(","));
+  check("A-14", tiles.join(",") === "매출,국민연금 가입자,누적 투자,검색으로 확인한 특허" && !/지역|업력|설립|기업 유형/.test(tiles.join()), tiles.join(","));
   // A-25: 엇갈림·미확보 값도, 담은 공고도 없으면 "지금 확인할 것" 묶음을 그리지 않는다(F-FULL)
   check("A-25 (모두 0)", !(await page.$("[data-checknow]")));
-  await page.evaluate(() => [...document.querySelectorAll("ul[aria-label='핵심 값'] a")].find((a) => a.innerText.startsWith("국내 특허"))?.click());
+  await page.evaluate(() => [...document.querySelectorAll("ul[aria-label='핵심 값'] a")].find((a) => a.innerText.startsWith("검색으로 확인한 특허"))?.click());
   await wait(400);
   check("A-15", (await page.evaluate(() => document.activeElement?.id)) === "h-tech");
   const order = await page.$$eval("main section[aria-labelledby^=h-]", (l) => l.map((s) => s.id).join(","));
@@ -856,7 +856,7 @@ await run("main", async () => {
   const everyCellHasWord = cmp.rows.every((r) => r.cells.every((c) => c.words >= 1));
   check(
     "RI-07",
-    cmp.heads.join() === "항목,주식회사 가나다테크,마바사,하하테크" && cmp.rows.map((r) => r.label).join() === "매출,국민연금 가입자,누적 투자,국내 특허,최근 라운드,주요 투자자,설립" && everyCellHasWord &&
+    cmp.heads.join() === "항목,주식회사 가나다테크,마바사,하하테크" && cmp.rows.map((r) => r.label).join() === "매출,국민연금 가입자,누적 투자,검색으로 확인한 특허,최근 라운드,주요 투자자,설립" && everyCellHasWord &&
       cellOf("매출", 1).includes("2024 사업연도, 별도") && cellOf("매출", 1).includes("금융위원회") && /\d{4}-\d{2}/.test(cellOf("국민연금 가입자", 1)) && cellOf("매출", 2).startsWith("미확보") && cellOf("매출", 2).includes("금융위원회 재무 자료 없음"),
     cmp.rows.map((r) => `${r.label}:${r.cells.map((c) => c.t.replace(/\n/g, " ")).join(" | ")}`).join(" / ").slice(0, 400),
   );
@@ -912,7 +912,7 @@ await run("main", async () => {
     const b1 = await blocks();
     check(
       "RI-11",
-      table0 === 0 && b0.map((b) => b.h).join() === "매출,국민연금 가입자,누적 투자,국내 특허" && restClosed && b1.length === 7 && b1.every((b) => b.first === "주식회사 가나다테크" && b.n === 3),
+      table0 === 0 && b0.map((b) => b.h).join() === "매출,국민연금 가입자,누적 투자,검색으로 확인한 특허" && restClosed && b1.length === 7 && b1.every((b) => b.first === "주식회사 가나다테크" && b.n === 3),
       `${b0.map((b) => b.h).join()} → ${b1.length}덩어리`,
     );
     await globalChecks(r390, "경쟁사 분석 390");
@@ -922,7 +922,7 @@ await run("main", async () => {
   // RI-12: 회사 분석에는 경쟁사 단락이 없고 경쟁사 분석으로 가는 한 줄이 있다. 옛 #rivals 주소는 경쟁사 분석으로 간다
   {
     const an = await open(`/c/${CID}`, { ctx });
-    await waitText(an, "출원인이 확인된 국내 특허");
+    await waitText(an, "검색으로 확인한 특허 11건");
     await wait(400);
     const line = await an.evaluate(() => ({ t: document.querySelector("[data-rivals-line]")?.innerText ?? "", href: document.querySelector("[data-rivals-line] a")?.getAttribute("href"), sec: Boolean(document.getElementById("rivals")), toc: [...document.querySelectorAll("nav[aria-label='단락 목차'] a")].map((a) => a.textContent) }));
     const old = await open(`/c/${CID}#rivals`, { ctx });
@@ -987,7 +987,7 @@ await run("main", async () => {
   check("C-16", c0 === 0 && posts.length === 1 && posts[0].body?.refresh === true);
   await ctl({ refreshRemaining: 0 });
   const p17 = await open(`/c/${CID}`, { ctx });
-  await waitText(p17, "출원인이 확인된 국내 특허");
+  await waitText(p17, "검색으로 확인한 특허 11건");
   await click(p17, "새로 분석", { exact: true });
   await wait(300);
   check("C-17", (await p17.evaluate(() => [...document.querySelectorAll("dialog[open] button")].find((b) => b.textContent.trim() === "새로 분석")?.disabled)) && (await text(p17, "dialog[open]")).includes("다 썼습니다"));
@@ -1543,7 +1543,7 @@ await run("main", async () => {
   for (const w of [390, 820, 1280]) {
     await rot.setViewport({ width: w, height: heightFor(w) });
     await rot.goto(`${BASE}/c/${CID}`, { waitUntil: "domcontentloaded" });
-    await waitText(rot, "출원인이 확인된 국내 특허");
+    await waitText(rot, "검색으로 확인한 특허 11건");
     await wait(400);
     await globalChecks(rot, `회사 분석 ${w}`);
   }
@@ -1610,10 +1610,28 @@ await run("variants", async () => {
   check("NE-08", !/중요 사건 \d+개 더 보기/.test(t));
   const tiles = await page.$$eval("ul[aria-label='핵심 값'] li", (l) => l.map((x) => x.innerText));
   check("C-06", tiles.filter((x) => x.includes("미확보:")).length >= 2 && !tiles.some((x) => /\n(0|-)\n/.test(`\n${x}\n`)));
+  // A-35: 특허 값 이름("검색으로 확인한 특허", 2026-11-23)을 바꾼 뒤에도 "지금 확인할 것" 미확보 값의 특허 줄이 기술 단락으로 간다
+  // (review.ts openValues 라벨과 Analysis.tsx VALUE_SECTION 키가 같은 PATENT_LABEL)
+  {
+    await page.evaluate(() => [...document.querySelectorAll("[data-checknow] button[aria-controls=checknow-list]")].find((b) => b.innerText.includes("미확보"))?.click());
+    await wait(200);
+    const li35 = await page.evaluate(() => {
+      const l = [...document.querySelectorAll("#checknow-list li")].find((x) => x.querySelector("span")?.textContent === "검색으로 확인한 특허");
+      const a = l?.querySelector("a");
+      a?.click();
+      return { t: l?.innerText.replace(/\s+/g, " ") ?? "", link: a?.textContent.trim() ?? "" };
+    });
+    await wait(300);
+    const focus35 = await page.evaluate(() => document.activeElement?.id);
+    const old35 = await page.evaluate(() => [...document.querySelectorAll("#checknow-list li > span:first-child")].some((s) => s.textContent === "국내 특허"));
+    check("A-35", li35.link === "기술 단락에서 보기" && li35.t.includes("미확보:") && focus35 === "h-tech" && !old35, `${li35.t} | ${focus35}`);
+  }
   const ep = await open(`/c/${CID}/review?tab=invest`, { ctx: page.browserContext() });
   await waitText(ep, "미팅 근거 묶음");
   const ev = await text(ep, "[data-evidence]");
   check("R-18", (ev.match(/미확보:/g) ?? []).length >= 3);
+  // R-18(특허 이름): 미팅 근거 묶음 특허 줄의 미확보 글도 새 이름 기준(옛 "국내 특허" 없음)
+  check("R-18 (특허 이름)", ev.includes("미확보: 출원인이 이 회사로 확인된 특허를 검색에서 찾지 못했습니다") && !ev.includes("국내 특허"), ev.replace(/\n/g, " ").slice(0, 200));
   await reset({ scenario: "F-STALE" });
   page = await open(`/c/${CID}/review?tab=invest`);
   await waitText(page, "미팅 근거 묶음");
@@ -1910,8 +1928,8 @@ await run("variants", async () => {
     await wait(400);
     const cells = await cellLinksOf(lp);
     const want = [
-      "마바사/국내 특허:원문 6건", "마바사/누적 투자:원문 2건", "마바사/주요 투자자:원문 2건", "마바사/최근 라운드:원문 열기",
-      "주식회사 가나다테크/국내 특허:원문 11건", "주식회사 가나다테크/주요 투자자:원문 3건",
+      "마바사/검색으로 확인한 특허:원문 6건", "마바사/누적 투자:원문 2건", "마바사/주요 투자자:원문 2건", "마바사/최근 라운드:원문 열기",
+      "주식회사 가나다테크/검색으로 확인한 특허:원문 11건", "주식회사 가나다테크/주요 투자자:원문 3건",
     ].sort().join(" | ");
     const ext = cells.flatMap((c) => c.links).filter((l) => /^https?:/.test(l.href ?? ""));
     check(
@@ -1922,7 +1940,7 @@ await run("variants", async () => {
     // RI-26: 링크 이름, "원문 6건" → 접힌 "칸별 원문 25건 보기"가 펼쳐지고 초점이 그 칸 목록 머리로
     const names = cells.flatMap((c) => c.links.map((l) => l.name));
     const before26 = await disclosure(lp, "칸별 원문 25건 보기");
-    await lp.evaluate(() => [...document.querySelectorAll("table[data-compare=table] a")].find((a) => a.textContent.startsWith("마바사 국내 특허"))?.click());
+    await lp.evaluate(() => [...document.querySelectorAll("table[data-compare=table] a")].find((a) => a.textContent.startsWith("마바사 검색으로 확인한 특허"))?.click());
     await wait(400);
     const j26 = await lp.evaluate(() => {
       const h = document.activeElement;
@@ -1941,9 +1959,9 @@ await run("variants", async () => {
     });
     check(
       "RI-26",
-      names.includes("마바사 국내 특허 원문 6건, 표 아래 목록으로 이동") && names.some((n) => /^마바사 최근 라운드 원문 열기 ?\(새 창\)$/.test(n)) &&
-        before26 === "false" && after26 === "true" && j26.id === "cmp-src-1-patents" && j26.t.startsWith("마바사 국내 특허 원문 6건") && j26.top >= 49 && j26.bottom <= j26.vh && j26.n === 6 && j26.blank &&
-        b26.t.startsWith("마바사 국내 특허") && b26.inView && !b26.btn,
+      names.includes("마바사 검색으로 확인한 특허 원문 6건, 표 아래 목록으로 이동") && names.some((n) => /^마바사 최근 라운드 원문 열기 ?\(새 창\)$/.test(n)) &&
+        before26 === "false" && after26 === "true" && j26.id === "cmp-src-1-patents" && j26.t.startsWith("마바사 검색으로 확인한 특허 원문 6건") && j26.top >= 49 && j26.bottom <= j26.vh && j26.n === 6 && j26.blank &&
+        b26.t.startsWith("마바사 검색으로 확인한 특허") && b26.inView && !b26.btn,
       `${before26}→${after26} ${JSON.stringify(j26)} 돌아가기 ${JSON.stringify(b26)}`,
     );
     await globalChecks(lp, "경쟁사 분석 원문 목록 1180");
@@ -1970,9 +1988,9 @@ await run("variants", async () => {
     const bad27 = await lp27.evaluate(() => [...document.querySelectorAll("a[href]")].filter((a) => /^(javascript|data):/i.test(a.getAttribute("href").trim())).length);
     check(
       "RI-27",
-      bad27 === 0 && at("마바사", "국내 특허").links.map((l) => l.vis).join() === "원문 4건" && at("마바사", "최근 라운드").links.length === 0 &&
+      bad27 === 0 && at("마바사", "검색으로 확인한 특허").links.map((l) => l.vis).join() === "원문 4건" && at("마바사", "최근 라운드").links.length === 0 &&
         at("마바사", "누적 투자").links.map((l) => `${l.vis}@${l.href}`).join() === "원문 열기@https://example.com/news/rival/round/m2" &&
-        at("카타파", "국내 특허").links.length === 0 && at("카타파", "국내 특허").text.includes("6건") && at("카타파", "국내 특허").text.includes("Google Patents") && at("카타파", "누적 투자").links.length === 1,
+        at("카타파", "검색으로 확인한 특허").links.length === 0 && at("카타파", "검색으로 확인한 특허").text.includes("6건") && at("카타파", "검색으로 확인한 특허").text.includes("Google Patents") && at("카타파", "누적 투자").links.length === 1,
       linkMap(c27),
     );
     await lp27.close();
@@ -2012,6 +2030,183 @@ await run("variants", async () => {
     check("RI-29", blk.mine === "원문 11건" && blk.rival === "원문 6건" && blk.select === "none" && pr.shown === 0 && pr.value, `${JSON.stringify(blk)} 인쇄 ${JSON.stringify(pr)}`);
     await sh(lp29, "rivals-links-390", true);
     await lp29.close();
+  }
+  // RI-30~RI-32: 특허 줄 이름 "검색으로 확인한 특허"와 표 아래 "항목별 한계"(screens 4B.2, 2026-11-23 사용자 지시)
+  {
+    const LIMITS = ["매출", "국민연금 가입자", "누적 투자·최근 라운드·주요 투자자", "검색으로 확인한 특허", "설립"];
+    const waitTable = (pg) => pg.waitForFunction(() => document.querySelector("table[data-compare=table] td"), { timeout: 8000 }).catch(() => null);
+    /** 표(640 이상) 또는 항목 덩어리(640 미만) 뒤의 보이는 펼치기 줄 글(순서대로)과, 표 끝에서 첫 펼치기 줄까지 거리 */
+    const below = (pg) =>
+      pg.evaluate(() => {
+        const vis = (e) => e.getBoundingClientRect().height > 0;
+        const anchor = [document.querySelector("[data-compare-scroll]"), document.querySelector("[data-compare=items]")].find((e) => e && vis(e));
+        const after = [...document.querySelectorAll("#compare button.disclosure")].filter(
+          (b) => vis(b) && !anchor.contains(b) && anchor.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING,
+        );
+        const base = document.querySelector("#compare p.source");
+        return {
+          texts: after.map((b) => b.textContent.trim()),
+          limitsOpen: after[0]?.getAttribute("aria-expanded"),
+          gap: Math.round((after[0]?.getBoundingClientRect().top ?? 0) - anchor.getBoundingClientRect().bottom),
+          baseBetween: Boolean(base && anchor.compareDocumentPosition(base) & Node.DOCUMENT_POSITION_FOLLOWING && base.compareDocumentPosition(after[0]) & Node.DOCUMENT_POSITION_FOLLOWING),
+        };
+      });
+    /** 펼친 한계 목록: 항목 이름(dt), 한 줄 글(끌어 복사와 같은 글), 선택해 복사한 글 */
+    const limitsOf = (pg, sel) =>
+      pg.evaluate((sel) => {
+        const box = document.querySelector(sel);
+        const items = [...(box?.querySelectorAll("[data-limit]") ?? [])].filter((e) => e.getBoundingClientRect().height > 0);
+        const dl = box?.querySelector("dl");
+        let copied = "";
+        if (dl && items.length) {
+          const r = document.createRange();
+          r.selectNodeContents(dl);
+          const s = getSelection();
+          s.removeAllRanges();
+          s.addRange(r);
+          copied = s.toString();
+          s.removeAllRanges();
+        }
+        return { labels: items.map((e) => e.querySelector("dt").textContent), lines: items.map((e) => e.innerText), copied, font: items[0] ? parseFloat(getComputedStyle(items[0]).fontSize) : 0 };
+      }, sel);
+    /** 글 줄 수(줄 상자 top 이 다른 수) */
+    const lineCount = (pg, sel) =>
+      pg.evaluate((sel) => {
+        const el = [...document.querySelectorAll(sel)].find((e) => e.getBoundingClientRect().height > 0);
+        if (!el) return -1;
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
+      }, sel);
+
+    await reset({ scenario: "F-FULL", deep: "two" });
+    const lw = await open(`/c/${CID}/rivals`, { width: 1180 });
+    await waitTable(lw);
+    await wait(400);
+    // RI-30: 줄 이름·칸 기준 글·원문 목록 머리·출처 줄·그림 제목이 모두 새 이름이고, "국내 특허"가 화면에 남지 않는다
+    const row30 = await lw.evaluate(() => {
+      const tr = document.querySelector("table[data-compare=table] tr[data-item-row=patents]");
+      return { head: tr?.querySelector("th").innerText.trim(), mine: tr?.querySelectorAll("td")[0]?.innerText ?? "", rival: tr?.querySelectorAll("td")[1]?.innerText ?? "", third: tr?.querySelectorAll("td")[2]?.innerText ?? "" };
+    });
+    for (const t of ["항목별 한계", "칸별 원문", "항목별 출처", "그림으로 보기"]) await openDisclosure(lw, t, "#compare");
+    const all30 = await text(lw, "#compare");
+    const listHead = await lw.$eval("#cmp-src-0-patents", (e) => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "");
+    check(
+      "RI-30",
+      row30.head === "검색으로 확인한 특허" && row30.mine.includes("11건") && row30.mine.includes("출원인 확인, 등록 8건") && row30.rival.includes("6건") && /출원인 확인, 등록 \d+건/.test(row30.rival) &&
+        row30.third.includes("출원인이 확인된 특허를 찾지 못함") && !/\b0건/.test(row30.third) && listHead.startsWith("주식회사 가나다테크 검색으로 확인한 특허 원문 11건") &&
+        all30.includes("검색으로 확인한 특허: 특허 공개 원문 (Google Patents)") && all30.includes("출원연도별 검색으로 확인한 특허") && !all30.includes("국내 특허"),
+      `${JSON.stringify(row30).replace(/\\n/g, " ")} | ${listHead}`,
+    );
+    // RI-31(1180): 표 아래 첫 펼치기 줄이 한계(접힘)이고 그다음 칸별 원문·출처. 한계 다섯 항목, 출처 다섯 줄에는 한계 문구가 없다
+    await lw.close();
+    const l31 = await open(`/c/${CID}/rivals`, { width: 1180 });
+    await waitTable(l31);
+    await wait(400);
+    const b31 = await below(l31);
+    await openDisclosure(l31, "항목별 한계", "#compare");
+    const lim31 = await limitsOf(l31, "[data-compare-limits]");
+    await openDisclosure(l31, "항목별 출처", "#compare");
+    const src31 = await l31.evaluate(() => {
+      const b = [...document.querySelectorAll("#compare button.disclosure")].find((x) => x.textContent.trim().startsWith("항목별 출처"));
+      return [...document.getElementById(b.getAttribute("aria-controls")).querySelectorAll(".source")].map((e) => e.innerText.trim());
+    });
+    const limitWords = /직원 수|다를 수|아닙니다|빠지|달라질/;
+    check(
+      "RI-31",
+      b31.texts.join("|") === "항목별 한계 5줄 보기|칸별 원문 25건 보기|항목별 출처 5줄 보기|그림으로 보기" && b31.limitsOpen === "false" && b31.baseBetween && b31.gap <= 120 &&
+        lim31.labels.join("|") === LIMITS.join("|") && lim31.lines.every((l, i) => !l.includes("\n") && l.startsWith(`${LIMITS[i]} `)) && lim31.font >= 15 &&
+        lim31.lines[1].includes("직원 수(상시근로자 수)와 다릅니다") && lim31.lines[3].includes("전체 특허 수가 아닙니다") &&
+        src31.length === 5 && src31.every((s) => !limitWords.test(s)),
+      `${b31.texts.join("|")} 거리 ${b31.gap}px | ${lim31.labels.join(",")} | 출처 ${src31.length}줄`,
+    );
+    await globalChecks(l31, "경쟁사 분석 한계 1180");
+    await sh(l31, "rivals-limits-1180", false);
+    // RI-32: 끌어 복사하면 한계가 항목마다 "{항목} {한계}" 한 줄. 인쇄에서는 접혀 있어도 한계 다섯 항목이 한 번만 찍히고 펼치기 줄은 없다
+    const copied = lim31.copied.split("\n").map((x) => x.trim()).filter(Boolean);
+    const printed = async (pg) => {
+      await pg.emulateMediaType("print");
+      const r = await pg.evaluate(() => {
+        const shown = (e) => e.getBoundingClientRect().height > 0 && getComputedStyle(e).visibility !== "hidden";
+        return {
+          items: [...document.querySelectorAll("#compare [data-limit]")].filter(shown).map((e) => e.querySelector("dt").textContent),
+          head: [...document.querySelectorAll("[data-compare-limits-print] p")].filter(shown).map((e) => e.textContent).join(),
+          button: [...document.querySelectorAll("#compare button.disclosure")].filter((b) => shown(b) && b.textContent.includes("한계")).length,
+          table: Boolean(document.querySelector("table[data-compare=table]")?.getBoundingClientRect().height),
+        };
+      });
+      await pg.emulateMediaType(null);
+      return r;
+    };
+    const pOpen = await printed(l31);
+    await l31.close();
+    const l32 = await open(`/c/${CID}/rivals`, { width: 1180 });
+    await waitTable(l32);
+    await wait(400);
+    const pClosed = await printed(l32);
+    const onScreen = await l32.evaluate(() => [...document.querySelectorAll("[data-compare-limits-print]")].every((e) => getComputedStyle(e).display === "none"));
+    await l32.close();
+    const okPrint = (p) => p.items.join("|") === LIMITS.join("|") && p.head === "항목별 한계" && p.button === 0 && p.table;
+    check(
+      "RI-32",
+      copied.length === 5 && copied.every((l, i) => l.startsWith(`${LIMITS[i]} `)) && okPrint(pClosed) && okPrint(pOpen) && onScreen,
+      `복사 ${copied.length}줄 | 인쇄(접힘) ${JSON.stringify(pClosed)} | 인쇄(펼침) ${JSON.stringify(pOpen)}`,
+    );
+    // RI-30(좁은 폭 줄 이름): 820 표의 붙은 첫 열에서 "검색으로 확인한 특허"는 두 줄 이하(옆 "국민연금 가입자"와 같은 줄 수), 390 항목 덩어리 제목은 한 줄.
+    // RI-31(390): 항목 덩어리 아래 첫 펼치기 줄이 한계
+    const l820 = await open(`/c/${CID}/rivals`, { width: 820 });
+    await waitTable(l820);
+    await wait(400);
+    const n820 = { pat: await lineCount(l820, "tr[data-item-row=patents] th"), nps: await lineCount(l820, "tr[data-item-row=nps] th") };
+    await globalChecks(l820, "경쟁사 분석 한계 820");
+    await l820.close();
+    const l390 = await open(`/c/${CID}/rivals`, { width: 390 });
+    await l390.waitForSelector("[data-compare=items]");
+    await wait(400);
+    const n390 = await lineCount(l390, "[data-item-block=patents] h3");
+    const b390 = await below(l390);
+    await openDisclosure(l390, "항목별 한계", "#compare");
+    const lim390 = await limitsOf(l390, "[data-compare-limits]");
+    await globalChecks(l390, "경쟁사 분석 한계 390");
+    await sh(l390, "rivals-limits-390", true);
+    await l390.close();
+    check(
+      "RI-30 (좁은 폭 줄 이름)",
+      n820.pat >= 1 && n820.pat <= 2 && n820.pat <= n820.nps && n390 === 1,
+      `820 표 첫 열 ${n820.pat}줄(국민연금 가입자 ${n820.nps}줄), 390 덩어리 제목 ${n390}줄`,
+    );
+    check(
+      "RI-31 (390)",
+      b390.texts[0] === "항목별 한계 5줄 보기" && b390.limitsOpen === "false" && b390.baseBetween && b390.gap <= 120 && lim390.labels.join("|") === LIMITS.join("|"),
+      `${b390.texts.join("|")} 거리 ${b390.gap}px`,
+    );
+
+    // RI-33: 투자 칸의 짧은 출처 글은 그 칸 원문 링크와 같은 라운드에서 만든다(2026-11-23 사용자 지시, 공개 서버 예시 회사에서 찾음).
+    // 마바사 최근 라운드(시리즈 C)와 보인 투자기관이 든 라운드는 People Data Labs 만, 기사는 다른 라운드(시리즈 B)에만 둔다
+    const env33 = structuredClone(JSON.parse(readFileSync(new URL("../../fixtures/analysis/F-RIVALS.json", import.meta.url), "utf8")).exchanges.find((e) => e.method === "GET").response.sections.rivals_deep);
+    const [r0, r1] = env33.result.rivals[0].funding.rounds;
+    r0.sources = r0.sources.filter((x) => x.type === "Premium");
+    r1.investors = ["다른 가짜 투자사"];
+    await reset({ scenario: "F-FULL", overrides: { rivals_deep: env33 } });
+    const l33 = await open(`/c/${CID}/rivals`, { width: 1180 });
+    await waitTable(l33);
+    await wait(400);
+    const c33 = await l33.evaluate(() =>
+      Object.fromEntries(
+        ["funding", "latest", "investors"].map((k) => {
+          const td = document.querySelectorAll(`table[data-compare=table] tr[data-item-row=${k}] td`)[1];
+          const src = [...(td?.querySelectorAll(".text-xs.text-sub") ?? [])].map((e) => e.textContent).find((t) => /People Data Labs|기사/.test(t)) ?? "";
+          return [k, { src, links: td?.querySelectorAll("a").length ?? -1 }];
+        }),
+      ),
+    );
+    await l33.close();
+    check(
+      "RI-33",
+      c33.latest.src === "People Data Labs" && c33.latest.links === 0 && c33.investors.src === "People Data Labs" && c33.investors.links === 0 &&
+        c33.funding.src === "People Data Labs, 기사" && c33.funding.links === 1,
+      JSON.stringify(c33),
+    );
   }
   // F-22: 같은 수출 공고가 빌리는 돈(필요한 지원: 수출·해외진출 지원)과 판로 갈래 수출에 함께 나올 때 담기 상태가 하나다
   {
@@ -2467,7 +2662,7 @@ if (OUT) {
     await reset({ scenario: "F-FULL", example: true });
     for (const w of [390, 820, 1180, 1440]) {
       const p = await open(`/c/${CID}`, { width: w, fonts: true });
-      await waitText(p, "출원인이 확인된 국내 특허");
+      await waitText(p, "검색으로 확인한 특허 11건");
       await wait(1200);
       await sh(p, `analysis-${w}`);
       await sh(p, `analysis-${w}-full`, true);

@@ -1,7 +1,7 @@
 // 심사 준비 화면 규칙(screens 6절): 부족한 요건 모으기, 대조 결과 정렬, 미팅 근거 묶음 한 줄, 판로 입찰공고 정렬.
 import type { AnalysisJob, Bid, NoticeAnalysis, Value, Verdict } from "./contract.ts";
 import { byCurrencyTexts, daysUntil, eok, fmtMD, signed, stageKo } from "./format.ts";
-import { isTerminal } from "./view.ts";
+import { PATENT_LABEL, isTerminal } from "./view.ts";
 import { SOON_DAYS, dday, type Program } from "./finder.ts";
 import { savedNotices, type CheckRecord, type SavedItem } from "./local.ts";
 
@@ -75,12 +75,16 @@ export function evidenceFunding(job: AnalysisJob): EvidenceLine {
   return { pending: false, text: `라운드 ${r.summary.roundCount}건${l ? `, 최근 ${(l.date ?? "").slice(0, 7)} ${stageKo(l.round)} ${l.amount ?? "금액 미공개"}` : ""}` };
 }
 
+/** 미팅 근거 묶음 특허 줄이 비었을 때(묶음 머리 줄·펼친 안 같은 글) */
+export const PATENT_MISSING = "미확보: 출원인이 이 회사로 확인된 특허를 검색에서 찾지 못했습니다";
+
 export function evidencePatents(job: AnalysisJob): EvidenceLine {
   const p = job.sections.patents;
   if (!isTerminal(p)) return { pending: true, text: "회사 분석에서 확인 중" };
   const r = p.result;
-  if (!r || !r.summary.total) return { pending: false, text: "미확보: 출원인이 이 회사로 확인된 국내 특허를 찾지 못했습니다" };
-  return { pending: false, text: `출원인이 확인된 국내 특허 ${r.summary.total}건 (등록 ${r.summary.registered}건)` };
+  if (!r || !r.summary.total) return { pending: false, text: PATENT_MISSING };
+  // 기술 단락 요약(view.ts summaryLine tech)과 같은 글
+  return { pending: false, text: `${PATENT_LABEL} ${r.summary.total}건 (출원인 확인, 등록 ${r.summary.registered}건)` };
 }
 
 export function evidenceNews(job: AnalysisJob): EvidenceLine {
@@ -97,7 +101,7 @@ export function openValues(job: AnalysisJob): OpenValue[] {
   const m = job.merged;
   const items: [string, Value | null][] = [
     ["지역", m.region], ["본사", m.headquarters], ["대표", m.ceo], ["설립", m.founded], ["업종(금융위)", m.industry.official], ["업종(웹 조사)", m.industry.web],
-    ["직원 수", m.employees], ["매출(공식)", m.revenue.official], ["매출(웹 조사)", m.revenue.web], ["국민연금 가입자", m.npsLatest], ["국내 특허", m.patentCount],
+    ["직원 수", m.employees], ["매출(공식)", m.revenue.official], ["매출(웹 조사)", m.revenue.web], ["국민연금 가입자", m.npsLatest], [PATENT_LABEL, m.patentCount],
   ];
   const out: OpenValue[] = [];
   for (const [label, v] of items) {
