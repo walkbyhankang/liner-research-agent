@@ -6,7 +6,7 @@ import { ageLabel, byCurrencyTexts, daysSince, elapsedText, eok, fmtBzno, fmtTim
 import { normName, sameNameIds, userRivalKey } from "./names.ts";
 import { initialConditions, relatedTo, rivalBackers, splitExisting } from "./funding.ts";
 import { bidDeadline, checkNowCounts, gaps, sortBids, sortRows, verdictCounts } from "./review.ts";
-import { reviewCount, savedNotices } from "./local.ts";
+import { fundingCount, reviewCount, savedNotices } from "./local.ts";
 import { memoryBackend } from "./store.ts";
 import { createHash } from "node:crypto";
 
@@ -143,6 +143,11 @@ test("지금 확인할 것: 새로 분석이 진행 중이면 값 개수를 세�
   assert.deepEqual([c2.soon, c2.unmet], [[8], verdictCounts(a).unmet]);
   assert.deepEqual(savedNotices(items).map((s) => s.kind), ["program"]);
   assert.equal(reviewCount({ saved: items }), 2); // 공고 1 + 운용사 1
+  // 자금 조달 단계 개수(screens 1.1): 같은 공고는 하나, 노트에 담은 입찰공고는 더한다
+  const bid = { kind: "bid", itemId: "B1", title: "입찰", meta: {}, savedAt: "x" };
+  assert.equal(fundingCount({ saved: items }), 2);
+  assert.equal(fundingCount({ saved: [...items, bid] }), 3);
+  assert.equal(reviewCount({ saved: [...items, bid] }), 2);
   // 마감이 연장된 뒤 판로에서 다시 담음: 나중에 담은 쪽(새 마감일)을 쓴다. 옛 마감(이미 지남)에 가려 마감 임박에서 빠지지 않는다
   const old = { ...item("program"), meta: { end: "2026-11-20" }, savedAt: "2026-11-01T10:00:00+09:00" };
   const fresh = { ...item("salesProgram"), meta: { end: "2026-11-29" }, savedAt: "2026-11-21T10:00:00+09:00" };

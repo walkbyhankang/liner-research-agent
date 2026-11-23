@@ -10,6 +10,7 @@ import { EDIT_LABEL, filledCount, noticeCompany, rivalNoticeCompany } from "@/li
 import { dday, shortDate, type Program } from "@/lib/finder";
 import { putCheck, putRivalCheck, removeNotice, rivalCheckOf, savedNotices, type CheckRecord, type SavedItem } from "@/lib/local";
 import { gaps, sortRows, verdictCounts } from "@/lib/review";
+import { pickedRivals } from "@/lib/view";
 import { runTask } from "@/lib/tasks";
 import { useTask } from "@/lib/useTask";
 import { elapsedText } from "@/lib/format";
@@ -155,7 +156,7 @@ export function Grants() {
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-rule p-5">
-          <p>아직 담은 공고가 없습니다. 자금 조달이나 판로에서 공고를 담으면 여기서 공고문과 자격을 대조합니다.</p>
+          <p>아직 담은 공고가 없습니다. 자금 조달에서 공고나 판로 지원사업을 담으면 여기서 공고문과 자격을 대조합니다.</p>
           <Link href={`/c/${c.cid}/funding`} className="btn btn-primary mt-3">
             자금 조달에서 고르기
           </Link>
@@ -396,11 +397,8 @@ const rowKey = (r: { field: string; quote: string }) => `${r.field}|${r.quote}`;
 function RivalCheck({ cid, programId, mine, company }: { cid: string; programId: string; mine: NoticeAnalysis; company: NoticeCompany }) {
   const c = useCompany();
   const job = c.job;
-  const ch = c.local.rivalChoices;
-  const rivals = [
-    ...(job?.merged.rivals ?? []).filter((r) => ch.choices[r.key] === "yes").map((r) => ({ key: r.key, name: r.name })),
-    ...ch.added.filter((a) => ch.choices[a.key] === "yes"),
-  ];
+  // 경쟁사 분석 화면의 고르기와 같은 목록(처음 고르기 포함, screens 4B.1·D-05)
+  const rivals = pickedRivals(job, c.local.rivalChoices);
   const [pick, setPick] = useState(rivals[0]?.key ?? "");
   const key = rivals.some((r) => r.key === pick) ? pick : rivals[0]?.key ?? "";
   const tkey = `rival:${cid}:${programId}:${key}`;
@@ -409,8 +407,8 @@ function RivalCheck({ cid, programId, mine, company }: { cid: string; programId:
   if (!rivals.length) {
     return (
       <div className="space-y-2">
-        <p>회사 분석에서 경쟁사를 &lsquo;맞음&rsquo;으로 고르면 쓸 수 있습니다.</p>
-        <Link href={`/c/${cid}#rivals`} className="link">
+        <p>경쟁사 분석에서 경쟁사를 &lsquo;맞음&rsquo;으로 고르면 쓸 수 있습니다.</p>
+        <Link href={`/c/${cid}/rivals`} className="link">
           경쟁사 고르러 가기
         </Link>
       </div>
@@ -435,7 +433,7 @@ function RivalCheck({ cid, programId, mine, company }: { cid: string; programId:
   return (
     <div className="space-y-3">
       <p className="text-sm">우리 회사의 지역·기업 유형·필요 자금은 그대로 두고, 나머지만 경쟁사 값으로 바꿔 같은 공고를 대조합니다.</p>
-      {!job?.sections.rivals_deep.result && <p className="text-sm">경쟁사 깊이 비교를 하면 경쟁사 값이 채워져 결과가 구체적이 됩니다.</p>}
+      {!job?.sections.rivals_deep.result && <p className="text-sm">경쟁사 분석에서 비교 자료를 받으면 경쟁사 값이 채워져 결과가 구체적이 됩니다.</p>}
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm">
           <span className="sr-only">경쟁사</span>

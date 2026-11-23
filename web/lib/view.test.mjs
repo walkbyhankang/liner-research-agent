@@ -10,9 +10,9 @@ const fx = (name) => JSON.parse(readFileSync(new URL(`../../fixtures/analysis/${
 const job = (name, i = 0) => fx(name).exchanges.filter((e) => e.method === "GET" && /^\/api\/(analysis\/[0-9a-f]{32}|company\/[^/]+\/analysis)$/.test(e.path))[i].response;
 const staged = fx("F-STAGED").exchanges.map((e) => e.response);
 
-test("단락 순서는 개요, 재무·고용, 투자, 최근 동향, 기술, 경쟁사이고 주된 서버 단락이 정해져 있다(C-14)", () => {
-  assert.deepEqual(SCREEN_SECTIONS.map((s) => s.label), ["개요", "재무·고용", "투자", "최근 동향", "기술", "경쟁사"]);
-  assert.deepEqual(SCREEN_SECTIONS.map((s) => s.primary), ["profile", "official", "funding_history", "news", "patents", "profile"]);
+test("단락 순서는 개요, 재무·고용, 투자, 최근 동향, 기술이고 주된 서버 단락이 정해져 있다(C-14, 경쟁사는 경쟁사 분석 화면)", () => {
+  assert.deepEqual(SCREEN_SECTIONS.map((s) => s.label), ["개요", "재무·고용", "투자", "최근 동향", "기술"]);
+  assert.deepEqual(SCREEN_SECTIONS.map((s) => s.primary), ["profile", "official", "funding_history", "news", "patents"]);
 });
 
 test("핵심 값은 네 칸이고 기준이 숫자에 붙는다(A-14, D-03)", () => {
@@ -66,7 +66,7 @@ test("경과가 예상의 2배를 넘으면 오래 걸린다고 본다(A-20)", (
 test("단락 완료 알림은 단락마다 한 번, 끝나면 '회사 분석이 끝났습니다.'(C-21)", () => {
   const msgs = [];
   for (let i = 1; i < staged.length; i++) msgs.push(...announcements(staged[i - 1], staged[i]));
-  assert.deepEqual(msgs, ["재무·고용 단락이 준비됐습니다.", "개요 단락이 준비됐습니다.", "경쟁사 단락이 준비됐습니다.", "투자 단락이 준비됐습니다.", "기술 단락이 준비됐습니다.", "최근 동향 단락이 준비됐습니다.", "회사 분석이 끝났습니다."]);
+  assert.deepEqual(msgs, ["재무·고용 단락이 준비됐습니다.", "개요 단락이 준비됐습니다.", "투자 단락이 준비됐습니다.", "기술 단락이 준비됐습니다.", "최근 동향 단락이 준비됐습니다.", "회사 분석이 끝났습니다."]);
   assert.deepEqual(announcements(null, staged[6]), []);
 });
 
@@ -82,7 +82,6 @@ test("한 줄 요약은 빈 값이 있으면 그 부분만 뺀다", () => {
   assert.equal(summaryLine(j, "finance"), "매출 2024 사업연도 56.7억원(별도), 국민연금 가입자 2026-10 132명(12개월 +28명)");
   assert.equal(summaryLine(j, "news"), "최근 12개월 중요 사건 14개, 기사 693건");
   assert.equal(summaryLine(j, "tech"), "출원인이 확인된 국내 특허 11건 (등록 8건)");
-  assert.equal(summaryLine(j, "rivals", 2), "국내 경쟁사 후보 4곳, 확정 2곳");
   assert.equal(summaryLine(job("F-EMPTY"), "investment"), null);
 });
 
@@ -159,4 +158,34 @@ test("깊이 비교 비용 줄은 고른 곳 수 기준이고, 5곳 기준 값�
   assert.equal(rivalsCost(est, 1).liner, 10);
   assert.equal(rivalsCost(est, 9).liner, 34); // 서버는 5곳까지만 받는다
   assert.equal(rivalsCost({ liner: 34, perRival: null }, 2).text, "Liner 약 34회 (경쟁사 5곳 기준)");
+});
+
+test("처음 고르기: 아무것도 고르지 않았고 비교 자료가 있으면 그 자료의 경쟁사를 고른 것으로 본다(screens 4B.1)", async () => {
+  const { effectiveRivalChoices, pickedRivals } = await import("./view.ts");
+  const j = job("F-RIVALS");
+  const empty = { choices: {}, added: [] };
+  const e = effectiveRivalChoices(j, empty);
+  assert.equal(e.implicit, true);
+  assert.deepEqual(e.choices, { "rival:마바사": "yes", "rival:하하테크": "yes" });
+  assert.deepEqual(pickedRivals(j, empty).map((r) => r.key), ["rival:마바사", "rival:하하테크"]);
+  // 하나라도 고르면 저장된 고르기만 쓴다
+  const mine = { choices: { "rival:카타파": "no" }, added: [] };
+  assert.equal(effectiveRivalChoices(j, mine).implicit, false);
+  assert.deepEqual(pickedRivals(j, mine), []);
+  // 비교 자료의 rivalSet 에 후보 밖 열쇠(직접 넣은 회사 "user:…")가 있으면 그 이름으로 직접 넣은 회사에 두고 "맞음"(가짜 서버 deep: "five" 와 같은 모양)
+  const five = structuredClone(j);
+  const extra = { ...structuredClone(five.sections.rivals_deep.result.rivals[0]), key: "user:가상다섯째", name: "가상다섯째", nameEn: null };
+  five.sections.rivals_deep.result.rivals.push(extra);
+  five.sections.rivals_deep.result.rivalSet.push("user:가상다섯째");
+  const e5 = effectiveRivalChoices(five, empty);
+  assert.deepEqual(e5.added, [{ key: "user:가상다섯째", name: "가상다섯째" }]);
+  assert.equal(e5.choices["user:가상다섯째"], "yes");
+  assert.deepEqual(pickedRivals(five, empty).map((r) => r.key), ["rival:마바사", "rival:하하테크", "user:가상다섯째"]);
+  // 고른 것을 모두 다시 풀었으면(touched) 처음 고르기로 돌아가지 않는다
+  assert.deepEqual(pickedRivals(j, { choices: {}, added: [], touched: true }), []);
+  // 비교 자료가 없으면 처음 고르기도 없다
+  assert.equal(effectiveRivalChoices(job("F-FULL"), empty).implicit, false);
+  // 직접 넣은 회사는 후보 다음, 넣은 순서
+  const added = { choices: { "rival:마바사": "yes", "user:가나": "yes" }, added: [{ key: "user:가나", name: "가나" }] };
+  assert.deepEqual(pickedRivals(j, added).map((r) => r.name), ["마바사", "가나"]);
 });

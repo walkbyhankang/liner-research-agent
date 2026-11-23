@@ -194,7 +194,7 @@ export function BrowseFunding() {
             <div className="mt-2">
               <FilterPanel need={prof.need} q={q} setQ={setQ} sort={sort} setSort={setSort} memoryKey="browse:filter" />
             </div>
-            <LaneTabs lane={lane} setLane={setLane} debt={result.list.length} equity={result.gps.length} />
+            <LaneTabs lane={lane} setLane={(l) => l !== "sales" && setLane(l)} debt={result.list.length} equity={result.gps.length} withSales={false} />
             <div className="mt-4 grid gap-8 lg:grid-cols-2">
               <section aria-label="빌리는 돈" className={lane === "debt" ? "" : "hidden lg:block"}>
                 <LaneHead lane="debt" title={`빌리는 돈 ${result.list.length}건`} line={`${needLabel(prof.need)} ${result.scoped}건 중 다른 지역 ${result.byRegion}건, 대상 아님 ${result.byTarget}건 제외`} />

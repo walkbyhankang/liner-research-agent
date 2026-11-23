@@ -1,20 +1,22 @@
 "use client";
 
-// 자금 조달(screens 5절): 회사 분석 값으로 조건을 채우고 공고·운용사를 고르고 담는다. 유료 호출 없음.
+// 자금 조달(screens 5절): 회사 분석 값으로 조건을 채우고 공고·운용사·판로 기회를 고르고 담는다. 유료 호출 없음(판로 갈래의 나라장터 조회는 무료).
+// 갈래 셋(2026-11-23 화면 구조 개편): 빌리는 돈 / 투자받는 돈 / 판로. 넓은 화면은 앞 둘을 나란히, 판로는 그 아래 단. 중간·좁은 화면은 탭 셋.
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { STATUS_LABEL, type BizTypeId, type Status } from "@/lib/contract";
 import { bizTypes, fundFields, needs, regionOptions, type Only, type Profile, type Program, type SortMode } from "@/lib/finder";
 import { initialConditions, relatedTo, rivalBackers, splitExisting, type Conditions } from "@/lib/funding";
-import { isSaved, reviewCount, setEdit, toggleSaved } from "@/lib/local";
+import { isSaved, reviewCount, savedNotices, setEdit, toggleSaved } from "@/lib/local";
 import { isTerminal } from "@/lib/view";
 import { Disclosure, StatusWord } from "@/components/kit";
 import { useCompany } from "@/components/company/context";
 import { BizPicker } from "@/components/company/Shell";
 import {
-  BoardFoot, CardList, FilterPanel, GpCard, LaneHead, LaneTabs, LoadError, ProgramCard, QuickFilters, SavedBar, fieldLabel, needLabel, useBoard, usePublicData, useToday,
+  BoardFoot, CardList, FilterPanel, GpCard, LaneHead, LaneTabs, LoadError, ProgramCard, QuickFilters, SavedBar, fieldLabel, needLabel, noticeSave, useBoard, usePublicData, useToday, type Lane,
 } from "@/components/funding/Board";
+import { SalesLane } from "@/components/Sales";
 
 const oneOf = <T extends string>(v: string | null, allowed: readonly T[]): T | null => (v && allowed.includes(v as T) ? (v as T) : null);
 
@@ -52,13 +54,24 @@ function FundingInner() {
   const [q, setQ] = useState(sp.get("q") ?? "");
   const [sort, setSort] = useState<SortMode>(oneOf(sp.get("s"), ["rec", "deadline", "new"] as const) ?? "rec");
   const [only, setOnly] = useState<Only>(oneOf(sp.get("o"), ["all", "soon", "local"] as const) ?? "all");
-  const [lane, setLane] = useState<"debt" | "equity">(sp.get("lane") === "invest" ? "equity" : "debt");
+  const [lane, setLane] = useState<Lane>(sp.get("lane") === "invest" ? "equity" : sp.get("lane") === "sales" ? "sales" : "debt");
+  // 넓은 화면에서 판로 갈래로 열면(옛 판로 주소 포함) 판로 단으로 한 번 스크롤한다. 좁은 화면은 판로 탭이 골라진 채 열린다.
+  // 판로 단은 공고·펀드 목록을 받은 뒤에 그리므로(아래 salesShown) 그때 스크롤한다. 첫 그림에는 #lane-sales 가 없어
+  // 처음 한 번만 돌면 스크롤하지 못하고, 판로 단이 화면에 들어오지 않아 나라장터 조회도 나가지 않았다(리뷰 P2, F-24)
+  const salesShown = Boolean(data || error);
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (scrolled.current || lane !== "sales" || !salesShown || !window.matchMedia("(min-width: 1024px)").matches) return;
+    scrolled.current = true;
+    requestAnimationFrame(() => document.getElementById("lane-sales")?.scrollIntoView({ block: "start" }));
+  }, [lane, salesShown]);
 
   // 사용자가 바꾼 조건만 주소에 남긴다
   const urlKey = [lane, chosen.region && cond.region, chosen.biz && cond.biz, chosen.need && cond.need, chosen.field && cond.field, q.trim(), sort, only].join("|");
   useEffect(() => {
     const u = new URLSearchParams();
     if (lane === "equity") u.set("lane", "invest");
+    if (lane === "sales") u.set("lane", "sales");
     if (chosen.region && cond.region) u.set("r", cond.region);
     if (chosen.biz && cond.biz) u.set("b", cond.biz);
     if (chosen.need) u.set("n", cond.need);
@@ -92,15 +105,12 @@ function FundingInner() {
   };
 
   const n = reviewCount(c.local);
-  const savedPrograms = c.local.saved.filter((s) => s.kind === "program").length;
+  const savedPrograms = savedNotices(c.local.saved).length;
   const savedGps = c.local.saved.filter((s) => s.kind === "gp").length;
   const goTab = savedPrograms === 0 && savedGps > 0 ? "?tab=invest" : "";
 
-  const saveProgram = (p: Program) => ({
-    on: isSaved(c.local, "program", p.id),
-    toggle: () => toggleSaved(c.cid, { kind: "program", itemId: p.id, title: p.title, meta: { end: p.period.end, agency: p.agency, url: p.url } }),
-    onText: "담음", offText: "담기", sr: `심사 준비로 담기: ${p.title}`,
-  });
+  // 같은 공고가 빌리는 돈과 판로 갈래에 함께 나와도 담기 상태는 하나다(screens 5절)
+  const saveProgram = (p: Program) => noticeSave(c.cid, c.local, p, "program");
   const saveGp = (gp: string, existing: boolean, funds: number, year: number) => ({
     on: isSaved(c.local, "gp", gp),
     toggle: () => toggleSaved(c.cid, { kind: "gp", itemId: gp, title: gp, meta: { existing, funds, latestYear: year } }),
@@ -171,17 +181,22 @@ function FundingInner() {
       {error && <LoadError />}
       {!data && !error && prof && <p className="mt-6 text-sub">공고와 펀드 목록을 불러오는 중입니다</p>}
 
+      {/* 갈래 탭(중간·좁은 화면)은 기업 유형을 고르기 전에도 둔다. 판로 갈래의 입찰공고는 기업 유형 없이 찾는다 */}
+      {cond && <LaneTabs lane={lane} setLane={setLane} debt={result ? result.list.length : null} equity={result ? result.gps.length : null} />}
+
       {result && split && prof && data && (
         <>
-          <div className="mt-4">
-            <QuickFilters only={only} setOnly={(o) => setOnly(o)} counts={result.counts} region={prof.region} />
+          {/* 빠른 거르기·거르기와 정렬은 빌리는 돈·투자받는 돈에만 걸린다. 좁은 화면은 탭 아래에 두어 판로 탭으로 바꿀 때 탭 위 내용이 바뀌지 않게 한다 */}
+          <div className={lane === "sales" ? "hidden lg:block" : ""}>
+            <div className="mt-4">
+              <QuickFilters only={only} setOnly={(o) => setOnly(o)} counts={result.counts} region={prof.region} />
+            </div>
+            {/* 찾기·정렬은 목록 앞에 둔다(카드를 다 지나야 닿지 않게) */}
+            <div className="mt-2">
+              <FilterPanel need={prof.need} q={q} setQ={setQ} sort={sort} setSort={setSort} memoryKey={`${c.cid}:fu:filter`} />
+            </div>
           </div>
-          {/* 찾기·정렬은 목록 앞에 둔다(카드를 다 지나야 닿지 않게) */}
-          <div className="mt-2">
-            <FilterPanel need={prof.need} q={q} setQ={setQ} sort={sort} setSort={setSort} memoryKey={`${c.cid}:fu:filter`} />
-          </div>
-          <LaneTabs lane={lane} setLane={setLane} debt={result.list.length} equity={result.gps.length} />
-          <div className="mt-4 grid gap-8 lg:grid-cols-2">
+          <div className={`mt-4 grid gap-8 lg:grid-cols-2 ${lane === "sales" ? "hidden lg:grid" : ""}`}>
             <section aria-label="빌리는 돈" className={lane === "debt" ? "" : "hidden lg:block"}>
               <LaneHead lane="debt" title={`빌리는 돈 ${result.list.length}건`} line={`${needLabel(prof.need)} ${result.scoped}건 중 다른 지역 ${result.byRegion}건, 대상 아님 ${result.byTarget}건 제외`} />
               <CardList
@@ -205,14 +220,24 @@ function FundingInner() {
               />
               {!deepDone && (
                 <p className="mt-4 flex flex-wrap items-center gap-x-2 text-sm">
-                  경쟁사에 투자한 운용사를 보려면 회사 분석에서 경쟁사 깊이 비교를 하세요.
-                  <Link href={`/c/${c.cid}#rivals`} className="link">
-                    경쟁사 단락으로 가기
+                  경쟁사에 투자한 운용사를 보려면 경쟁사 분석에서 비교 자료를 받으세요.
+                  <Link href={`/c/${c.cid}/rivals`} className="link">
+                    경쟁사 분석으로 가기
                   </Link>
                 </p>
               )}
             </section>
           </div>
+        </>
+      )}
+
+      {/* 판로 갈래(screens 5.2): 넓은 화면은 두 갈래 아래 화면 폭 단, 중간·좁은 화면은 판로 탭에서만.
+          공고·펀드 목록을 받은 뒤에 그린다: 그 전에 그리면 넓은 화면에서 판로 단이 잠깐 첫 화면에 보였다가 아래로 밀리며
+          "화면에 들어옴"으로 잡혀 사용자가 보지 않은 나라장터 조회가 나간다(F-20) */}
+      {salesShown && <SalesLane region={cond.region} biz={cond.biz} className={`${lane === "sales" ? "mt-4" : "hidden"} lg:mt-12 lg:block`} />}
+
+      {result && split && prof && data && (
+        <>
 
           <div className="mt-8">
             <Disclosure text="조건은 어디서 왔나요?" memoryKey={`${c.cid}:fu:from`}>
@@ -229,7 +254,7 @@ function FundingInner() {
               <ul className="space-y-1 py-2 text-sm">
                 <li>회사 사업과 관련: 회사 기술 낱말이 공고 제목·요약·태그에 있습니다. 순서에만 쓰고 공고를 빼지 않습니다.</li>
                 <li>이미 투자함: 회사의 투자기관 이름과 운용사 이름이 같습니다.</li>
-                <li>경쟁사에 투자: 확정한 국내 경쟁사에 투자한 기록이 있습니다. 이 업종을 아는 곳이지만, 직접 경쟁사에 투자한 곳은 이해충돌로 투자를 피할 수 있습니다.</li>
+                <li>경쟁사에 투자: 고른 국내 경쟁사에 투자한 기록이 있습니다(경쟁사 분석의 비교 자료). 이 업종을 아는 곳이지만, 직접 경쟁사에 투자한 곳은 이해충돌로 투자를 피할 수 있습니다.</li>
               </ul>
             </Disclosure>
             <BoardFoot meta={data.meta} memoryKey={`${c.cid}:fu`} />

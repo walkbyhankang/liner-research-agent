@@ -1,20 +1,21 @@
 "use client";
 
-// 회사 분석 화면(screens 4절): 진행 줄 → 핵심 값 네 칸(재무제표식 숫자 띠) → 자금 후보 줄 → 상태 표시 안내 → 단락 6개.
+// 회사 분석 화면(screens 4절): 진행 줄 → 핵심 값 네 칸(재무제표식 숫자 띠) → 자금 후보 줄 → 상태 표시 안내 → 단락 5개 → 경쟁사 분석 줄.
+// 경쟁사는 2026-11-23 화면 구조 개편으로 단락이 아니라 경쟁사 분석 화면(/c/[id]/rivals)이다. 여기에는 그 입구 한 줄만 둔다.
 // 단락은 정해진 순서로 자리를 잡고 도착하는 대로 그 자리만 채운다. 전체를 덮는 대기 화면은 없다.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DEFAULT_ESTIMATES, type AnalysisJob } from "@/lib/contract";
 import { elapsedText } from "@/lib/format";
-import { SCREEN_SECTIONS, TOC_TEXT, isTerminal, keyTiles, phaseOf, stillChecking, unavailableScreens, type ScreenKey, type Tile, type Word } from "@/lib/view";
+import { SCREEN_SECTIONS, TOC_TEXT, isTerminal, keyTiles, phaseOf, pickedRivals, stillChecking, unavailableScreens, visibleRivals, type ScreenKey, type Tile, type Word } from "@/lib/view";
 import { checkNowCounts, type OpenValue } from "@/lib/review";
 import { Chevron, Disclosure, Placeholder, StatusWord, VerdictMark, nb, useOpen } from "@/components/kit";
 import { restoreAnchor, useCompany, useTicker } from "@/components/company/context";
 import { ConflictLines, WORD_MEANING } from "@/components/company/values";
 import { useToday } from "@/components/funding/Board";
 import { Finance, Investment, Overview } from "@/components/company/sections-a";
-import { News, Rivals, Tech } from "@/components/company/sections-b";
+import { News, Tech } from "@/components/company/sections-b";
 
 /** 단락으로 옮기고 제목에 초점(A-15). 주소 조각은 기록에 쌓지 않는다 */
 export function goSection(key: ScreenKey) {
@@ -27,8 +28,14 @@ export function goSection(key: ScreenKey) {
 
 export function AnalysisScreen() {
   const c = useCompany();
+  const router = useRouter();
   const job = c.job;
   const hashDone = useRef(false);
+
+  // 옛 경쟁사 단락 주소(#rivals)는 경쟁사 분석 화면으로 보낸다(기록에 쌓지 않는다, screens 4.0)
+  useEffect(() => {
+    if (window.location.hash === "#rivals") router.replace(`/c/${c.cid}/rivals`);
+  }, [router, c.cid]);
 
   useLayoutEffect(() => restoreAnchor(), [job]);
 
@@ -69,7 +76,7 @@ export function AnalysisScreen() {
           <Investment />
           <News />
           <Tech />
-          <Rivals />
+          <RivalsLine job={job} />
         </div>
       </main>
     </div>
@@ -139,7 +146,7 @@ function NotAnalyzed() {
 function Toc({ job }: { job: AnalysisJob }) {
   const [current, setCurrent] = useState<ScreenKey>("overview");
   const listRef = useRef<HTMLOListElement>(null);
-  // 지금 단락: 위에 붙은 줄 바로 아래(약 140px)를 지난 마지막 단락. 맨 위면 개요, 맨 아래면 경쟁사
+  // 지금 단락: 위에 붙은 줄 바로 아래(약 140px)를 지난 마지막 단락. 맨 위면 개요, 맨 아래면 기술
   useEffect(() => {
     let raf = 0;
     const update = () => {
@@ -485,6 +492,25 @@ function CheckNow({ job }: { job: AnalysisJob }) {
         </ul>
       </div>
     </section>
+  );
+}
+
+/**
+ * 경쟁사 분석 줄(screens 4.0): 기술 단락 아래 한 줄. 경쟁사 후보 수와 고른 수, 경쟁사 분석 화면으로 가는 링크.
+ * 후보를 받기 전·뒤 모두 한 줄이라 profile 이 와도 높이가 바뀌지 않는다
+ */
+function RivalsLine({ job }: { job: AnalysisJob }) {
+  const c = useCompany();
+  const phase = phaseOf(job.sections.profile);
+  const text =
+    phase === "loading" ? "국내 경쟁사 후보 확인 중" : phase === "unavailable" ? "국내 경쟁사 후보 미확보" : `국내 경쟁사 후보 ${visibleRivals(job).length}곳, 고른 곳 ${pickedRivals(job, c.local.rivalChoices).length}곳`;
+  return (
+    <div className="no-print flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-ink pt-5" data-rivals-line>
+      <p className={phase === "loading" ? "text-sub" : ""}>{text}</p>
+      <Link href={`/c/${c.cid}/rivals`} className="link">
+        경쟁사 분석에서 보기
+      </Link>
+    </div>
   );
 }
 

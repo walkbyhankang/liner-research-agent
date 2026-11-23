@@ -3,8 +3,10 @@
 //
 // 실행: node scripts/mock_api.mjs [포트, 기본 8200]
 // 조종(시험 스크립트가 쓴다):
-//   POST /__control {scenario, step, corp, formerNamesUnknown, example, health, delayMs, notice, noticeDelayMs, gpDelayMs, salesPartial, fail500, stagedRegionLater, overrides, newerSaved}
+//   POST /__control {scenario, step, corp, formerNamesUnknown, example, health, delayMs, notice, noticeDelayMs, gpDelayMs, salesPartial, fail500, stagedRegionLater, overrides, newerSaved, deep}
 //     formerNamesUnknown: true 면 법인 후보의 formerNames 를 모두 null 로(서버의 이름 이력 조회가 실패·상한에 걸린 경우, 계약 2.1)
+//     deep: "two" 면 F-RIVALS 의 경쟁사 비교 자료(2곳), "four" 면 후보 4곳 모두(가상, 투자기관 포함), "five" 면 가상 경쟁사 5곳 자료를 지금 시나리오에 얹는다
+//           (예시 회사에 저장된 비교 자료, 820 폭 표 밀기 시험. 예시 회사면 retryable=false — 서버가 유료 단락을 막는 것과 같다, 계약 2.4)
 //   GET  /__log      받은 /api 요청 목록
 //   POST /__reset    상태와 기록을 처음으로
 import { createHash } from "node:crypto";
@@ -23,7 +25,7 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 const ex = (name, pred = () => true) => FIX[name].exchanges.find(pred);
 const jobOf = (name, i = 0) => clone(FIX[name].exchanges.filter((e) => e.method === "GET" && /^\/api\/(analysis\/[0-9a-f]{32}|company\/[^/]+\/analysis)$/.test(e.path))[i].response);
 
-const DEFAULT = { scenario: "F-FULL", step: 0, corp: null, formerNamesUnknown: false, example: false, health: "up", delayMs: 0, notice: "ok", noticeDelayMs: 300, gpDelayMs: 200, salesPartial: false, fail500: false, overrides: {}, newsReruns: 0, newsVersion: 0 };
+const DEFAULT = { scenario: "F-FULL", step: 0, corp: null, formerNamesUnknown: false, example: false, health: "up", delayMs: 0, notice: "ok", noticeDelayMs: 300, gpDelayMs: 200, salesPartial: false, fail500: false, overrides: {}, newsReruns: 0, newsVersion: 0, deep: null };
 let st = clone(DEFAULT);
 let log = [];
 
@@ -53,12 +55,35 @@ function refreshJobView() {
   return j;
 }
 
+/**
+ * 경쟁사 비교 자료 봉투. four: 후보 4곳(마바사·하하테크에 아자차랩스·카타파 사본, 투자기관 포함) — 실제 예시 회사처럼 고른 4곳을 모두 받은 모양.
+ * five: 마바사·하하테크에 가상 경쟁사 3곳(이름·열쇠만 바꾼 사본)을 더한 5곳
+ */
+function deepEnv(kind) {
+  const env = jobOf("F-RIVALS").sections.rivals_deep;
+  if (kind === "four") {
+    const [a, b] = env.result.rivals;
+    const more = [["rival:아자차랩스", "아자차랩스", a], ["rival:카타파", "카타파", a]].map(([key, name, src]) => ({ ...clone(src), key, name, nameEn: null }));
+    env.result.rivals = [a, more[0], more[1], b];
+    env.result.rivalSet = env.result.rivals.map((r) => r.key);
+    env.result.rivalInvestors = env.result.rivals.filter((r) => r.funding?.investors.length).map((r) => ({ rivalKey: r.key, rivalName: r.name, investors: r.funding.investors }));
+    return env;
+  }
+  if (kind !== "five") return env;
+  const [a, b] = env.result.rivals;
+  const extra = [["rival:아자차랩스", "아자차랩스"], ["rival:카타파", "카타파"], ["user:가상다섯째", "가상다섯째"]].map(([key, name], i) => ({ ...clone(i % 2 ? b : a), key, name, nameEn: null }));
+  env.result.rivals = [a, b, ...extra];
+  env.result.rivalSet = env.result.rivals.map((r) => r.key);
+  return env;
+}
+
 function scenarioJob() {
   let job;
   if (st.scenario === "F-STAGED") job = clone(FIX["F-STAGED"].exchanges[Math.min(st.step, 6)].response);
   else job = jobOf(st.scenario);
   // stagedConflict: 단계별 분석이 끝날 때 설립이 엇갈린 채로 끝난다(ux-check A-29: 끝나는 순간 "지금 확인할 것"이 아래를 밀지 않는지)
   if (st.scenario === "F-STAGED" && st.stagedConflict && job.status !== "running") job.merged.founded = jobOf("F-CONFLICT").merged.founded;
+  if (st.deep) job.sections.rivals_deep = { ...deepEnv(st.deep), retryable: !job.isExample };
   for (const [k, env] of Object.entries(st.overrides)) job.sections[k] = clone(env);
   if (typeof st.refreshRemaining === "number") job.refresh.remainingToday = st.refreshRemaining;
   // 경과가 예상의 2배를 넘은 단락(A-20)
@@ -162,6 +187,11 @@ async function api(req, res, url, body) {
     } else if (key === "sales") {
       st.overrides.sales = jobOf(st.salesPartial ? "F-SALES-PARTIAL" : "F-SALES").sections.sales;
       if (Array.isArray(body?.keywords)) st.overrides.sales.result.keywords = body.keywords;
+      // 실제 서버는 실행·다시 실행마다 단락 analyzedAt 을 끝난 시각으로 바꾼다(growth/jobs.py _finish). 가짜 서버도 실행마다 1분씩 늦은 시각을 준다.
+      // 같은 시각을 그대로 주면 화면이 "바뀐 것 없음"으로 보고 브라우저 사본을 갱신하지 않아, 다시 열 때 옛 검색어 결과로 다시 조회했다(P-01 다시 열기)
+      st.salesRuns = (st.salesRuns ?? 0) + 1;
+      const t = new Date(Date.parse(st.overrides.sales.analyzedAt ?? "2026-11-22T20:49:06+09:00") + st.salesRuns * 60000 + 9 * 3600000);
+      st.overrides.sales.analyzedAt = t.toISOString().replace(/\.\d{3}Z$/, "+09:00");
     }
     else if (key === "papers") st.overrides.papers = { ...job.sections.papers, status: "running", startedAt: job.analyzedAt, seconds: 2, retryable: false, waitingFor: [] };
     else if (key === "news") {

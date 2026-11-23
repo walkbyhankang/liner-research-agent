@@ -9,6 +9,7 @@ import {
   type Fund, type GpGroup, type Meta, type Only, type Profile, type Program, type ProgramMatch, type SortMode,
 } from "@/lib/finder";
 import { programSorter } from "@/lib/funding";
+import { isNoticeSaved, removeNotice, toggleSaved, type Local } from "@/lib/local";
 import { msToNextKstMidnight, todayKST } from "@/lib/format";
 import { Disclosure, ExtLink, useMore } from "@/components/kit";
 
@@ -127,18 +128,50 @@ function Deadline({ p, today }: { p: Program; today: string }) {
 /** 분류·지역·개수 꼬리표. 상태 낱말과 섞이지 않게 테두리 없는 보조 글(globals.css .meta) */
 const mark = "meta";
 
-export type SaveSpec = { on: boolean; toggle: () => void; onText: string; offText: string; sr: string };
+/** toggle 이 Promise<false> 를 돌려주면(브라우저 저장소에서 빼지 못함) 카드가 다시 누르라고 알린다 */
+export type SaveSpec = { on: boolean; toggle: () => unknown; onText: string; offText: string; sr: string };
 
-function SaveButton({ s }: { s: SaveSpec }) {
+/**
+ * 자금 조달 화면의 공고 담기(screens 5절 "같은 공고가 두 갈래에 나올 때"). 빌리는 돈(program)과 판로 갈래(salesProgram)의 같은 공고는
+ * 담기 상태가 하나다: 어느 갈래에서 담아도 둘 다 "담음", 빼면 두 종류를 함께 뺀다(심사 준비의 빼기와 같은 removeNotice)
+ */
+export function noticeSave(cid: string, local: Local, p: Program, kind: "program" | "salesProgram"): SaveSpec {
+  const on = isNoticeSaved(local, p.id);
+  return {
+    on,
+    toggle: () => (on ? removeNotice(cid, p.id) : void toggleSaved(cid, { kind, itemId: p.id, title: p.title, meta: { end: p.period.end, agency: p.agency, url: p.url } })),
+    onText: "담음", offText: "담기", sr: `심사 준비로 담기: ${p.title}`,
+  };
+}
+
+function SaveButton({ s, onFail }: { s: SaveSpec; onFail?: (failed: boolean) => void }) {
   return (
-    <button type="button" className={`btn ${s.on ? "btn-pressed" : ""}`} aria-pressed={s.on} aria-label={s.sr} onClick={s.toggle}>
+    <button
+      type="button"
+      className={`btn ${s.on ? "btn-pressed" : ""}`}
+      aria-pressed={s.on}
+      aria-label={s.sr}
+      onClick={() => {
+        const r = s.toggle();
+        if (r instanceof Promise) void r.then((ok) => onFail?.(ok === false));
+        else onFail?.(false);
+      }}
+    >
       {s.on ? s.onText : s.offText}
     </button>
   );
 }
 
+/** 빼기 실패 알림(심사 준비 "담은 공고에서 빼기"와 같은 문구) */
+const RemoveFailed = () => (
+  <p role="alert" className="mt-2 text-sm font-medium text-amber">
+    브라우저에 저장된 목록에서 빼지 못했습니다. 다시 눌러 주세요.
+  </p>
+);
+
 export function ProgramCard({ m, today, related, save, foot }: { m: ProgramMatch; today: string; related: boolean; save: SaveSpec; foot?: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [removeFailed, setRemoveFailed] = useState(false);
   const [ever, setEver] = useState(false);
   const p = m.program;
   const benefit = p.points[1] ?? p.points[0] ?? p.intro;
@@ -178,12 +211,13 @@ export function ProgramCard({ m, today, related, save, foot }: { m: ProgramMatch
           {!open && m.checks.length > 0 && <span className="num text-xs font-medium text-sub">확인 {m.checks.length}</span>}
         </button>
         <span className="ml-auto flex gap-2">
-          <SaveButton s={save} />
+          <SaveButton s={save} onFail={setRemoveFailed} />
           <ExtLink href={p.url} className="btn">
             공고 원문
           </ExtLink>
         </span>
       </div>
+      {removeFailed && <RemoveFailed />}
       {ever && (
         <div className={open ? "mt-3 space-y-3 rounded-md bg-wash p-3 text-sm" : "hidden"}>
           {p.points[0] && (
@@ -312,9 +346,11 @@ export function CardList<T>({ items, render, empty, keyOf, listClass = "mt-3 spa
   );
 }
 
-export function LaneHead({ lane, title, line }: { lane: "debt" | "equity"; title: string; line: string }) {
+export type Lane = "debt" | "equity" | "sales";
+
+export function LaneHead({ lane, title, line }: { lane: Lane; title: string; line: string }) {
   return (
-    <div className={`${lane === "debt" ? "lane-debt" : "lane-equity"} pt-3`}>
+    <div className={`lane-${lane} pt-3`}>
       {/* 좁은 화면은 갈래 탭이 제목을 대신 보인다. 제목 순서(h1 → h2 → h3)는 화면 읽기에 남긴다 */}
       <h2 className="sr-only text-lg font-bold lg:not-sr-only">{title}</h2>
       <p className="text-sm">{line}</p>
@@ -322,25 +358,36 @@ export function LaneHead({ lane, title, line }: { lane: "debt" | "equity"; title
   );
 }
 
-/** 중간·좁은 화면의 갈래 탭(단계 메뉴 아래 붙는다) */
-export function LaneTabs({ lane, setLane, debt, equity }: { lane: "debt" | "equity"; setLane: (l: "debt" | "equity") => void; debt: number; equity: number }) {
+const LANE_LINE: Record<Lane, string> = {
+  debt: "shadow-[inset_0_-3px_0_var(--color-debt)]",
+  equity: "shadow-[inset_0_-3px_0_var(--color-equity)]",
+  sales: "shadow-[inset_0_-3px_0_var(--color-sales)]",
+};
+
+/**
+ * 중간·좁은 화면의 갈래 탭 셋(단계 메뉴 아래 붙는다, screens 5절). 판로에는 개수를 붙이지 않는다(입찰공고·지원사업 두 목록).
+ * 개수를 아직 모르면(기업 유형을 고르기 전) 숫자를 빼고 이름만 둔다
+ */
+export function LaneTabs({ lane, setLane, debt, equity, withSales = true }: { lane: Lane; setLane: (l: Lane) => void; debt: number | null; equity: number | null; withSales?: boolean }) {
   return (
     <div role="tablist" aria-label="갈래" className="no-print sticky top-[49px] z-20 -mx-4 mt-4 flex border-b border-rule bg-paper px-4 sm:-mx-6 sm:px-6 lg:hidden">
       {(
         [
           ["debt", "빌리는 돈", debt],
           ["equity", "투자받는 돈", equity],
+          ["sales", "판로", null],
         ] as const
-      ).map(([id, label, n]) => (
+      ).filter(([id]) => withSales || id !== "sales").map(([id, label, n]) => (
         <button
           key={id}
           type="button"
           role="tab"
           aria-selected={lane === id}
           onClick={() => setLane(id)}
-          className={`min-h-12 flex-1 text-[15px] ${lane === id ? `font-semibold text-ink ${id === "debt" ? "shadow-[inset_0_-3px_0_var(--color-debt)]" : "shadow-[inset_0_-3px_0_var(--color-equity)]"}` : "text-ink"}`}
+          className={`min-h-12 flex-1 whitespace-nowrap text-[15px] text-ink ${lane === id ? `font-semibold ${LANE_LINE[id]}` : ""}`}
         >
-          {label} <span className="num">{n}</span>
+          {label}
+          {n !== null && <span className="num"> {n}</span>}
         </button>
       ))}
     </div>

@@ -1,27 +1,51 @@
 "use client";
 
-// 판로(screens 7절): 나라장터 입찰공고(열 때 무료 조회)와 판로 지원사업(기업마당, 화면에서 거름).
-import { useEffect, useMemo, useState } from "react";
-import type { Bid } from "@/lib/contract";
-import { matchProgram, notExpired, withStatus, type Profile, type Program } from "@/lib/finder";
-import { initialConditions, relatedTo } from "@/lib/funding";
+// 판로 갈래(screens 5.2, 옛 판로 화면 7절): 나라장터 입찰공고(갈래가 처음 화면에 들어올 때 무료 조회)와 판로 지원사업(기업마당, 화면에서 거름).
+// 2026-11-23 화면 구조 개편으로 자금 조달의 셋째 갈래가 됐다. 내용과 문구는 옛 판로 화면 그대로이고, 화면 제목 대신 갈래 머리를 쓴다.
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { BizTypeId, Bid } from "@/lib/contract";
+import { matchProgram, notExpired, withStatus, type Profile } from "@/lib/finder";
+import { relatedTo } from "@/lib/funding";
 import { elapsedText, fmtDay } from "@/lib/format";
-import { isSaved, reviewCount, saveSalesKeywords, setEdit, toggleSaved } from "@/lib/local";
+import { isSaved, saveSalesKeywords, toggleSaved } from "@/lib/local";
 import { bidDeadline, sortBids } from "@/lib/review";
 import { phaseOf } from "@/lib/view";
 import { BIZ_LABEL } from "@/lib/company-values";
 import { DetailRow, Disclosure, ExtLink, MoreButton, Placeholder, SourceLine, StatusWord, useMore } from "@/components/kit";
 import { useCompany, useTicker } from "@/components/company/context";
-import { BizPicker } from "@/components/company/Shell";
-import { CardList, DueText, LoadError, ProgramCard, SavedBar, usePublicData, useToday } from "@/components/funding/Board";
+import { CardList, DueText, LoadError, ProgramCard, noticeSave, usePublicData, useToday } from "@/components/funding/Board";
 
 /** 같은 방문에서 같은 검색어로 다시 열면 다시 묻지 않는다(P-01) */
 const posted = new Set<string>();
 
-export function SalesScreen() {
+/** 이 요소가 한 번이라도 화면에 들어왔는가. 넓은 화면은 판로 단이 보일 때, 좁은 화면은 판로 탭을 열어 보일 때다(display:none 은 들어오지 않는다) */
+function useSeen<T extends Element>() {
+  const ref = useRef<T>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || seen) return;
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) {
+        setSeen(true);
+        io.disconnect();
+      }
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [seen]);
+  return [ref, seen] as const;
+}
+
+/**
+ * 판로 갈래. region·biz 는 자금 조달 화면의 지금 조건(사용자가 바꾼 것 포함)이다. 기업 유형 고르기는 화면 위 한 곳에만 둔다.
+ * 나라장터 조회는 갈래가 처음 화면에 들어올 때 한 번(무료, F-20)
+ */
+export function SalesLane({ region, biz, className = "" }: { region: string | null; biz: BizTypeId | null; className?: string }) {
   const c = useCompany();
   const job = c.job;
   const today = useToday();
+  const [ref, seen] = useSeen<HTMLElement>();
   const env = job?.sections.sales;
   const profileDone = job ? phaseOf(job.sections.profile) !== "loading" : false;
   const kwKey = (c.local.salesKeywords ?? job?.merged.bidKeywords ?? []).slice(0, 6).join("|");
@@ -38,7 +62,7 @@ export function SalesScreen() {
   };
 
   useEffect(() => {
-    if (!job || !env || !c.local.loaded || !keywords.length || running) return;
+    if (!seen || !job || !env || !c.local.loaded || !keywords.length || running) return;
     const key = `${job.jobId}|${keywords.join("|")}`;
     if (posted.has(key)) return;
     const same = env.result && env.result.keywords.join("|") === keywords.join("|");
@@ -51,7 +75,7 @@ export function SalesScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void search(keywords);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.jobId, env?.status, c.local.loaded, keywords]);
+  }, [seen, job?.jobId, env?.status, c.local.loaded, keywords]);
 
   const r = env?.result ?? null;
   const items = useMemo(() => (r ? sortBids(r.items) : []), [r]);
@@ -59,14 +83,19 @@ export function SalesScreen() {
   const open = items.filter((b) => b.status === "open").length;
 
   return (
-    <main className="mx-auto w-full max-w-[1200px] px-4 pb-24 pt-6 sm:px-6">
-      <h1 className="text-2xl font-semibold">판로</h1>
-
+    <section ref={ref} id="lane-sales" aria-label="판로" className={`scroll-mt-16 ${className}`} data-lane="sales">
+      {/* 갈래 머리: 넓은 화면은 제목과 판로 색 3px 윗선, 좁은 화면은 "판로" 탭이 제목을 대신한다(빌리는 돈·투자받는 돈과 같은 규칙) */}
+      <div className="lane-sales pt-3">
+        <h2 className="sr-only text-lg font-bold lg:not-sr-only">판로</h2>
+        <p className="text-sm">
+          회사 기술 낱말과 회사 값{region && biz ? `(${region}, ${BIZ_LABEL[biz]})` : ""}으로 찾은 판로 기회입니다.<span className="hidden lg:inline"> 위 빠른 거르기는 걸리지 않습니다.</span>
+        </p>
+      </div>
       <section aria-labelledby="bid-h" className="mt-6 max-w-[760px]">
-        <h2 id="bid-h" className="flex flex-wrap items-center gap-2 text-xl font-semibold">
+        <h3 id="bid-h" className="flex flex-wrap items-center gap-2 text-xl font-semibold">
           공공 조달 입찰공고
           {env?.status === "unavailable" && <StatusWord w="unavailable" />}
-        </h2>
+        </h3>
         <p className="text-sm text-sub">조달청 나라장터, 최근 28일</p>
         {/* 검색어는 누르는 것이 아니라 테두리 없이 따옴표로 보인다. 고치기는 아래 "검색어 고치기"에서 */}
         <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -145,9 +174,8 @@ export function SalesScreen() {
         </div>
       </section>
 
-      <SalesPrograms />
-      <SavedBar n={reviewCount(c.local)} href={`/c/${c.cid}/review`} />
-    </main>
+      <SalesPrograms region={region} biz={biz} />
+    </section>
   );
 }
 
@@ -245,13 +273,12 @@ function BidRow({ b, today }: { b: Bid; today: string }) {
   );
 }
 
-function SalesPrograms() {
+function SalesPrograms({ region, biz }: { region: string | null; biz: BizTypeId | null }) {
   const c = useCompany();
   const { data, error } = usePublicData();
   const today = useToday();
   const [cat, setCat] = useState<"내수" | "수출">("내수");
-  const cond = initialConditions(c.job?.merged ?? null, c.local.edits).cond;
-  const prof: Profile | null = cond.region && cond.biz ? { region: cond.region, biz: cond.biz, need: "all", field: cond.field ?? "ai" } : null;
+  const prof: Profile | null = region && biz ? { region, biz, need: "all", field: "ai" } : null;
   const keywords = c.job?.merged.programKeywords ?? [];
   const lists = useMemo(() => {
     if (!data || !prof || !today) return null;
@@ -261,20 +288,14 @@ function SalesPrograms() {
   }, [data, prof?.region, prof?.biz, today]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <section aria-labelledby="sp-h" className="mt-12 border-t border-rule pt-6">
-      <h2 id="sp-h" className="text-xl font-semibold">
+    <section aria-labelledby="sp-h" className="mt-10 border-t border-rule pt-6">
+      <h3 id="sp-h" className="text-xl font-semibold">
         판로 지원사업
-      </h2>
+      </h3>
       {error && <LoadError />}
       {!prof ? (
-        <div className="mt-3 max-w-[680px]">
-          <p>{cond.region ? "기업 유형을 골라 주세요." : "지역과 기업 유형을 고르면 자금 조달과 같은 조건으로 거릅니다."}</p>
-          {!cond.biz && (
-            <div className="mt-2">
-              <BizPicker current={null} onPick={(b) => setEdit(c.cid, "bizType", b)} hint={c.job?.merged.bizTypeHint ?? null} />
-            </div>
-          )}
-        </div>
+        // 기업 유형 고르기는 자금 조달 화면 위 "기업 유형을 골라 주세요" 한 곳에만 둔다(같은 고르기가 두 번 나오지 않게)
+        <p className="mt-3 max-w-[680px]">{region ? "기업 유형을 고르면 판로 지원사업이 나옵니다." : "지역과 기업 유형을 고르면 판로 지원사업이 나옵니다."}</p>
       ) : lists ? (
         <>
           <div role="tablist" aria-label="판로 지원사업 갈래" className="mt-3 flex gap-2">
@@ -285,7 +306,7 @@ function SalesPrograms() {
             ))}
           </div>
           <p className="mt-2 text-sm">
-            자금 조달과 같은 조건({prof.region}, {BIZ_LABEL[prof.biz]})으로 거릅니다.
+            위 조건({prof.region}, {BIZ_LABEL[prof.biz]})으로 거릅니다.
           </p>
           <div>
             <CardList
@@ -294,7 +315,7 @@ function SalesPrograms() {
               items={lists[cat]}
               keyOf={(m) => m.program.id}
               empty="이 조건에 맞는 판로 지원사업이 없습니다."
-              render={(m) => <ProgramCard m={m} today={today} related={relatedTo(m.program, keywords)} save={saveSales(c.cid, c.local, m.program)} />}
+              render={(m) => <ProgramCard m={m} today={today} related={relatedTo(m.program, keywords)} save={noticeSave(c.cid, c.local, m.program, "salesProgram")} />}
             />
           </div>
         </>
@@ -306,10 +327,3 @@ function SalesPrograms() {
   );
 }
 
-function saveSales(cid: string, local: ReturnType<typeof useCompany>["local"], p: Program) {
-  return {
-    on: isSaved(local, "salesProgram", p.id),
-    toggle: () => toggleSaved(cid, { kind: "salesProgram", itemId: p.id, title: p.title, meta: { end: p.period.end, agency: p.agency, url: p.url } }),
-    onText: "담음", offText: "담기", sr: `심사 준비로 담기: ${p.title}`,
-  };
-}

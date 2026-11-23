@@ -9,16 +9,18 @@ import { normName } from "./names.ts";
 
 // ---------------------------------------------------------------- 단락
 
-export type ScreenKey = "overview" | "finance" | "investment" | "news" | "tech" | "rivals";
+export type ScreenKey = "overview" | "finance" | "investment" | "news" | "tech";
 export type ScreenSection = { key: ScreenKey; label: string; primary: SectionKey };
-/** 단락 순서는 언제나 이 순서다(C-14). 주된 서버 단락은 screens 4.0.1 */
+/**
+ * 단락 순서는 언제나 이 순서다(C-14). 주된 서버 단락은 screens 4.0.1.
+ * 경쟁사는 2026-11-23 화면 구조 개편으로 단락이 아니라 경쟁사 분석 화면(/c/[id]/rivals, screens 4B)이다
+ */
 export const SCREEN_SECTIONS: readonly ScreenSection[] = [
   { key: "overview", label: "개요", primary: "profile" },
   { key: "finance", label: "재무·고용", primary: "official" },
   { key: "investment", label: "투자", primary: "funding_history" },
   { key: "news", label: "최근 동향", primary: "news" },
   { key: "tech", label: "기술", primary: "patents" },
-  { key: "rivals", label: "경쟁사", primary: "profile" },
 ];
 export const screenLabel = (k: ScreenKey) => SCREEN_SECTIONS.find((s) => s.key === k)!.label;
 
@@ -41,7 +43,7 @@ export const isSlow = (env: AnyEnv | null | undefined, extra = 0) =>
   Boolean(env && env.expectedSeconds && env.seconds !== null && env.seconds + extra > env.expectedSeconds * 2);
 
 /**
- * 경쟁사 깊이 비교 비용 줄. 서버 예상값은 5곳 기준 호출 수(liner)와 한 곳당 호출 수(perRival)다.
+ * 경쟁사 비교 자료(rivals_deep) 비용 줄. 서버 예상값은 5곳 기준 호출 수(liner)와 한 곳당 호출 수(perRival)다.
  * 고른 곳 수(1~5)로 바꿔 "Liner 약 {m}회 (고른 {k}곳 기준, 한 곳당 약 {p}회)"로 쓴다. 한 곳당 값이 없으면 5곳 기준 그대로.
  */
 export function rivalsCost(est: { liner: number; perRival: number | null }, picked: number): { liner: number; text: string } {
@@ -182,7 +184,7 @@ function blank(key: Tile["key"], label: string, anchor: ScreenKey, loading: bool
 
 // ---------------------------------------------------------------- 단락 한 줄 요약
 
-export function summaryLine(job: AnalysisJob, key: ScreenKey, confirmedRivals = 0): string | null {
+export function summaryLine(job: AnalysisJob, key: ScreenKey): string | null {
   const m = job.merged;
   const s = job.sections;
   switch (key) {
@@ -215,8 +217,6 @@ export function summaryLine(job: AnalysisJob, key: ScreenKey, confirmedRivals = 
       if (!r || !r.summary.total) return null;
       return `출원인이 확인된 국내 특허 ${r.summary.total}건 (등록 ${r.summary.registered}건)`;
     }
-    case "rivals":
-      return `국내 경쟁사 후보 ${visibleRivals(job).length}곳, 확정 ${confirmedRivals}곳`;
   }
 }
 
@@ -230,6 +230,41 @@ export function visibleRivals(job: AnalysisJob) {
   return job.merged.rivals.filter((r) => !foreign.has(normName(r.name)) && !(r.nameEn && foreign.has(normName(r.nameEn))));
 }
 
+export type RivalChoiceMap = Record<string, "yes" | "no">;
+export type RivalChoicesLike = { choices: RivalChoiceMap; added: { key: string; name: string }[]; touched?: boolean };
+
+/**
+ * 이 브라우저의 경쟁사 고르기(screens 4B.1 "처음 고르기"). 아직 한 번도 고르지 않았고(맞음·아님·직접 넣기 모두 없음, touched 아님)
+ * 받아 둔 비교 자료가 있으면, 그 자료가 비교한 후보(rivalSet 가운데 후보 목록에 있는 곳)를 "맞음"으로 본다.
+ * 예시 회사나 같은 분석을 처음 연 사람이 "경쟁사 고르기가 바뀌었습니다"부터 보지 않게 한다. implicit 이면 저장된 고르기가 아니다.
+ */
+export function effectiveRivalChoices(job: AnalysisJob | null, rc: RivalChoicesLike): RivalChoicesLike & { implicit: boolean } {
+  const untouched = !rc.touched && Object.keys(rc.choices).length === 0 && rc.added.length === 0;
+  const deep = job?.sections.rivals_deep.result;
+  const set = deep?.rivalSet ?? [];
+  if (!job || !deep || !untouched || !set.length) return { ...rc, implicit: false };
+  // 후보 목록에 없는 열쇠(직접 넣은 회사 "user:…" 등)는 비교 자료의 이름으로 직접 넣은 회사에 둔다. 그래야 처음 연 사람의
+  // 고른 목록·단계 메뉴 개수·비교 표가 저장된 비교 자료와 같다
+  const known = new Set(visibleRivals(job).map((r) => r.key));
+  const names = new Map(deep.rivals.map((r) => [r.key, r.name]));
+  const keys = set.filter((k) => known.has(k) || names.has(k));
+  const choices: RivalChoiceMap = Object.fromEntries(keys.map((k) => [k, "yes" as const]));
+  const added = keys.filter((k) => !known.has(k)).map((k) => ({ key: k, name: names.get(k)! }));
+  return { choices, added, implicit: keys.length > 0 };
+}
+
+export type PickedRival = { key: string; name: string; nameEn: string | null };
+/** 고른 경쟁사("맞음")를 보이는 순서로: 후보 목록 순서, 그다음 직접 넣은 회사. 비교 자료 요청 본문·심사 준비·단계 메뉴가 같은 목록을 쓴다(D-05) */
+export function pickedRivals(job: AnalysisJob | null, rc: RivalChoicesLike): PickedRival[] {
+  const eff = effectiveRivalChoices(job, rc);
+  const yes = (k: string) => eff.choices[k] === "yes";
+  const cands = job ? visibleRivals(job) : [];
+  return [
+    ...cands.filter((r) => yes(r.key)).map((r) => ({ key: r.key, name: r.name, nameEn: r.nameEn })),
+    ...eff.added.filter((a) => yes(a.key)).map((a) => ({ key: a.key, name: a.name, nameEn: null })),
+  ];
+}
+
 // ---------------------------------------------------------------- 진행 줄과 알림
 
 const PENDING_TEXT: Record<string, string> = {
@@ -239,7 +274,7 @@ const PENDING_TEXT: Record<string, string> = {
   "region.web": "개요(본사 지역)",
   "revenue.web": "재무·고용(웹 조사 매출)",
   "investors.confirmed": "투자(원문 확인 투자자)",
-  "rivals.facts": "경쟁사(후보 추가)",
+  "rivals.facts": "경쟁사 분석(후보 추가)",
 };
 
 /** 진행 줄 둘째 줄의 "아직 확인 중" 목록 */

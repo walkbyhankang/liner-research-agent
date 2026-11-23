@@ -149,7 +149,7 @@
 
 - 성공: 202 `{jobId, key, started: true}`. 상태는 `GET /api/analysis/{jobId}`로 묻는다.
 - 거절: 404 `not_found`(작업 없음), 409 `section_running`(이미 실행 중 — 화면은 그대로 폴링), 409 `section_not_ready`(`papers`인데 기술 낱말 전), 409 `conflict`(그 상태에서는 다시 실행하지 않음, 예: `done`인 `profile`), 409 `example_readonly`(예시 회사의 `sales` 밖 단락), 429 `daily_limit`(Liner 하루 상한이 모자라 시작하지 않음 — 단락은 바뀌지 않는다), 429 `rate_limited`.
-- 같은 작업은 여러 사람이 볼 수 있다(저장된 분석). 다른 사람이 실행한 결과도 같은 작업에 남는다. 화면은 `rivalSet`과 자기 고르기를 견줘 "경쟁사 고르기가 바뀌었습니다"를 판정한다.
+- 같은 작업은 여러 사람이 볼 수 있다(저장된 분석). 다른 사람이 실행한 결과도 같은 작업에 남는다. 화면은 `rivalSet`을 비교 표 열 순서와 "처음 고르기"(아직 고르지 않은 브라우저가 비교 자료의 경쟁사를 고른 것으로 보이는 것)에 쓴다. 고르기가 `rivalSet`과 달라도 안내는 띄우지 않는다(2026-11-23 사용자 결정, `docs/ux/screens.md` 4B절).
 
 ### 2.5 `GET /api/analysis/{jobId}/news`
 

@@ -17,7 +17,8 @@ export type SavedItem = {
 export type CheckRecord = { programId: string; result: NoticeAnalysis | null; error: { code: string; message: string } | null; ranAt: string; company: NoticeCompany };
 export type RivalCheckRecord = { programId: string; rivalKey: string; result: NoticeAnalysis | null; error: { code: string; message: string } | null; ranAt: string; company: NoticeCompany };
 export type BriefRecord = { gp: string; result: GpBrief | null; error: { code: string; message: string } | null; ranAt: string; company: NoticeCompany };
-export type RivalChoices = { choices: Record<string, "yes" | "no">; added: { key: string; name: string }[] };
+/** touched: 이 브라우저에서 한 번이라도 고른 적이 있다(모두 다시 풀어도 "처음 고르기"로 돌아가지 않게, screens 4B.1) */
+export type RivalChoices = { choices: Record<string, "yes" | "no">; added: { key: string; name: string }[]; touched?: boolean };
 export type Prep = { questions: Record<string, { ready: boolean; memo: string }>; dd: Record<string, boolean> };
 export type NoteMemo = { memo: string; updatedAt: string };
 
@@ -132,7 +133,11 @@ export function savedNotices(saved: readonly SavedItem[]): SavedItem[] {
   }
   return [...out.values()];
 }
-export const reviewCount = (l: Local) => savedNotices(l.saved).length + l.saved.filter((s) => s.kind === "gp").length;
+export const reviewCount = (l: Pick<Local, "saved">) => savedNotices(l.saved).length + l.saved.filter((s) => s.kind === "gp").length;
+/** 자금 조달 단계 옆 개수(screens 1.1): 그 화면에서 담은 것 전체. 심사 준비 개수에 노트에만 담는 입찰공고를 더한 수 */
+export const fundingCount = (l: Pick<Local, "saved">) => reviewCount(l) + l.saved.filter((s) => s.kind === "bid").length;
+/** 자금 조달 화면에서 이 공고를 담았는가. 빌리는 돈(program)과 판로 갈래(salesProgram)의 같은 공고는 담기 상태가 하나다(screens 5절) */
+export const isNoticeSaved = (l: Local, itemId: string) => isSaved(l, "program", itemId) || isSaved(l, "salesProgram", itemId);
 
 export function toggleSaved(cid: string, item: Omit<SavedItem, "savedAt">): boolean {
   const on = !isSaved(getLocal(cid), item.kind, item.itemId);
@@ -146,8 +151,9 @@ export function toggleSaved(cid: string, item: Omit<SavedItem, "savedAt">): bool
 }
 
 /**
- * 심사 준비에서 공고를 뺀다. 심사 준비는 두 화면(자금 조달·판로)에서 담은 같은 공고를 하나로 보이므로(savedNotices),
- * 빼기도 두 종류를 한 번에 지운다. 자금 조달·판로 화면의 담기 단추는 지금처럼 자기 종류만 바꾼다(toggleSaved).
+ * 공고를 뺀다(두 종류 program·salesProgram 을 한 번에). 심사 준비는 빌리는 돈·판로 갈래에서 담은 같은 공고를 하나로 보이므로(savedNotices)
+ * 빼기도 두 종류를 함께 지운다. 자금 조달 화면의 담기 단추도 2026-11-23부터 같은 공고의 담기 상태를 하나로 다루어, 뺄 때 이 함수를 쓴다
+ * (funding/Board.tsx noticeSave). 담을 때만 그 갈래의 종류 하나를 저장한다(toggleSaved). 실패하면 false — 부르는 쪽이 다시 누르라고 알린다.
  */
 export async function removeNotice(cid: string, itemId: string): Promise<boolean> {
   const kinds: SavedKind[] = ["program", "salesProgram"];
@@ -179,19 +185,27 @@ export function putBrief(cid: string, rec: BriefRecord) {
 
 // ---------------------------------------------------------------- 경쟁사 고르기
 
-export function setRivalChoice(cid: string, key: string, choice: "yes" | "no" | null) {
-  const cur = getLocal(cid).rivalChoices;
+/**
+ * seed: 화면이 "처음 고르기"(screens 4B.1, 비교 자료가 고른 곳과 그 자료의 직접 넣은 회사)를 보이고 있었다면 그 고르기.
+ * 저장된 고르기가 비어 있을 때만 그것을 먼저 저장하고 그 위에 바꾼다(보이던 "맞음"이 사용자가 누른 순간 사라지지 않게)
+ */
+export type RivalSeed = Pick<RivalChoices, "choices" | "added">;
+const seeded = (cur: RivalChoices, seed?: RivalSeed): RivalChoices =>
+  seed && !cur.touched && Object.keys(cur.choices).length === 0 && cur.added.length === 0 ? { choices: { ...seed.choices }, added: [...seed.added] } : cur;
+
+export function setRivalChoice(cid: string, key: string, choice: "yes" | "no" | null, seed?: RivalSeed) {
+  const cur = seeded(getLocal(cid).rivalChoices, seed);
   const choices = { ...cur.choices };
   if (choice === null) delete choices[key];
   else choices[key] = choice;
-  const next = { ...cur, choices };
+  const next = { ...cur, choices, touched: true };
   update(cid, (l) => ({ ...l, rivalChoices: next }));
   void store.put("rivalChoices", cid, next);
 }
-export function addRival(cid: string, key: string, name: string) {
-  const cur = getLocal(cid).rivalChoices;
+export function addRival(cid: string, key: string, name: string, seed?: RivalSeed) {
+  const cur = seeded(getLocal(cid).rivalChoices, seed);
   if (cur.added.some((a) => a.key === key)) return;
-  const next = { choices: { ...cur.choices, [key]: "yes" as const }, added: [...cur.added, { key, name }] };
+  const next = { choices: { ...cur.choices, [key]: "yes" as const }, added: [...cur.added, { key, name }], touched: true };
   update(cid, (l) => ({ ...l, rivalChoices: next }));
   void store.put("rivalChoices", cid, next);
 }

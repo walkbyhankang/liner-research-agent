@@ -6,9 +6,9 @@ import { useParams, usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BIZ_LABEL, isBizType } from "@/lib/company-values";
 import { ageLabel, daysSince, elapsedText, fmtDay, fmtTime, isStale, yearsSince } from "@/lib/format";
-import { reviewCount, setEdit } from "@/lib/local";
+import { fundingCount, reviewCount, setEdit } from "@/lib/local";
 import { onStorageChange, quotaExceeded, storageState } from "@/lib/store";
-import { isTerminal, usedRaw } from "@/lib/view";
+import { isTerminal, pickedRivals, usedRaw } from "@/lib/view";
 import type { BizTypeId, Value } from "@/lib/contract";
 import { Banner, LiveRegion, SourceLine, StatusWord, Toast } from "@/components/kit";
 import { Wordmark } from "@/components/SiteHeader";
@@ -155,16 +155,23 @@ function StepNav() {
   const job = c.job;
   const officialReady = !job || isTerminal(job.sections.official);
   const running = Boolean(job && job.status === "running");
-  // 단계 옆 개수(screens 1.1): 이 브라우저에 담은 것. 자금 조달 = 거기서 담은 공고·운용사, 심사 준비 = 담은 항목 전체(입찰공고 제외),
-  // 판로 = 거기서 담은 판로 지원사업과 노트에 담은 입찰공고. 0이면 붙이지 않는다. 회사 분석·노트에는 붙이지 않는다
-  const kinds = (ks: string[]) => c.local.saved.filter((s) => ks.includes(s.kind)).length;
+  // 단계(2026-11-23 화면 구조 개편): 회사 분석 · 경쟁사 분석 · 자금 조달 · 심사 준비 · 노트. 판로는 자금 조달의 갈래다(screens 5.2).
+  // 좁은 화면은 짧은 이름(short)을 보이고 화면 읽기 이름은 늘 전체 이름이다(보이는 글이 이름 안에 들어 있다, WCAG 2.5.3).
+  // 단계 옆 개수(screens 1.1): 경쟁사 분석 = 고른 경쟁사, 자금 조달 = 거기서 담은 것 전체(같은 공고는 하나, 입찰공고 포함),
+  // 심사 준비 = 담은 항목 전체(입찰공고 제외). 0이면 붙이지 않는다. 회사 분석·노트에는 붙이지 않는다
   const items = [
-    { href: base, label: "회사 분석", current: path === base, disabled: false, n: 0, sr: "" },
-    { href: `${base}/funding`, label: "자금 조달", current: path.startsWith(`${base}/funding`), disabled: !officialReady, n: kinds(["program", "gp"]), sr: "담은 자금 후보" },
-    { href: `${base}/review`, label: "심사 준비", current: path.startsWith(`${base}/review`), disabled: false, n: reviewCount(c.local), sr: "담은 항목" },
-    { href: `${base}/sales`, label: "판로", current: path.startsWith(`${base}/sales`), disabled: false, n: kinds(["salesProgram", "bid"]), sr: "담은 판로 항목" },
-    { href: `${base}/note`, label: "노트", current: path.startsWith(`${base}/note`), disabled: false, n: 0, sr: "" },
+    { href: base, label: "회사 분석", short: "회사", current: path === base, disabled: false, n: 0, sr: "", unit: "개" },
+    { href: `${base}/rivals`, label: "경쟁사 분석", short: "경쟁사", current: path.startsWith(`${base}/rivals`), disabled: false, n: pickedRivals(job, c.local.rivalChoices).length, sr: "고른 경쟁사", unit: "곳" },
+    { href: `${base}/funding`, label: "자금 조달", short: "자금", current: path.startsWith(`${base}/funding`), disabled: !officialReady, n: fundingCount(c.local), sr: "담은 자금·판로 후보", unit: "개" },
+    { href: `${base}/review`, label: "심사 준비", short: "심사", current: path.startsWith(`${base}/review`), disabled: false, n: reviewCount(c.local), sr: "담은 항목", unit: "개" },
+    { href: `${base}/note`, label: "노트", short: "노트", current: path.startsWith(`${base}/note`), disabled: false, n: 0, sr: "", unit: "개" },
   ];
+  const labelOf = (it: (typeof items)[number]) => (
+    <>
+      <span className="sm:hidden">{it.short}</span>
+      <span className="hidden sm:inline">{it.label}</span>
+    </>
+  );
   return (
     <nav aria-label="단계" className="min-w-0 flex-1 overflow-x-auto">
       <ol className="flex min-w-max items-stretch sm:gap-4">
@@ -175,10 +182,11 @@ function StepNav() {
               <span
                 role="link"
                 aria-disabled="true"
+                aria-label={it.label}
                 aria-describedby="funding-wait"
                 className="flex min-h-12 w-full flex-col items-center justify-center px-2 text-center text-sm text-sub sm:px-3"
               >
-                <span>{it.label}</span>
+                <span>{labelOf(it)}</span>
                 <span className="text-xs">준비 중</span>
                 <span id="funding-wait" className="sr-only">
                   공식 자료를 받으면 열립니다
@@ -188,12 +196,12 @@ function StepNav() {
               <Link
                 href={it.href}
                 aria-current={it.current ? "page" : undefined}
-                aria-label={it.n > 0 ? `${it.label}, ${it.sr} ${it.n}개` : undefined}
+                aria-label={it.n > 0 ? `${it.label}, ${it.sr} ${it.n}${it.unit}` : it.label}
                 className={`flex min-h-12 w-full items-center justify-center gap-1 whitespace-nowrap px-1.5 text-sm text-ink sm:gap-1.5 sm:px-3 ${
                   it.current ? "font-semibold shadow-[inset_0_-3px_0_var(--color-ledger)]" : "hover:shadow-[inset_0_-3px_0_var(--color-rule)]"
                 }`}
               >
-                {it.label}
+                {labelOf(it)}
                 {it.label === "회사 분석" && running && (
                   <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-ledger motion-safe:animate-pulse" />
                 )}
@@ -275,7 +283,7 @@ function CompanyBar() {
     </button>
   );
 
-  // 회사 분석이 아닌 단계(자금 조달·심사 준비·판로·노트)에서는 표시줄을 한 줄로 줄인다.
+  // 회사 분석이 아닌 단계(경쟁사 분석·자금 조달·심사 준비·노트)에서는 표시줄을 한 줄로 줄인다.
   // 그 화면의 주인공(카드·문서)이 첫 화면에 들어오게 하려는 것이다. 사실 칩과 예시 안내 문장은 회사 분석 화면에서 본다.
   if (!isAnalysis) {
     return (

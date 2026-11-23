@@ -10,7 +10,8 @@ import { noticeCompany } from "@/lib/company-values";
 import { elapsedText, fmtTime, isStale, stageKo, todayKST } from "@/lib/format";
 import { rivalBackers } from "@/lib/funding";
 import { putBrief, setPrep, toggleSaved, type SavedItem } from "@/lib/local";
-import { DD_GROUPS, DD_ITEMS, QUESTIONS, QUESTION_GROUPS, groupCounts, type PrepContext, type Related } from "@/lib/prep";
+import { DD_GROUPS, DD_ITEMS, QUESTIONS, QUESTION_GROUPS, groupCounts, relatedHref, type PrepContext, type Related } from "@/lib/prep";
+import { pickedRivals } from "@/lib/view";
 import { evidenceFinance, evidenceFunding, evidenceNews, evidencePatents, openValues } from "@/lib/review";
 import { runTask } from "@/lib/tasks";
 import { useTask } from "@/lib/useTask";
@@ -408,7 +409,7 @@ function RelatedList({ items }: { items: Related[] }) {
       {items.map((r) => (
         <li key={r.text} className="py-2.5">
           {r.to ? (
-            <Link href={`/c/${c.cid}#${r.to}`} className="link link-fit">
+            <Link href={relatedHref(c.cid, r.to)} className="link link-fit">
               {r.text}
             </Link>
           ) : (
@@ -421,8 +422,8 @@ function RelatedList({ items }: { items: Related[] }) {
 }
 
 function prepCtx(c: ReturnType<typeof useCompany>, job: AnalysisJob): PrepContext {
-  const ch = c.local.rivalChoices.choices;
-  const confirmedRivals = job.merged.rivals.filter((r) => ch[r.key] === "yes").length + c.local.rivalChoices.added.filter((a) => ch[a.key] === "yes").length;
+  // 고른 경쟁사 수는 경쟁사 분석 화면과 같은 셈(처음 고르기 포함, screens 4B.1)
+  const confirmedRivals = pickedRivals(job, c.local.rivalChoices).length;
   return { job, confirmedRivals, deepDone: Boolean(job.sections.rivals_deep.result), papersDone: Boolean(job.sections.papers.result) };
 }
 
@@ -523,7 +524,7 @@ function DueDiligence({ job }: { job: AnalysisJob }) {
                       {rel.map((r) =>
                         r.to ? (
                           <p key={r.text} className="mt-1 text-sm">
-                            <Link href={`/c/${c.cid}#${r.to}`} className="link link-fit">
+                            <Link href={relatedHref(c.cid, r.to)} className="link link-fit">
                               분석에 있음: {r.text}
                             </Link>
                           </p>
