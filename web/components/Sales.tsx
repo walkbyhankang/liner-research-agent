@@ -39,9 +39,10 @@ function useSeen<T extends Element>() {
 
 /**
  * 판로 갈래. region·biz 는 자금·판로 화면의 지금 조건(사용자가 바꾼 것 포함)이다. 기업 유형 고르기는 화면 위 한 곳에만 둔다.
- * 나라장터 조회는 갈래가 처음 화면에 들어올 때 한 번(무료, F-20)
+ * 나라장터 조회는 갈래가 처음 화면에 들어올 때 한 번(무료, F-20).
+ * filtersAbove: 빠른 거르기 줄이 지금 판로 단 위에 있는가(조건을 다 고르고 목록을 받은 뒤). 그때만 넓은 화면 머리에 "위 빠른 거르기는 걸리지 않습니다."를 쓴다
  */
-export function SalesLane({ region, biz, className = "" }: { region: string | null; biz: BizTypeId | null; className?: string }) {
+export function SalesLane({ region, biz, filtersAbove, className = "" }: { region: string | null; biz: BizTypeId | null; filtersAbove: boolean; className?: string }) {
   const c = useCompany();
   const job = c.job;
   const today = useToday();
@@ -88,8 +89,10 @@ export function SalesLane({ region, biz, className = "" }: { region: string | nu
       {/* 갈래 머리: 넓은 화면은 제목과 판로 색 3px 윗선, 좁은 화면은 "판로" 탭이 제목을 대신한다(빌리는 돈·투자받는 돈과 같은 규칙) */}
       <div className="lane-sales pt-3">
         <h2 className="sr-only text-lg font-bold lg:not-sr-only">판로</h2>
+        {/* 둘째 문장은 넓은 화면에서 빠른 거르기 줄이 실제로 위에 있을 때만(좁은 화면은 판로 탭에서 빠른 거르기를 숨긴다, 기업 유형을 고르기 전에는 줄이 없다) */}
         <p className="text-sm">
-          회사 기술 낱말과 회사 값{region && biz ? `(${region}, ${BIZ_LABEL[biz]})` : ""}으로 찾은 판로 기회입니다.<span className="hidden lg:inline"> 위 빠른 거르기는 걸리지 않습니다.</span>
+          회사 기술 낱말과 회사 값{region && biz ? `(${region}, ${BIZ_LABEL[biz]})` : ""}으로 찾은 판로 기회입니다.
+          {filtersAbove && <span className="hidden lg:inline"> 위 빠른 거르기는 걸리지 않습니다.</span>}
         </p>
       </div>
       <section aria-labelledby="bid-h" className="mt-6 max-w-[760px]">

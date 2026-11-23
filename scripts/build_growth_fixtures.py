@@ -362,9 +362,33 @@ def patents_result(ctx: Ctx, *, empty=False):
             "errors": [], "queriedAt": ctx.at(END["patents"])}
 
 
+def rival_patent_items():
+    """마바사 특허 낱건 6건(출원일 최근순, 등록 4건 — 요약 {total 6, registered 4, byYear}와 맞춘다). 계약 8.9 RivalPatent."""
+    years = ["2025", "2024", "2024", "2023", "2023", "2022"]
+    out = []
+    for i, y in enumerate(years):
+        no = f"10-{y}-88888{i + 1:02d}"
+        reg = i not in (0, 2)
+        out.append({"id": no, "title": f"추론 칩 메모리 배치 방법 {i + 1}", "assignee": "주식회사 마바사", "applicationNo": no,
+                    "filingDate": f"{y}-{9 - i:02d}-2{i}", "publicationNo": f"KR{y}88888{i + 1:02d}A",
+                    "registrationNo": f"KR{y}88888{i + 1:02d}B1" if reg else None, "url": f"{EX}/patent/rival/m{i + 1}"})
+    return out
+
+
+def rival_summary_inputs():
+    """마바사 요약 모델에 넘긴 기사 4건(최신순, 마지막 건은 Liner 검색 결과라 naverUrl 없음). 계약 8.9 RivalSummaryInput."""
+    rows = [("2026-11-10", "마바사, 추론 칩 2세대 공개", "가나다일보", True), ("2026-10-02", "마바사 데이터센터 공급 계약", "라마바경제", True),
+            ("2026-08-19", "마바사 컴파일러 업데이트", "사아자뉴스", True), ("2026-05-04", "마바사 해외 법인 설립", "example.com", False)]
+    return [{"title": t, "url": f"{EX}/news/rival/m{i + 1}", "naverUrl": f"{EX}/naver/rival/m{i + 1}" if nv else None, "date": d, "outlet": o}
+            for i, (d, t, o, nv) in enumerate(rows)]
+
+
 def rivals_deep_result(ctx: Ctx, started: float, seconds: float):
     fh = funding_result(ctx)
     m_rounds = rounds_list(pool=[RIVAL_INVESTOR, "Test Ventures X", "Test Ventures Y"], prefix="m")[:3]
+    # 웹 보완 기사 출처(계약 8.5 sources[].url — Web 만 주소가 있다). 나란히 비교 표의 투자 칸 원문 링크 시험용(screens 4B.2)
+    m_rounds[0]["sources"].append({"type": "Web", "label": "마바사 시리즈 C 투자 유치 기사", "url": f"{EX}/news/rival/round/m1"})
+    m_rounds[1]["sources"].append({"type": "Web", "label": "마바사 시리즈 B 투자 기사", "url": f"{EX}/news/rival/round/m2"})
     mabasa_corp = corp(ctx, crno="0000000000003", name="주식회사 마바사", ceo="이영희", founded="2018-04-02",
                        address="대전광역시 유성구 예시로 7", idx=3)
     return {
@@ -379,15 +403,18 @@ def rivals_deep_result(ctx: Ctx, started: float, seconds: float):
                                                                          "byCurrency": {"USD": 1.8e8}, "roundsWithAmount": 2, "roundsTotal": 3, "entity": None,
                                                                          "note": "중복 정리한 라운드 3건 중 금액 확인 2건 합산(통화별, 환산 없음)"}},
                          "investors": [RIVAL_INVESTOR, "Test Ventures X", "Test Ventures Y"]},
-             "fundingReason": None, "patents": {"total": 6, "registered": 4, "byYear": {"2022": 1, "2023": 2, "2024": 2, "2025": 1}},
+             "fundingReason": None, "patents": {"total": 6, "registered": 4, "byYear": {"2022": 1, "2023": 2, "2024": 2, "2025": 1},
+                                                "items": rival_patent_items()},
              "patentsReason": None,
              "summary": {"business": "마바사는 추론용 칩을 만드는 가짜 경쟁사다.", "productsTech": "추론 칩, 컴파일러",
-                         "recentChanges": ["가짜 변화 1", "가짜 변화 2", "가짜 변화 3"]}, "errors": []},
+                         "recentChanges": ["가짜 변화 1", "가짜 변화 2", "가짜 변화 3"], "inputArticles": rival_summary_inputs()}, "errors": []},
+            # 하하테크: 출원인 확인 특허 0건(items []), 기사 없이 쓴 요약(inputArticles [])
             {"key": "rival:하하테크", "name": "하하테크", "nameEn": None, "corp": None, "financials": [],
              "financialsReason": "금융위원회 재무 자료 없음", "nps": None, "npsReason": "국민연금 사업장을 찾지 못함",
-             "funding": None, "fundingReason": "투자 라운드 자료 없음", "patents": {"total": 0, "registered": 0, "byYear": {}},
+             "funding": None, "fundingReason": "투자 라운드 자료 없음", "patents": {"total": 0, "registered": 0, "byYear": {}, "items": []},
              "patentsReason": None, "summary": {"business": "하하테크는 엣지 AI 모듈을 만드는 가짜 경쟁사다.", "productsTech": "엣지 AI 모듈",
-                                                 "recentChanges": []}, "errors": ["법인이 확인되지 않아 공식 재무·고용 자료가 없습니다."]},
+                                                 "recentChanges": [], "inputArticles": []},
+             "errors": ["법인이 확인되지 않아 공식 재무·고용 자료가 없습니다."]},
         ],
         "rivalInvestors": [{"rivalKey": "rival:마바사", "rivalName": "마바사", "investors": [RIVAL_INVESTOR, "Test Ventures X", "Test Ventures Y"]}],
         "queriedAt": ctx.at(started + seconds),
@@ -828,7 +855,8 @@ def build() -> dict[str, dict]:
     fixture("F-BRIEF", "운용사 요약 응답: 사실 4, 맞닿는 점 2, 물어볼 것 2, 검색 결과 6(지금 코드 상한: 맞닿는 점·물어볼 것 각 2).", [
         x("POST", "/api/gp/brief", 200, gp_brief(), request={"gp": "가나다벤처스", "company": notice_company()})])
     riv, _ = make_job(rivals=True)
-    fixture("F-RIVALS", "rivals_deep done: 경쟁사 2곳(하하테크는 재무 미확보), rivalInvestors 에 '타파하인베스트'(화면 테스트의 가짜 운용사 이름과 맞춘다).", [
+    fixture("F-RIVALS", "rivals_deep done: 경쟁사 2곳(하하테크는 재무 미확보), rivalInvestors 에 '타파하인베스트'(화면 테스트의 가짜 운용사 이름과 맞춘다). "
+            "원문 링크 기록: 마바사 patents.items 6건·summary.inputArticles 4건, 하하테크는 둘 다 빈 목록.", [
         x("POST", f"{jp}/sections/rivals_deep", 202, {"jobId": JOB_ID, "key": "rivals_deep", "started": True},
           request={"rivals": [{"key": "rival:마바사", "name": "마바사", "nameEn": "Mabasa"}, {"key": "rival:하하테크", "name": "하하테크"}]}),
         x("GET", jp, 200, riv),

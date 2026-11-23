@@ -240,7 +240,7 @@ function FundingInner() {
       {/* 판로 갈래(screens 5.2): 넓은 화면은 두 갈래 아래 화면 폭 단, 중간·좁은 화면은 판로 탭에서만.
           공고·펀드 목록을 받은 뒤에 그린다: 그 전에 그리면 넓은 화면에서 판로 단이 잠깐 첫 화면에 보였다가 아래로 밀리며
           "화면에 들어옴"으로 잡혀 사용자가 보지 않은 나라장터 조회가 나간다(F-20) */}
-      {salesShown && <SalesLane region={cond.region} biz={cond.biz} className={`${lane === "sales" ? "mt-4" : "hidden"} lg:mt-12 lg:block`} />}
+      {salesShown && <SalesLane region={cond.region} biz={cond.biz} filtersAbove={Boolean(result && split && prof && data)} className={`${lane === "sales" ? "mt-4" : "hidden"} lg:mt-12 lg:block`} />}
 
       {result && split && prof && data && (
         <>

@@ -13,7 +13,7 @@ import { checkNowCounts, type OpenValue } from "@/lib/review";
 import { Chevron, Disclosure, Placeholder, StatusWord, VerdictMark, nb, useOpen } from "@/components/kit";
 import { restoreAnchor, useCompany, useTicker } from "@/components/company/context";
 import { ConflictLines, WORD_MEANING } from "@/components/company/values";
-import { useToday } from "@/components/funding/Board";
+import { usePublicData, useToday } from "@/components/funding/Board";
 import { Finance, Investment, Overview } from "@/components/company/sections-a";
 import { News, Tech } from "@/components/company/sections-b";
 
@@ -379,11 +379,22 @@ const VALUE_SECTION: Record<string, ScreenKey> = {
 };
 
 /**
+ * "지금 확인할 것"이 공고 목록(/data/programs.json)을 기다리는 시간(screens 4.0.3 "오래 걸림"). 지나면 저장한 마감일로 센다.
+ * 근거: 목록은 압축 전송 약 485KB. Chrome 개발 도구 "Fast 3G"(약 1.44Mbps, 왕복 약 0.56초)에서 약 4초에 오므로 여유를 둔 5초.
+ */
+const CHECKNOW_WAIT_MS = 5000;
+
+/**
  * "지금 확인할 것"(screens 4.0.3): 사실을 센 개수만 둔다(점수·확률 없음). 0인 항목은 숨기고, 끝난 분석을 열었을 때 모두 0이면 묶음을 그리지 않는다.
  * 이 방문에서 분석이 진행되는 것을 봤으면 틀을 끝까지 두고 항목은 한 줄로 둔다(끝나는 순간 아래가 밀리지 않게).
  * - 엇갈린 값·미확보 값: 합친 회사 값(merged)의 상태로 센다. 미팅 근거 묶음 "미팅 전에 정리할 값"과 같은 셈(openValues). 분석이 진행 중이면(새로 분석 포함) 세지 않는다.
  * 셈 자체는 lib/review.ts checkNowCounts(단위 시험이 있다).
- * - 마감 임박 담은 공고: 이 브라우저에 담은 공고(판로 지원사업 포함) 가운데 마감이 오늘부터 14일 안(자금·판로 "마감 임박"과 같은 기준).
+ * - 마감 임박 담은 공고: 이 브라우저에 담은 공고(판로 지원사업 포함) 가운데 마감이 오늘부터 14일 안(자금·판로 "마감 임박"과 같은 날 수).
+ *   마감일은 심사 준비·노트와 같은 기준(lib/review.ts noticeEnd: 지금 공고 자료 먼저, 없으면 담을 때 저장값). 지금 공고 자료는 자금·판로와 같은
+ *   정적 파일(/data/programs.json, 유료 호출 없음, 한 방문에 한 번 받아 여러 화면이 나눠 쓴다). 받는 중에는 마감 임박을 세지 않고(저장값으로 먼저 셌다가
+ *   받은 뒤 숫자가 바뀌지 않게), 담은 공고가 하나라도 있으면 틀과 "마감 임박은 공고 목록을 받으면 셉니다"를 먼저 둔다(받은 뒤 같은 자리에 들어와 아래가 밀리지 않게.
+ *   저장값으로는 임박이 아니어도 마감이 앞당겨졌을 수 있다). 받지 못하면, 또는 CHECKNOW_WAIT_MS 가 지나도 오지 않으면 저장한 마감일로 센다.
+ *   기다림 시간 제한은 이 묶음만의 것이다. 공용 요청은 끊지 않으므로 늦게라도 오면 지금 자료로 다시 센다(틀이 있어 위치는 그대로).
  * - 미충족 요건: 공고문 자격 대조를 한 담은 공고의 "미충족" 요건 수(심사 준비 "부족한 요건"과 같은 셈). 대조한 것이 없으면 없음.
  * 값 항목은 누르면 아래에 목록이 펼쳐지고(값마다 그 단락으로 가는 링크), 공고 항목은 심사 준비로 간다.
  */
@@ -404,9 +415,24 @@ function CheckNow({ job }: { job: AnalysisJob }) {
     setOpenConflict(false);
     setOpenMissing(false);
   }
-  const { conflicts, missing, soon, unmet } = checkNowCounts(job, c.live, c.local.saved, c.local.checks, today);
+  const pub = usePublicData();
+  const loading = !pub.data && !pub.error; // 지금 공고 자료를 받는 중. 받지 못하면(error) 아래 셈이 저장한 마감일로 센다
+  // 이 묶음만의 기다림 시간 제한. 지나면 저장값으로 센다(공용 요청은 그대로 두어 자금·판로·심사 준비·노트는 늦게라도 받는다)
+  const [gaveUp, setGaveUp] = useState(false);
+  useEffect(() => {
+    if (!loading || gaveUp) return;
+    const t = setTimeout(() => setGaveUp(true), CHECKNOW_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [loading, gaveUp]);
+  const waiting = loading && !gaveUp;
+  const { conflicts, missing, soon: counted, unmet, notices } = checkNowCounts(job, c.live, c.local.saved, c.local.checks, today, pub.data?.programs ?? null);
+  // 받는 중(waiting)에는 마감 임박을 보이지 않고, 담은 공고가 있으면 틀을 잡는다. 틀을 한 번 잡았으면 이 방문 동안 둔다(seenRunning 과 같은 까닭)
+  const soon = waiting ? [] : counted;
+  const holdSoon = waiting && notices > 0;
+  const [seenHold, setSeenHold] = useState(holdSoon);
+  if (holdSoon && !seenHold) setSeenHold(true);
   const any = conflicts.length > 0 || missing.length > 0 || soon.length > 0 || unmet > 0;
-  if (!any && !running && !seenRunning) return null;
+  if (!any && !running && !seenRunning && !holdSoon && !seenHold) return null;
 
   const listed = open === "conflict" ? conflicts : open === "missing" ? missing : [];
   const toggle = (k: OpenValue["kind"]) => {
@@ -432,9 +458,11 @@ function CheckNow({ job }: { job: AnalysisJob }) {
         {running && (
           <li className="flex min-h-11 shrink-0 items-center text-sm text-sub">엇갈린 값·미확보 값은 분석이 끝나면 셉니다</li>
         )}
-        {!running && !any && <li className="flex min-h-11 shrink-0 items-center text-sm text-sub">지금 확인할 것이 없습니다</li>}
+        {!running && !any && !holdSoon && <li className="flex min-h-11 shrink-0 items-center text-sm text-sub">지금 확인할 것이 없습니다</li>}
         {conflicts.length > 0 && <li>{valueButton("conflict", conflicts.length)}</li>}
         {missing.length > 0 && <li>{valueButton("missing", missing.length)}</li>}
+        {/* 마감 임박 자리: 공고 목록을 받으면 같은 자리에 개수가 들어온다 */}
+        {holdSoon && <li className="flex min-h-11 shrink-0 items-center text-sm text-sub">마감 임박은 공고 목록을 받으면 셉니다</li>}
         {soon.length > 0 && (
           <li>
             <Link href={`/c/${c.cid}/review?tab=grants`} className="btn gap-2 px-3 font-medium">

@@ -4,9 +4,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { fmtMD, fmtTime, isStale } from "@/lib/format";
-import { replaceLocal, saveMemo } from "@/lib/local";
+import { replaceLocal, saveMemo, type SavedItem } from "@/lib/local";
 import { exportFile, exportName, linerTotal, NOT_EXPORT_FILE, noteRows, noteText, parseImport, WORD_LEGEND, type ExportFile } from "@/lib/note";
-import { openValues, verdictCounts } from "@/lib/review";
+import { noticeEnd, openValues, verdictCounts } from "@/lib/review";
 import { QUESTIONS } from "@/lib/prep";
 import { onStorageChange, storageState } from "@/lib/store";
 import { Dialog, StatusWord, toast } from "@/components/kit";
@@ -92,11 +92,12 @@ export function NoteScreen() {
   const progs = saved.filter((s) => s.kind === "program");
   const gps = saved.filter((s) => s.kind === "gp");
   const sales = saved.filter((s) => s.kind === "bid" || s.kind === "salesProgram");
-  const endOf = (id: string, meta: Record<string, unknown>) => data?.programs.find((p) => p.id === id)?.period.end ?? (typeof meta.end === "string" ? meta.end : null);
+  // 마감일은 회사 분석 "지금 확인할 것"·심사 준비와 같은 기준(지금 공고 자료 먼저, 없으면 담을 때 저장값)
+  const endOf = (s: SavedItem) => noticeEnd(s, data?.programs);
 
   const progItems: Item[] = progs.map((s) => {
     const rec = c.local.checks[s.itemId];
-    const end = endOf(s.itemId, s.meta);
+    const end = endOf(s);
     const r = rec?.result;
     const vc = r ? verdictCounts(r) : null;
     const gapsList = r ? r.match.rows.filter((x) => x.verdict === "미충족" || x.verdict === "확인 필요").slice(0, 5) : [];
@@ -144,7 +145,7 @@ export function NoteScreen() {
   });
   const salesItems: Item[] = sales.map((s) => {
     const agency = typeof s.meta.agency === "string" ? s.meta.agency : "";
-    const end = s.kind === "bid" ? (typeof s.meta.deadline === "string" ? s.meta.deadline : null) : endOf(s.itemId, s.meta);
+    const end = s.kind === "bid" ? (typeof s.meta.deadline === "string" ? s.meta.deadline : null) : endOf(s);
     const kind = s.kind === "bid" ? "입찰공고" : "판로 지원사업";
     const text = `[${kind}] ${s.title}, ${agency}${end ? `, ${fmtMD(end)} 마감` : ""}`;
     return { key: `${s.kind}:${s.itemId}`, text, node: <span><span className="text-sm text-sub">{kind} </span>{s.title} <span className="text-sm text-sub">{agency}{end ? `, ${fmtMD(end)} 마감` : ""}</span></span> };

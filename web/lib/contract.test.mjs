@@ -107,6 +107,21 @@ test("오류 본문과 상태 낱말", () => {
   assert.equal(limit.expectedSeconds, EXPECTED_SECONDS.news);
 });
 
+test("경쟁사 원문 링크 기록(계약 8.9): 특허 낱건 수는 건수와 같고, 주소는 http·https 이거나 null 이다", () => {
+  const { rivals } = jobs.find((j) => j.name === "F-RIVALS").job.sections.rivals_deep.result;
+  assert.deepEqual(rivals.map((r) => [r.patents.items.length, r.summary.inputArticles.length]), [[6, 4], [0, 0]]);
+  for (const r of rivals) {
+    const { total, registered, items } = r.patents;
+    assert.equal(items.length, total, r.name);
+    assert.equal(items.filter((p) => p.registrationNo).length, registered, r.name); // 등록 여부 = registrationNo 유무
+    assert.ok(items.length <= 30 && r.summary.inputArticles.length <= 15, r.name);
+    const dates = items.map((p) => p.filingDate ?? "");
+    assert.deepEqual(dates, [...dates].sort().reverse(), r.name); // 출원일 최근순
+    const urls = [...items.map((p) => p.url), ...r.summary.inputArticles.flatMap((a) => [a.url, a.naverUrl])];
+    assert.ok(urls.every((u) => u === null || /^https?:\/\//.test(u)), r.name);
+  }
+});
+
 test("글은 평문이다(HTML 로 해석하지 않을 값이 그대로 온다)", () => {
   const job = fixtures["F-HTML"].exchanges[0].response;
   assert.equal(job.sections.news.result.articles[0].title, "<b>굵게</b>");

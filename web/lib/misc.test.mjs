@@ -5,7 +5,7 @@ import test from "node:test";
 import { ageLabel, byCurrencyTexts, daysSince, elapsedText, eok, fmtBzno, fmtTime, formerNamesText, isStale, moneyText, msToNextKstMidnight, safeUrl, shortCompany, stageKo, todayKST, wonDisplay, wrapSvgText, yearsSince } from "./format.ts";
 import { normName, sameNameIds, userRivalKey } from "./names.ts";
 import { initialConditions, relatedTo, rivalBackers, splitExisting } from "./funding.ts";
-import { bidDeadline, checkNowCounts, gaps, sortBids, sortRows, verdictCounts } from "./review.ts";
+import { bidDeadline, checkNowCounts, gaps, noticeEnd, sortBids, sortRows, verdictCounts } from "./review.ts";
 import { fundingCount, reviewCount, savedNotices } from "./local.ts";
 import { memoryBackend } from "./store.ts";
 import { createHash } from "node:crypto";
@@ -155,6 +155,42 @@ test("지금 확인할 것: 새로 분석이 진행 중이면 값 개수를 세�
     assert.deepEqual(savedNotices(order).map((s) => s.meta.end), ["2026-11-29"]);
     assert.deepEqual(checkNowCounts(saved, null, order, {}, "2026-11-22").soon, [7]);
   }
+});
+
+test("담은 공고 마감일은 지금 공고 자료 먼저, 없으면 담을 때 저장값: 지금 확인할 것·심사 준비·노트가 같은 기준(D-08, A-27)", () => {
+  const saved = job("F-FULL"); // 엇갈림·미확보 0
+  const prog = (id, end) => ({ id, period: { raw: "", start: null, end, status: end ? "접수 중" : "수시" } });
+  const item = (id, end, kind = "program") => ({ kind, itemId: id, title: id, meta: end === undefined ? {} : { end }, savedAt: "2026-11-22T10:00:00+09:00" });
+  // 저장한 마감은 15일 뒤, 지금 자료는 5일 뒤(마감이 당겨짐) → 지금 자료로 마감 임박
+  const early = [item("P1", "2026-12-07")];
+  const now1 = [prog("P1", "2026-11-27")];
+  assert.equal(noticeEnd(early[0], now1), "2026-11-27");
+  assert.deepEqual(checkNowCounts(saved, null, early, {}, "2026-11-22", now1).soon, [5]);
+  // 자료를 아직 못 받았거나 받지 못했으면(null) 저장값으로 센다: 15일 뒤라 마감 임박이 아니다
+  assert.equal(noticeEnd(early[0], null), "2026-12-07");
+  assert.deepEqual(checkNowCounts(saved, null, early, {}, "2026-11-22", null).soon, []);
+  assert.deepEqual(checkNowCounts(saved, null, early, {}, "2026-11-22").soon, []); // 인자를 빼면 null 과 같다
+  // 반대로 저장값은 5일 뒤인데 지금 자료가 15일 뒤(마감 연장) → 지금 자료로 빠진다
+  const late = [item("P2", "2026-11-27")];
+  const now2 = [prog("P2", "2026-12-07")];
+  assert.deepEqual(checkNowCounts(saved, null, late, {}, "2026-11-22", now2).soon, []);
+  assert.deepEqual(checkNowCounts(saved, null, late, {}, "2026-11-22", null).soon, [5]);
+  // 지금 자료에 그 공고가 없거나(목록에서 빠짐) 마감일이 비었으면(수시로 바뀜) 저장값
+  assert.equal(noticeEnd(item("P3", "2026-11-30"), now1), "2026-11-30");
+  assert.equal(noticeEnd(item("P1", "2026-11-30"), [prog("P1", null)]), "2026-11-30");
+  // 둘 다 없으면 null(화면은 "신청기간 미기재"), 셈에서 빠진다
+  assert.equal(noticeEnd(item("P4", undefined), [prog("P4", null)]), null);
+  assert.deepEqual(checkNowCounts(saved, null, [item("P4", undefined)], {}, "2026-11-22", [prog("P4", null)]).soon, []);
+  // 두 화면에서 담은 같은 공고(저장값이 서로 달라도)는 한 건이고, 지금 자료가 있으면 그 마감 하나로 센다
+  const both = [item("P1", "2026-12-07"), { ...item("P1", "2026-12-20", "salesProgram"), savedAt: "2026-11-22T11:00:00+09:00" }];
+  assert.deepEqual(checkNowCounts(saved, null, both, {}, "2026-11-22", now1).soon, [5]);
+  assert.deepEqual(checkNowCounts(saved, null, both, {}, "2026-11-22", null).soon, []);
+  // 담은 공고 수(같은 공고는 하나, 운용사 빼고): 목록을 받는 동안 틀을 둘지 화면이 정한다(저장값으로 임박이 아니어도 담은 공고가 있으면 둔다)
+  assert.equal(checkNowCounts(saved, null, [...both, { kind: "gp", itemId: "G1", title: "운용사", meta: {}, savedAt: "x" }], {}, "2026-11-22", null).notices, 1);
+  assert.equal(checkNowCounts(saved, null, [], {}, "2026-11-22", null).notices, 0);
+  // 접수 전(접수 예정)이어도 14일 안이면 센다(기존 결정 그대로)
+  const upcoming = [{ id: "P5", period: { raw: "", start: "2026-11-25", end: "2026-11-28", status: "접수 예정" } }];
+  assert.deepEqual(checkNowCounts(saved, null, [item("P5", "2026-12-30")], {}, "2026-11-22", upcoming).soon, [6]);
 });
 
 test("입찰공고: 진행 중 → 핵심 낱말 일치 → 마감 가까운 순(P-03), 마감 글", () => {

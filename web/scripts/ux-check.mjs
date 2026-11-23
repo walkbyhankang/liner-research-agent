@@ -58,7 +58,8 @@ const heightFor = (w) => (w < 640 ? 844 : w === 820 ? 1180 : w === 1180 ? 820 : 
 
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox"] });
 
-async function open(path, { width = 1180, ctx = null, reduced = false, blockData = false, fonts = false } = {}) {
+// programs: /data/programs.json 대신 줄 공고 목록(JSON 글), dataDelay: 그 응답을 늦추는 ms(공고 목록을 받는 중 화면 점검, A-33)
+async function open(path, { width = 1180, ctx = null, reduced = false, blockData = false, fonts = false, programs: programsBody = null, dataDelay = 0 } = {}) {
   const context = ctx ?? (await browser.createBrowserContext());
   const page = await context.newPage();
   page.errors = [];
@@ -98,7 +99,11 @@ async function open(path, { width = 1180, ctx = null, reduced = false, blockData
   await page.setRequestInterception(true);
   page.on("request", (req) => {
     const u = new URL(req.url());
-    if (u.pathname === "/data/programs.json") return blockData ? req.respond({ status: 404, body: "" }) : req.respond({ status: 200, contentType: "application/json", body: PROGRAMS });
+    if (u.pathname === "/data/programs.json") {
+      if (blockData) return req.respond({ status: 404, body: "" });
+      const send = () => req.respond({ status: 200, contentType: "application/json", body: programsBody ?? PROGRAMS });
+      return dataDelay ? void setTimeout(send, dataDelay) : send();
+    }
     if (u.pathname === "/data/funds.json") return blockData ? req.respond({ status: 404, body: "" }) : req.respond({ status: 200, contentType: "application/json", body: FUNDS });
     if (!fonts && /fonts\.(googleapis|gstatic)\.com/.test(u.host)) return req.abort();
     return req.continue();
@@ -1234,6 +1239,8 @@ await run("main", async () => {
   {
     const cp = await open(`/c/${CID}`, { ctx: rp.browserContext() });
     await waitText(cp, "지금 확인할 것");
+    // 새 페이지라 공고 목록을 받는 동안은 "마감 임박은 공고 목록을 받으면 셉니다"(A-33). 받은 뒤의 개수를 본다
+    await cp.waitForFunction(() => (document.querySelector("[data-checknow]")?.innerText ?? "").includes("마감 임박 담은 공고"), { timeout: 8000 }).catch(() => null);
     const ck = await text(cp, "[data-checknow]");
     check("A-25", ck.includes("마감 임박 담은 공고 2건") && ck.includes("D-8") && /미충족\s*요건\s*2개/.test(ck) && !ck.includes("엇갈림") && !ck.includes("미확보"), ck.replace(/\n/g, " "));
     // A-31: 한 화면 안에서(새로고침 없이) 심사 준비 투자 갈래를 본 뒤 회사 분석으로 돌아와 "마감 임박 담은 공고"를 누르면
@@ -1873,6 +1880,139 @@ await run("variants", async () => {
       await r5.close();
     }
   }
+  // RI-25~RI-29: 나란히 비교 칸의 원문 링크(screens 4B.2). 받은 주소가 있는 칸만, http·https 만, 링크 이름에 회사·항목, "원문 n건"은 표 아래 목록으로
+  {
+    /** 표 칸마다 링크(보이는 글은 화면 읽기 전용 글을 뺀 것) */
+    const cellLinksOf = (pg) =>
+      pg.evaluate(() => {
+        const vis = (a) => {
+          const c = a.cloneNode(true);
+          c.querySelectorAll(".sr-only").forEach((x) => x.remove());
+          return c.textContent.replace(/\s+/g, " ").trim();
+        };
+        const t = document.querySelector("table[data-compare=table]");
+        const heads = [...t.querySelectorAll("thead th")].map((c) => c.innerText.split("\n")[0].trim());
+        return [...t.querySelectorAll("tbody tr")].flatMap((r) =>
+          [...r.querySelectorAll("td")].map((td, i) => ({
+            row: r.querySelector("th").innerText.trim(),
+            col: heads[i + 1],
+            text: td.innerText,
+            links: [...td.querySelectorAll("a")].map((a) => ({ vis: vis(a), name: a.textContent.replace(/\s+/g, " ").trim(), href: a.getAttribute("href"), target: a.target, rel: a.rel, line: a.closest("span.block")?.innerText ?? "" })),
+          })),
+        );
+      });
+    const linkMap = (cells) => cells.filter((c) => c.links.length).map((c) => `${c.col}/${c.row}:${c.links.map((l) => l.vis).join("+")}`).sort().join(" | ");
+    const waitTable = (pg) => pg.waitForFunction(() => document.querySelector("table[data-compare=table] td"), { timeout: 8000 }).catch(() => null);
+
+    await reset({ scenario: "F-FULL", deep: "two" });
+    const lp = await open(`/c/${CID}/rivals`, { width: 1180 });
+    await waitTable(lp);
+    await wait(400);
+    const cells = await cellLinksOf(lp);
+    const want = [
+      "마바사/국내 특허:원문 6건", "마바사/누적 투자:원문 2건", "마바사/주요 투자자:원문 2건", "마바사/최근 라운드:원문 열기",
+      "주식회사 가나다테크/국내 특허:원문 11건", "주식회사 가나다테크/주요 투자자:원문 3건",
+    ].sort().join(" | ");
+    const ext = cells.flatMap((c) => c.links).filter((l) => /^https?:/.test(l.href ?? ""));
+    check(
+      "RI-25",
+      linkMap(cells) === want && cells.every((c) => c.links.length <= 1) && ext.length === 1 && ext.every((l) => l.target === "_blank" && l.rel.includes("noopener") && l.rel.includes("noreferrer")),
+      linkMap(cells),
+    );
+    // RI-26: 링크 이름, "원문 6건" → 접힌 "칸별 원문 25건 보기"가 펼쳐지고 초점이 그 칸 목록 머리로
+    const names = cells.flatMap((c) => c.links.map((l) => l.name));
+    const before26 = await disclosure(lp, "칸별 원문 25건 보기");
+    await lp.evaluate(() => [...document.querySelectorAll("table[data-compare=table] a")].find((a) => a.textContent.startsWith("마바사 국내 특허"))?.click());
+    await wait(400);
+    const j26 = await lp.evaluate(() => {
+      const h = document.activeElement;
+      const r = h?.getBoundingClientRect();
+      const list = h?.closest("[data-links-item]")?.querySelectorAll("ul a") ?? [];
+      return { id: h?.id, t: h?.textContent.replace(/\s+/g, " ").trim(), top: Math.round(r?.top ?? -1), bottom: Math.round(r?.bottom ?? -1), vh: innerHeight, n: list.length, blank: [...list].every((a) => a.target === "_blank" && /^https:\/\//.test(a.getAttribute("href"))) };
+    });
+    const after26 = await disclosure(lp, "칸별 원문 25건");
+    // 머리 옆 "표로 돌아가기" → 누른 칸 링크로 초점이 돌아온다
+    await lp.evaluate(() => document.querySelector("[data-back-to-table]")?.click());
+    await wait(400);
+    const b26 = await lp.evaluate(() => {
+      const a = document.activeElement;
+      const r = a?.getBoundingClientRect();
+      return { t: a?.textContent.replace(/\s+/g, " ").trim().slice(0, 20), inView: Boolean(r && r.top >= 49 && r.bottom <= innerHeight), btn: Boolean(document.querySelector("[data-back-to-table]")) };
+    });
+    check(
+      "RI-26",
+      names.includes("마바사 국내 특허 원문 6건, 표 아래 목록으로 이동") && names.some((n) => /^마바사 최근 라운드 원문 열기 ?\(새 창\)$/.test(n)) &&
+        before26 === "false" && after26 === "true" && j26.id === "cmp-src-1-patents" && j26.t.startsWith("마바사 국내 특허 원문 6건") && j26.top >= 49 && j26.bottom <= j26.vh && j26.n === 6 && j26.blank &&
+        b26.t.startsWith("마바사 국내 특허") && b26.inView && !b26.btn,
+      `${before26}→${after26} ${JSON.stringify(j26)} 돌아가기 ${JSON.stringify(b26)}`,
+    );
+    await globalChecks(lp, "경쟁사 분석 원문 목록 1180");
+    await lp.close();
+
+    // RI-27: http·https 가 아닌 주소와 원문 링크 칸 전(patents.items 없음) 비교 자료 → 링크 없음, 값은 그대로
+    const fxR = JSON.parse(readFileSync(new URL("../../fixtures/analysis/F-RIVALS.json", import.meta.url), "utf8")).exchanges.find((e) => e.method === "GET").response.sections.rivals_deep;
+    const env27 = structuredClone(fxR);
+    const [m27] = env27.result.rivals;
+    m27.patents.items[0].url = "javascript:alert(1)";
+    m27.patents.items[1].url = "data:text/html,x";
+    m27.funding.rounds[0].sources[1].url = "javascript:alert(2)"; // 최근 라운드(시리즈 C)의 기사 주소
+    const oldRival = { ...structuredClone(m27), key: "rival:카타파", name: "카타파", nameEn: null };
+    delete oldRival.patents.items;
+    delete oldRival.summary.inputArticles;
+    env27.result.rivals = [m27, oldRival];
+    env27.result.rivalSet = ["rival:마바사", "rival:카타파"];
+    await reset({ scenario: "F-FULL", overrides: { rivals_deep: env27 } });
+    const lp27 = await open(`/c/${CID}/rivals`, { width: 1180 });
+    await waitTable(lp27);
+    await wait(400);
+    const c27 = await cellLinksOf(lp27);
+    const at = (col, row) => c27.find((c) => c.col === col && c.row === row) ?? { links: [], text: "" };
+    const bad27 = await lp27.evaluate(() => [...document.querySelectorAll("a[href]")].filter((a) => /^(javascript|data):/i.test(a.getAttribute("href").trim())).length);
+    check(
+      "RI-27",
+      bad27 === 0 && at("마바사", "국내 특허").links.map((l) => l.vis).join() === "원문 4건" && at("마바사", "최근 라운드").links.length === 0 &&
+        at("마바사", "누적 투자").links.map((l) => `${l.vis}@${l.href}`).join() === "원문 열기@https://example.com/news/rival/round/m2" &&
+        at("카타파", "국내 특허").links.length === 0 && at("카타파", "국내 특허").text.includes("6건") && at("카타파", "국내 특허").text.includes("Google Patents") && at("카타파", "누적 투자").links.length === 1,
+      linkMap(c27),
+    );
+    await lp27.close();
+
+    // RI-28: 엇갈린 설립 칸은 주소가 있는 값(기사 2021-01) 줄에만 "원문 열기"
+    await reset({ scenario: "F-CONFLICT", deep: "two" });
+    const lp28 = await open(`/c/${CID}/rivals`, { width: 1180 });
+    await waitTable(lp28);
+    await wait(400);
+    const f28 = (await cellLinksOf(lp28)).find((c) => c.col === "주식회사 가나다테크" && c.row === "설립") ?? { links: [], text: "" };
+    check("RI-28", f28.text.includes("2020-09-15") && f28.links.length === 1 && f28.links[0].vis === "원문 열기" && f28.links[0].line.includes("2021-01") && !f28.links[0].line.includes("2020-09-15"), JSON.stringify(f28.links));
+    await lp28.close();
+
+    // RI-29: 390 항목 덩어리에도 같은 링크. 인쇄에서는 칸 링크를 숨기고, 끌어 복사해도 링크 글은 따라가지 않는다
+    await reset({ scenario: "F-FULL", deep: "two" });
+    const lp29 = await open(`/c/${CID}/rivals`, { width: 390 });
+    await lp29.waitForSelector("[data-compare=items]");
+    await wait(400);
+    const blk = await lp29.evaluate(() => {
+      const li = (n) => [...document.querySelectorAll("[data-item-block=patents] li")].find((l) => l.getAttribute("data-company") === n);
+      const vis = (a) => {
+        if (!a) return null;
+        const c = a.cloneNode(true);
+        c.querySelectorAll(".sr-only").forEach((x) => x.remove());
+        return c.textContent.replace(/\s+/g, " ").trim();
+      };
+      const a = li("마바사")?.querySelector("a");
+      return { mine: vis(li("주식회사 가나다테크")?.querySelector("a")), rival: vis(a), select: a ? getComputedStyle(a).userSelect : null };
+    });
+    await globalChecks(lp29, "경쟁사 분석 원문 링크 390");
+    await lp29.emulateMediaType("print");
+    const pr = await lp29.evaluate(() => ({
+      shown: [...document.querySelectorAll("#compare a.cell-link")].filter((a) => getComputedStyle(a).display !== "none").length,
+      value: document.querySelector("[data-item-block=patents]")?.innerText.includes("6건") ?? false,
+    }));
+    await lp29.emulateMediaType(null);
+    check("RI-29", blk.mine === "원문 11건" && blk.rival === "원문 6건" && blk.select === "none" && pr.shown === 0 && pr.value, `${JSON.stringify(blk)} 인쇄 ${JSON.stringify(pr)}`);
+    await sh(lp29, "rivals-links-390", true);
+    await lp29.close();
+  }
   // F-22: 같은 수출 공고가 빌리는 돈(필요한 지원: 수출·해외진출 지원)과 판로 갈래 수출에 함께 나올 때 담기 상태가 하나다
   {
     await reset({ scenario: "F-FULL" });
@@ -2114,6 +2254,193 @@ await run("header-height", async () => {
   const logos = new Set((seen.logo ?? []).map((x) => x.split(" ").pop()));
   if (logos.size !== 1) fails.push(`1280 로고 위치 ${seen.logo.join(" | ")}`);
   check("L-02 (머리줄 높이 49·로고 위치)", fails.length === 0, fails.slice(0, 4).join(" | ") || (seen.logo ?? []).join(" · "));
+});
+
+// A-33·D-08: 담은 공고 마감일은 지금 공고 자료 먼저, 없으면 담을 때 저장값(lib/review.ts noticeEnd). "지금 확인할 것"·심사 준비·노트가 같은 날짜다.
+// 공고 목록을 받는 동안은 마감 임박 개수를 보이지 않고(저장값으로 셌다가 바뀌지 않게), 담은 공고가 있으면 틀을 먼저 두어 아래가 밀리지 않는다.
+// A-34: 이 묶음은 목록을 5초만 기다리고 저장값으로 센다. 공용 요청은 끊지 않아 늦게 오면 지금 자료로 다시 센다(위치 그대로)
+await run("deadline-basis", async () => {
+  await reset({ scenario: "F-FULL" }); // 엇갈림·미확보 0: "지금 확인할 것"에는 담은 공고 항목만 나온다
+  const ctx = await browser.createBrowserContext();
+  const P3 = "PBLN_000000000000003";
+  const P4 = "PBLN_000000000000004";
+  const title = (id) => `가나다시 마감 확인 가짜 공고 ${id.slice(-1)}`;
+  const list = (ends) => JSON.stringify([...Object.entries(ends).map(([id, end]) => fakeProgram(id, title(id), end)), ...programs]);
+  // 담기를 브라우저 저장소에 바로 쓴다(담을 때 저장한 마감일 meta.end 를 지금 자료와 다르게 두려고)
+  const putSaved = (pg, id, end) =>
+    pg.evaluate(
+      (cid, id, end, t) =>
+        new Promise((res) => {
+          const r = indexedDB.open("growthnote", 1);
+          r.onupgradeneeded = () => {
+            for (const s of ["companies", "snapshots", "jobs", "edits", "saved", "checks", "rivalChecks", "briefs", "rivalChoices", "prep", "notes", "salesKeywords"]) r.result.createObjectStore(s);
+          };
+          r.onsuccess = () => {
+            const tx = r.result.transaction("saved", "readwrite");
+            tx.objectStore("saved").put({ kind: "program", itemId: id, title: t, savedAt: "2026-11-20T10:00:00+09:00", meta: { end, agency: "가나다시청", url: `https://example.com/program/${id}` } }, [cid, "program", id]);
+            tx.oncomplete = () => res(true);
+          };
+        }),
+      CID, id, end, title(id),
+    );
+  const seed = await open("/", { ctx });
+  await seed.waitForSelector("#company-name");
+  await putSaved(seed, P3, "2026-12-07"); // 담을 때 마감 15일 뒤(2026-11-22 기준)
+  await seed.close();
+  const shown = (pg, sel, t) => pg.waitForFunction((sel, t) => (document.querySelector(sel)?.innerText ?? "").includes(t), { timeout: 8000 }, sel, t).catch(() => null);
+
+  // 1) 지금 자료 마감 5일 뒤(마감이 당겨짐) → 세 화면 모두 11.27(D-5)
+  const early = list({ [P3]: "2026-11-27" });
+  const a1 = await open(`/c/${CID}`, { ctx, programs: early });
+  await shown(a1, "[data-checknow]", "마감 임박 담은 공고");
+  const ck1 = await text(a1, "[data-checknow]");
+  await a1.close();
+  const r1 = await open(`/c/${CID}/review`, { ctx, programs: early });
+  await shown(r1, `[data-notice='${P3}']`, "11.27 마감");
+  // 카드 마감 칸은 큰 줄 "D-5"와 작은 줄 "11.27 마감"으로 나뉜다(화면 읽기는 "D-5, 11.27 마감" 한 덩어리). 글 전체(textContent)로 본다
+  const due = (pg) => pg.$eval(`[data-notice='${P3}'] .lrow-end`, (e) => e.textContent.replace(/\s+/g, " ").trim()).catch(() => "카드 없음");
+  const card1 = await due(r1);
+  await r1.close();
+  const n1 = await open(`/c/${CID}/note`, { ctx, programs: early });
+  await shown(n1, "[data-part=programs]", "11.27 마감");
+  const note1 = await text(n1, "[data-part=programs]");
+  await n1.close();
+  check("A-33 (지금 자료 우선)", ck1.includes("마감 임박 담은 공고 1건") && ck1.includes("D-5"), ck1.replace(/\n/g, " "));
+  check("D-08 (세 화면 같은 마감일)", ck1.includes("D-5") && card1.includes("D-5, 11.27 마감") && note1.includes("11.27 마감") && !note1.includes("12.7"), `${card1} | ${note1.split("\n").find((l) => l.includes("마감")) ?? "노트 없음"}`);
+
+  // 2) 공고 목록을 받지 못함 → 세 화면 모두 저장값(12.7, D-15). 지금 확인할 것에는 마감 임박이 없다
+  //    (F-FULL 이라 다른 항목도 없다. 오류 전 받는 동안 틀을 잡았으면 "지금 확인할 것이 없습니다"로 남는다)
+  const a2 = await open(`/c/${CID}`, { ctx, blockData: true });
+  await a2.waitForSelector("#h-overview", { timeout: 8000 }).catch(() => null);
+  await wait(1500);
+  const ck2 = await text(a2, "[data-checknow]");
+  await a2.close();
+  const r2 = await open(`/c/${CID}/review`, { ctx, blockData: true });
+  await shown(r2, `[data-notice='${P3}']`, "마감");
+  await wait(800);
+  const card2 = await due(r2);
+  await r2.close();
+  const n2 = await open(`/c/${CID}/note`, { ctx, blockData: true });
+  await shown(n2, "[data-part=programs]", "마감");
+  await wait(800);
+  const note2 = await text(n2, "[data-part=programs]");
+  await n2.close();
+  check("A-33 (목록 못 받음 → 저장값)", !ck2.includes("마감 임박 담은 공고") && (ck2 === "" || ck2.includes("지금 확인할 것이 없습니다")) && card2.includes("D-15, 12.7 마감") && note2.includes("12.7 마감"), `묶음 "${ck2.replace(/\n/g, " ") || "없음"}" | ${card2} | ${note2.split("\n").find((l) => l.includes("마감")) ?? "노트 없음"}`);
+
+  // 화면 기록: 개요 제목이 그려진 뒤 40ms 마다 "지금 확인할 것" 글(없으면 null)과 개요 제목 위치
+  const record = (pg, ms = 3800) =>
+    pg.evaluate((ms) => {
+      window.__ck = [];
+      const t = setInterval(() => {
+        const ov = document.getElementById("h-overview");
+        if (!ov) return;
+        const s = document.querySelector("[data-checknow]");
+        window.__ck.push({ t: s ? s.innerText.replace(/\s+/g, " ") : null, ov: Math.round(ov.getBoundingClientRect().top + scrollY) });
+      }, 40);
+      setTimeout(() => clearInterval(t), ms);
+    }, ms);
+  const HOLD = "마감 임박은 공고 목록을 받으면 셉니다";
+  // 3) 저장값으로는 마감 임박이 아닌 공고(P3, 15일 뒤 → 지금 5일 뒤) 하나만 담았고 다른 항목이 없다. 목록이 1.5초 늦게 와도
+  //    개요 제목이 그려진 처음부터 틀과 대기 줄이 있고, 목록이 오면 같은 자리에 "1건 D-5"가 들어와 개요 제목이 그대로다
+  for (const w of [1180, 390]) {
+    const pd = await open(`/c/${CID}`, { ctx, width: w, programs: early, dataDelay: 1500 });
+    await record(pd);
+    await wait(4000);
+    const seen = await pd.evaluate(() => window.__ck);
+    await pd.close();
+    const ovs = [...new Set(seen.map((x) => x.ov))];
+    const last = seen.at(-1)?.t ?? "";
+    const ok = seen.length > 0 && seen.every((x) => x.t !== null) && seen[0].t.includes(HOLD) && last.includes("마감 임박 담은 공고 1건") && last.includes("D-5") && ovs.length === 1;
+    check(`A-33 (저장값으로는 임박 아님, 받는 중 ${w})`, ok, `처음 "${seen[0]?.t ?? "없음"}" → 끝 "${last}", 틀 없던 기록 ${seen.filter((x) => x.t === null).length}, 개요 제목 위치 ${ovs.join("/")}`);
+  }
+
+  // 4) 공고 목록이 1.5초 늦게 온다. P4 는 저장값으로 마감 임박(5일 뒤), P3 는 저장값 15일 뒤.
+  //    받는 중: 틀 + "마감 임박은 공고 목록을 받으면 셉니다"(저장값 개수 "1건"은 한 번도 보이지 않는다). 받은 뒤: 같은 자리에 지금 자료 개수, 개요 제목 그대로
+  const seed2 = await open("/", { ctx });
+  await seed2.waitForSelector("#company-name");
+  await putSaved(seed2, P4, "2026-11-27");
+  await seed2.close();
+  for (const w of [1180, 390]) {
+    const pd = await open(`/c/${CID}`, { ctx, width: w, programs: list({ [P3]: "2026-11-27", [P4]: "2026-11-27" }), dataDelay: 1500 });
+    await record(pd);
+    await wait(4000);
+    const seen = await pd.evaluate(() => window.__ck);
+    await pd.close();
+    const ovs = [...new Set(seen.map((x) => x.ov))];
+    const last = seen.at(-1)?.t ?? "";
+    const ok = seen.length > 0 && seen.every((x) => x.t !== null) && seen[0].t.includes(HOLD) && !seen.some((x) => /마감 임박 담은 공고 1건/.test(x.t)) && last.includes("마감 임박 담은 공고 2건") && last.includes("D-5") && ovs.length === 1;
+    check(`A-33 (받는 중 ${w})`, ok, `처음 "${seen[0]?.t ?? "없음"}" → 끝 "${last}", 개요 제목 위치 ${ovs.join("/")}`);
+  }
+  // 받은 뒤 마감 임박이 없으면(둘 다 마감이 늘어남) 틀은 이 방문 동안 "지금 확인할 것이 없습니다"로 남는다(아래가 다시 밀리지 않게)
+  {
+    const pd = await open(`/c/${CID}`, { ctx, programs: list({ [P3]: "2026-12-30", [P4]: "2026-12-30" }), dataDelay: 1500 });
+    await record(pd);
+    await wait(4000);
+    const seen = await pd.evaluate(() => window.__ck);
+    await pd.close();
+    const ovs = [...new Set(seen.map((x) => x.ov))];
+    const last = seen.at(-1)?.t ?? "";
+    check("A-33 (받는 중 → 마감 임박 없음)", seen.length > 0 && seen.every((x) => x.t !== null) && seen[0].t.includes(HOLD) && !seen.some((x) => x.t.includes("마감 임박 담은 공고")) && last.includes("지금 확인할 것이 없습니다") && ovs.length === 1, `처음 "${seen[0]?.t ?? "없음"}" → 끝 "${last}", 개요 제목 위치 ${ovs.join("/")}`);
+  }
+  // A-34: 목록이 기다림 시간(5초)보다 늦게(7초) 온다. 대기 줄 → 5초 뒤 저장값 개수(P4 만 임박 "1건") → 목록이 오면 지금 자료 개수("2건").
+  //       개요 제목은 처음부터 끝까지 같은 자리. 공용 요청은 끊지 않으므로 같은 페이지에서 심사 준비로 가면 지금 자료 마감이 보인다
+  {
+    const pd = await open(`/c/${CID}`, { ctx, programs: list({ [P3]: "2026-11-27", [P4]: "2026-11-27" }), dataDelay: 7000 });
+    await record(pd, 8800);
+    await wait(9000);
+    const seen = await pd.evaluate(() => window.__ck);
+    const ovs = [...new Set(seen.map((x) => x.ov))];
+    const kind = (t) => (t === null ? "없음" : t.includes(HOLD) ? "대기" : /마감 임박 담은 공고 1건/.test(t) ? "저장값" : /마감 임박 담은 공고 2건/.test(t) ? "지금 자료" : `기타(${t})`);
+    const order = seen.map((x) => kind(x.t)).filter((k, i, a) => i === 0 || a[i - 1] !== k); // 바뀐 차례만
+    const savedAt = seen.findIndex((x) => kind(x.t) === "저장값") * 40; // 기록 시작부터 대략 ms
+    await pd.evaluate((cid) => document.querySelector(`nav[aria-label=단계] a[href="/c/${cid}/review"]`)?.click(), CID);
+    await shown(pd, `[data-notice='${P3}']`, "11.27 마감");
+    const card = await due(pd).catch(() => "카드 없음");
+    await pd.close();
+    check(
+      "A-34 (기다림 5초 → 저장값 → 지금 자료)",
+      order.join(">") === "대기>저장값>지금 자료" && savedAt >= 4000 && ovs.length === 1 && card.includes("D-5, 11.27 마감"),
+      `${order.join(" → ")}, 저장값으로 바뀐 때 약 ${savedAt}ms, 개요 제목 위치 ${ovs.join("/")}, 심사 준비 ${card}`,
+    );
+  }
+  await ctx.close();
+});
+
+// P-12: 판로 머리의 "위 빠른 거르기는 걸리지 않습니다."는 빠른 거르기 줄이 실제로 위에 보일 때만(1180). 820·390 판로 탭에서는 없다
+await run("sales-head", async () => {
+  await reset({ scenario: "F-FULL" });
+  const ctx = await browser.createBrowserContext();
+  const S = "위 빠른 거르기는 걸리지 않습니다.";
+  const head = (pg) =>
+    pg.evaluate(() => ({
+      head: document.querySelector("#lane-sales .lane-sales p")?.innerText ?? null,
+      quick: [...document.querySelectorAll("[aria-label='빠른 거르기']")].some((e) => e.getBoundingClientRect().height > 0),
+    }));
+  const pg = await open(`/c/${CID}/funding?lane=sales`, { ctx });
+  await waitText(pg, "기업 유형을 골라 주세요");
+  await pg.waitForSelector("#lane-sales");
+  await wait(300);
+  const before = await head(pg);
+  await click(pg, "창업·벤처기업", { exact: true });
+  await pg.waitForSelector("[aria-label='빠른 거르기']", { timeout: 8000 }).catch(() => null);
+  await wait(300);
+  const after = await head(pg);
+  await globalChecks(pg, "자금·판로 판로 머리 1180");
+  await pg.close();
+  const narrow = [];
+  for (const w of [820, 390]) {
+    const pn = await open(`/c/${CID}/funding?lane=sales`, { ctx, width: w });
+    await pn.waitForSelector("#lane-sales");
+    await wait(500);
+    narrow.push({ w, ...(await head(pn)) });
+    await pn.close();
+  }
+  check(
+    "P-12",
+    before.head !== null && !before.quick && !before.head.includes(S) && after.quick && after.head?.includes(S) && narrow.every((n) => n.head !== null && !n.head.includes(S)),
+    JSON.stringify({ before, after, narrow }),
+  );
+  await ctx.close();
 });
 
 // PR-06: 인쇄한 차트 안 글이 7pt(9.33px) 이상이다. 근거 묶음 인쇄 모양을 A4 본문 폭(182mm = 688px)으로 그려 잰다

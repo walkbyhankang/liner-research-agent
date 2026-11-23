@@ -21,7 +21,7 @@
 
 ### 1.2 null 과 빈 목록
 
-- 계약에 적힌 키는 **언제나 들어 있다.** 값이 없으면 `null`, 목록이 비면 `[]`다. 키를 빼지 않는다. 예외는 `GpBrief.model` 하나(검색 결과 0건이면 없음, 지금 코드 그대로)와 요청 본문의 선택 칸이다.
+- 계약에 적힌 키는 **언제나 들어 있다.** 값이 없으면 `null`, 목록이 비면 `[]`다. 키를 빼지 않는다. 예외는 `GpBrief.model` 하나(검색 결과 0건이면 없음, 지금 코드 그대로)와 요청 본문의 선택 칸이다. 서버 응답에는 언제나 있지만 화면 타입에서 선택 칸인 것: 나중에 더한 `rivals_deep`의 `patents.items`·`summary.inputArticles`(브라우저에 저장된 옛 응답에는 없다, 8.9).
 - `merged`의 값이 `null`이면 "그 값을 채울 단락이 아직 끝나지 않음(확인 중)"이다. 단락이 끝났는데 값이 없으면 `null`이 아니라 `status: "unavailable"`인 값이 온다(7.1).
 
 ### 1.3 시각·날짜·금액·글·주소
@@ -681,14 +681,20 @@
 | `financials`, `financialsReason` | `public.financials` | 8.2와 같은 행. 법인이 없거나 재무가 없으면 `[]`와 사유 |
 | `nps`, `npsReason` | `public.nps` | 8.2와 같은 모양 |
 | `funding` `{rounds, summary, investors}`, `fundingReason` | `funding_history` | `rounds`·`summary`는 8.5와 같은 모양(최근순, 이 회사 것만). `investors`는 투자기관 이름 목록 |
-| `patents` `{total, registered, byYear}`, `patentsReason` | (경쟁사 특허 요약) | 8.7 `summary`에서 셋만 |
-| `summary` `{business, productsTech, recentChanges}` | `rivals_summary.{이름}`의 `business`, `products_tech`, `recent_changes` | 최대 5줄 |
+| `patents` `{total, registered, byYear, items}`, `patentsReason` | (경쟁사 특허 요약), `patents[]` | `total`·`registered`·`byYear`는 8.7 `summary`에서 셋만. `items`는 아래 `RivalPatent` |
+| `summary` `{business, productsTech, recentChanges, inputArticles}` | `rivals_summary.{이름}`의 `business`, `products_tech`, `recent_changes`, (요약 모델에 넘긴 기사) | `recentChanges` 최대 5줄. `inputArticles`는 아래 `RivalSummaryInput` |
 | `errors` | `errors`, `public.errors` | 짧은 글 |
 | `rivalInvestors[]` `{rivalKey, rivalName, investors}` | (새로) | `funding.investors`가 있는 경쟁사마다. 자금·판로 "경쟁사에 투자" 판정(`gpKey`로 견줌) |
 | `rivalSet` | (새로) | 요청한 `key` 목록 |
 | (뺌) | `news`(경쟁사 뉴스 목록) | 요약 모델 입력으로만 쓴다 |
 
 - 상태: 경쟁사마다 일부가 비어도 `done`(칸마다 사유). 모든 경쟁사가 실패하면 `unavailable`(`upstream_error`).
+
+**원문 링크 기록**(2026-11-23에 더함). 화면: `patents.items`는 경쟁사 분석 "나란히 비교" 표의 경쟁사 국내 특허 칸 원문 링크로 보인다(`docs/ux/screens.md` 4B.2 "칸의 원문 링크"). `summary.inputArticles`는 기록만 하고 아직 화면에 보이지 않는다. 서버가 받은 주소만 적고 만들어 내지 않는다. `http://`·`https://`가 아닌 주소는 `null`(1.3). 설립·재무·국민연금은 공공 API 원자료라 원문 주소가 없고 칸도 두지 않는다. 투자 라운드는 이미 `funding.rounds[].sources[].url`(8.5, Premium은 `null`)에 있다.
+
+- `patents.items: RivalPatent[]?` — 출원인이 원문(Google Patents 공개 문서)에서 그 경쟁사로 확인된 특허 낱건. 출원일 최근순. `RivalPatent = {id, title, assignee?, applicationNo?, filingDate?, publicationNo?, registrationNo?, url?}`이고 칸의 뜻은 8.7 `Patent`의 같은 이름 칸과 같다(`url`은 출원인을 확인하려고 연 원문 주소). 등록 여부는 `registrationNo` 유무(8.7과 같은 규칙)라서 `registered` = `registrationNo`가 있는 낱건 수다. 상한 30건(`limits.PATENT_PAGES_PER_COMPANY`): 원문 확인 상한(경쟁사 한 곳 30쪽)과 같아서 확인된 특허는 잘리지 않고, 언제나 `items` 수 = `total`이다. 출원인이 다른 언급 문서(8.7 `mentions`)는 넣지 않는다. 화면은 이 칸 주소를 국내 특허 칸의 "원문 열기"(1건)·"원문 {n}건"(여러 건)으로 단다(이 칸이 없거나 `null`이면 그 칸에 링크가 없다).
+- `summary.inputArticles: RivalSummaryInput[]?` — **요약 모델에 넘긴 기사 목록**이다. 모델이 그중 무엇을 근거로 썼는지는 받지 않으므로 알 수 없다(나중에 화면에 쓸 때도 근거 표시가 아니라 "요약에 넘긴 자료"로 보여야 한다). 지금은 기록만 하고 화면에 보이지 않는다. 그 경쟁사 뉴스(최근 12개월, 중복 정리 뒤 날짜 최신순)의 앞 15건(`sections.RIVAL_SUMMARY_ARTICLES`)이고 모델에 넘긴 순서 그대로다. `RivalSummaryInput = {title, url?, naverUrl?, date?, outlet?}`(8.6 `Article`의 같은 이름 칸, 발췌 글은 넣지 않는다). `[]`이면 그 경쟁사 기사 없이 쓴 요약이다(모델 지시: 뉴스가 없으면 일반적으로 알려진 사업 개요만 쓴다). 요약이 없으면(`summary: null`) 이 칸도 없다.
+- 뒤로 호환: 두 칸이 생기기 전 스냅샷은 읽을 때 `null`로 채운다(12.1). `null` = 기록 없음. 새 결과는 언제나 목록이다. 화면은 브라우저에 저장된 옛 응답(12.3)에 키 자체가 없을 수 있다고 보고 읽는다(`contract.ts`에서 선택 칸 `?:`). 키를 더하기만 했으므로 `contractVersion`은 1 그대로다(버전을 올리면 브라우저에 저장된 옛 응답을 화면이 계약 모양이 아니라고 버린다).
 
 ### 8.10 `sales` — 나라장터 입찰공고 (열 때, 무료)
 
@@ -755,7 +761,7 @@
 - `results/analysis/<companyId>/latest.json` = `{"file": "<파일 이름>", "jobId": "…", "analyzedAt": "…"}`. 작업이 `done`이 될 때만 바꾸고, 지금 가리키는 분석보다 `analyzedAt`이 새롭거나 같을 때만 바꾼다(서버를 다시 시작한 뒤 옛 작업에서 단락을 실행해도 더 새 분석을 가리키는 포인터를 뒤로 돌리지 않는다). 2.6·2.8이 이 파일을 먼저 본다(없거나 깨졌으면 폴더를 훑는다).
 - 서버가 켜질 때 `results/analysis/*/*.json`을 읽어 `jobId → 파일` 표를 만든다. `status: "running"`인 파일은 `interrupted`로 바꾼다: `waiting`·`running` 단락 → `unavailable`(`interrupted`, `retryable: true`), `rerun.status: "running"` → `failed`(`interrupted`), `analyzedAt` = 파일의 마지막 수정 시각(한국 시간), `busy: false`. 그리고 파일을 다시 쓴다.
 - 작업 상태는 메모리 + 이 파일이다. DB는 쓰지 않는다. `results/`는 Git에서 제외돼 있다.
-- 나중에 계약에 더한 키가 없는 옛 스냅샷은 읽을 때(`Store.read`) `null`로 채워 응답이 계약 모양이 되게 한다. 이것 때문에 파일을 다시 쓰지는 않는다(상태가 바뀌어 다시 쓸 때 함께 들어간다). 지금은 `Corp.formerNames`(2026-11-23에 더함, `identity.result.corp`·`otherCorps`, `rivals_deep.result.rivals[].corp`) 하나다. 서버는 스냅샷을 읽을 때 계약 모양을 검사하지 않는다(검사는 테스트에서만 한다).
+- 나중에 계약에 더한 키가 없는 옛 스냅샷은 읽을 때(`Store.read`) `null`로 채워 응답이 계약 모양이 되게 한다. 이것 때문에 파일을 다시 쓰지는 않는다(상태가 바뀌어 다시 쓸 때 함께 들어간다). 지금은 `Corp.formerNames`(2026-11-23에 더함, `identity.result.corp`·`otherCorps`, `rivals_deep.result.rivals[].corp`), `rivals_deep.result.rivals[].patents.items`와 `rivals[].summary.inputArticles`(2026-11-23에 더함, 8.9 — `patents`·`summary`가 `null`이 아닐 때만)다. 서버는 스냅샷을 읽을 때 계약 모양을 검사하지 않는다(검사는 테스트에서만 한다).
 
 ### 12.2 하루 사용량 (②)
 

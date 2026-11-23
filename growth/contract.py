@@ -628,10 +628,24 @@ class PapersResult(TypedDict):
 # ---------------------------------------------------------------- rivals_deep
 
 @_strict
+class RivalPatent(TypedDict):
+    """출원인이 원문에서 그 경쟁사로 확인된 특허 한 건(계약 8.9). 칸의 뜻은 Patent 의 같은 이름 칸과 같다."""
+    id: str                       # 출원번호(없으면 공개번호)
+    title: str
+    assignee: str | None          # 원문에서 확인한 출원인
+    applicationNo: str | None
+    filingDate: str | None
+    publicationNo: str | None
+    registrationNo: str | None    # 있으면 "등록", 없으면 "공개"
+    url: str | None               # 출원인을 확인하려고 연 원문 주소(http·https 만)
+
+
+@_strict
 class RivalPatents(TypedDict):
     total: int
     registered: int
     byYear: dict[str, int]
+    items: list[RivalPatent] | None  # 출원일 최근순, 최대 30(원문 확인 상한과 같아 len == total). None = 기록 없음(이 칸 전 스냅샷). 화면: 비교 표 국내 특허 칸의 원문 링크
 
 
 @_strict
@@ -642,10 +656,21 @@ class RivalFunding(TypedDict):
 
 
 @_strict
+class RivalSummaryInput(TypedDict):
+    """경쟁사 요약 모델에 넘긴 기사 한 건(계약 8.9). 모델이 근거로 고른 기사라는 뜻이 아니다."""
+    title: str
+    url: str | None
+    naverUrl: str | None
+    date: str | None
+    outlet: str | None
+
+
+@_strict
 class RivalSummary(TypedDict):
     business: str | None
     productsTech: str | None
     recentChanges: list[str]      # 최대 5
+    inputArticles: list[RivalSummaryInput] | None  # 요약 모델에 넘긴 기사(최대 15). [] = 기사 없이 쓴 요약. None = 기록 없음(이 칸 전 스냅샷). 기록만, 화면에 아직 안 보임
 
 
 @_strict

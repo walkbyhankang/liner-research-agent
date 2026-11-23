@@ -546,6 +546,29 @@ def _empty_company() -> dict:
 
 # ---------------------------------------------------------------- rivals_deep (8.9)
 
+RIVAL_SUMMARY_ARTICLES = 15   # 경쟁사마다 요약 모델에 넘기는 기사 수(그 경쟁사 뉴스의 최신순 앞부분)
+# 경쟁사 특허 낱건 상한(계약 8.9). 원문 확인 상한(한 곳 30쪽)과 같다: 원문 한 쪽이 특허 한 건 이하라 확인된 특허가 잘리지 않는다
+RIVAL_PATENT_ITEMS = limits.PATENT_PAGES_PER_COMPANY
+_RIVAL_PATENT_KEYS = ("id", "title", "assignee", "applicationNo", "filingDate", "publicationNo", "registrationNo", "url")
+
+
+def summary_articles(row: dict) -> list[dict]:
+    """경쟁사 한 곳에서 요약 모델에 넘기는 기사. 넘긴 목록과 결과에 남기는 목록(inputArticles)이 같도록 여기서만 정한다."""
+    return ((row.get("news") or {}).get("articles") or [])[:RIVAL_SUMMARY_ARTICLES]
+
+
+def summary_inputs(arts: list[dict]) -> list[dict]:
+    """요약 모델에 넘긴 기사 → 계약 RivalSummaryInput(받은 값만 옮긴다. http·https 가 아닌 주소는 None, 발췌 글은 넣지 않는다)."""
+    n = common.none_if_empty
+    return [{"title": str(a.get("title") or ""), "url": common.web_url(a.get("url")), "naverUrl": common.web_url(a.get("naver_url")),
+             "date": n(a.get("date")), "outlet": n(a.get("매체"))} for a in arts]
+
+
+def rival_patent_items(pats: list[dict]) -> list[dict]:
+    """출원인이 원문에서 확인된 경쟁사 특허(company_patents 의 patents, 출원일 최근순) → 계약 RivalPatent(Patent 의 일부 칸)."""
+    return [{k: c[k] for k in _RIVAL_PATENT_KEYS} for c in map(patent_contract, pats[:RIVAL_PATENT_ITEMS])]
+
+
 RIVAL_SCHEMA = {
     "type": "object", "additionalProperties": False, "required": ["rivals"],
     "properties": {"rivals": {"type": "array", "items": {
@@ -560,7 +583,7 @@ def summarize_rivals(target: str, rows: list[dict], liner: Liner) -> dict:
     """경쟁사별 상위 뉴스 제목·요약을 묶어 모델 1회로 사업·제품·최근 변화를 정리한다(research/controller 에서 옮김)."""
     blocks = []
     for r in rows:
-        arts = ((r.get("news") or {}).get("articles") or [])[:15]
+        arts = summary_articles(r)
         lines = "\n".join(f"- ({a['date']}) {a['title']} — {a['description'][:150]}" for a in arts) or "- 뉴스 없음"
         c = r["info"]
         blocks.append(f"## {c.get('name')} ({c.get('country') or '한국'}, {c.get('relation')}: {c.get('reason')})\n{lines}")
@@ -653,10 +676,11 @@ def run_rivals_deep(ctx: RunCtx) -> dict:
                            "investors": [i["name"] for i in investors]}
         pt = r["patents"]
         pat = ({"total": pt["summary"]["total"], "registered": pt["summary"]["registered"],
-                "byYear": patents.summary_contract(pt["summary"])["byYear"]} if pt else None)
+                "byYear": patents.summary_contract(pt["summary"])["byYear"], "items": rival_patent_items(pt["patents"])} if pt else None)
         s = summ.get(pick["name"])
         summary_out = ({"business": common.none_if_empty(s.get("business")), "productsTech": common.none_if_empty(s.get("products_tech")),
-                        "recentChanges": _strs(s.get("recent_changes"), 5)} if s else None)
+                        "recentChanges": _strs(s.get("recent_changes"), 5), "inputArticles": summary_inputs(summary_articles(r))}
+                       if s else None)
         errors = list(dict.fromkeys(pub["errors"] + r["errors"]))
         out_rivals.append({"key": pick["key"], "name": pick["name"], "nameEn": common.none_if_empty(pick.get("nameEn")),
                            "corp": pub["corp"], "financials": pub["financials"], "financialsReason": pub["financialsReason"],

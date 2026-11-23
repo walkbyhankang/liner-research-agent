@@ -9,7 +9,7 @@ import { ApiFail, api } from "@/lib/api";
 import { EDIT_LABEL, filledCount, noticeCompany, rivalNoticeCompany } from "@/lib/company-values";
 import { dday, shortDate, type Program } from "@/lib/finder";
 import { putCheck, putRivalCheck, removeNotice, rivalCheckOf, savedNotices, type CheckRecord, type SavedItem } from "@/lib/local";
-import { gaps, sortRows, verdictCounts } from "@/lib/review";
+import { gaps, noticeEnd, sortRows, verdictCounts } from "@/lib/review";
 import { pickedRivals } from "@/lib/view";
 import { runTask } from "@/lib/tasks";
 import { useTask } from "@/lib/useTask";
@@ -49,7 +49,8 @@ function UsedValue({ field, company }: { field: string; company: NoticeCompany }
   );
 }
 
-export type SavedProgram = { item: SavedItem; program: Program | null };
+/** end: 화면에 쓰는 마감일(noticeEnd: 지금 공고 자료 먼저, 없으면 담을 때 저장값). 회사 분석 "지금 확인할 것"·노트와 같은 기준 */
+export type SavedProgram = { item: SavedItem; program: Program | null; end: string | null };
 
 export function Grants() {
   const c = useCompany();
@@ -57,9 +58,8 @@ export function Grants() {
   const { openEdit } = useShell();
   const { data } = usePublicData();
   const items: SavedProgram[] = savedNotices(c.local.saved) // 두 화면에서 담은 같은 공고는 하나로
-    .map((item) => ({ item, program: data?.programs.find((p) => p.id === item.itemId) ?? null }));
-  const end = (x: SavedProgram) => x.program?.period.end ?? (typeof x.item.meta.end === "string" ? x.item.meta.end : "9999-12-31");
-  items.sort((a, b) => end(a).localeCompare(end(b)));
+    .map((item) => ({ item, program: data?.programs.find((p) => p.id === item.itemId) ?? null, end: noticeEnd(item, data?.programs) }));
+  items.sort((a, b) => (a.end ?? "9999-12-31").localeCompare(b.end ?? "9999-12-31"));
   const done = items.map((x) => ({ x, rec: c.local.checks[x.item.itemId] })).filter((y) => y.rec?.result);
   const g = gaps(done.map((y) => ({ programId: y.x.item.itemId, programTitle: y.x.item.title, result: y.rec!.result! })));
   const filled = job ? filledCount(job, c.local.edits) : 0;
@@ -206,7 +206,7 @@ function NoticeCard({ x, company }: { x: SavedProgram; company: NoticeCompany | 
   const limit = task.status === "error" && task.error === LIMIT_TEXT;
   const run = () => company && runNoticeCheck(c.cid, id, company);
   const p = x.program;
-  const endDay = p?.period.end ?? (typeof x.item.meta.end === "string" ? x.item.meta.end : null);
+  const endDay = x.end;
   const d = endDay && today ? dday(endDay, today) : null;
   const url = p?.url ?? (typeof x.item.meta.url === "string" ? x.item.meta.url : null);
   const result = rec?.result ?? null;

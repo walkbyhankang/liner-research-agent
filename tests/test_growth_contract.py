@@ -291,6 +291,13 @@ def test_variant_fixtures():
     assert (len(b["facts"]), len(b["fit"]), len(b["questions"]), len(b["sources"])) == (4, 2, 2, 6)
     rd = get("F-RIVALS", 1)["sections"]["rivals_deep"]["result"]
     assert len(rd["rivals"]) == 2 and any(r["financials"] == [] and r["financialsReason"] for r in rd["rivals"])
+    # 원문 링크 기록(계약 8.9): 특허 낱건 수 = 건수(등록 = registrationNo 있는 낱건), 요약에 넘긴 기사. 하하테크는 둘 다 빈 목록
+    assert [(len(r["patents"]["items"]), len(r["summary"]["inputArticles"])) for r in rd["rivals"]] == [(6, 4), (0, 0)]
+    for r in rd["rivals"]:
+        items = r["patents"]["items"]
+        assert len(items) == r["patents"]["total"] <= L.PATENT_PAGES_PER_COMPANY
+        assert sum(1 for p in items if p["registrationNo"]) == r["patents"]["registered"]
+        assert [p["filingDate"] for p in items] == sorted((p["filingDate"] for p in items), reverse=True)
     items = get("F-SALES", 1)["sections"]["sales"]["result"]["items"]
     assert [sum(i["status"] == s for i in items) for s in ("open", "upcoming", "closed")] == [7, 2, 3]
     assert sum(i["relevance"] == "high" for i in items) == 4

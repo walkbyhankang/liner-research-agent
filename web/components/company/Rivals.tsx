@@ -11,14 +11,15 @@
 // 배치는 이 화면을 열 때 한 번 정하고 방문 동안 바꾸지 않는다(정하기·받기 중에 덩어리 순서가 바뀌어 화면이 밀리지 않게).
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { DEFAULT_ESTIMATES, type AnalysisJob, type RivalDeep, type RivalsDeepResult } from "@/lib/contract";
-import { COMPARE_ITEMS, COMPARE_SOURCES, compareColumns, type Cell, type CompareColumn, type CompareItem } from "@/lib/compare";
+import { COMPARE_ITEMS, COMPARE_SOURCES, cellLinks, compareColumns, type Cell, type CellLink, type CompareColumn, type CompareItem } from "@/lib/compare";
 import { elapsedText, fmtDay, fmtMonthDayTime, fmtTime, shortCompany, todayKST } from "@/lib/format";
 import { isExistingInvestor } from "@/lib/finder";
 import { addRival, setRivalChoice } from "@/lib/local";
 import { userRivalKey } from "@/lib/names";
 import { MAX_RIVALS, effectiveRivalChoices, errorSentence, phaseOf, pickedRivals, rivalsCost, visibleRivals, type PickedRival } from "@/lib/view";
-import { DetailRow, Disclosure, Placeholder, SourceLine, StatusWord, nb, useMore } from "@/components/kit";
+import { DetailRow, Disclosure, DownIcon, ExtLink, Placeholder, SourceLine, StatusWord, nb, useMore, useOpen } from "@/components/kit";
 import { FinanceBars, InvestBars, NpsLine, PatentLine, type InvestBar } from "@/components/charts";
 import { useCompany, useTicker } from "@/components/company/context";
 import { RunningLine } from "@/components/company/Section";
@@ -342,6 +343,26 @@ function Compare({ job, fold }: { job: AnalysisJob; fold: ReactNode }) {
   const cost = rivalsCost(est, picked.length);
   const canRun = !job.isExample && env.retryable && sent.length > 0;
   const cols = useMemo(() => compareColumns(job, c.local.edits), [job, c.local.edits]);
+  // 칸의 "원문 n건"이 표 아래 "칸별 원문"을 펼치고 그 칸의 목록 머리로 옮긴다(screens 4B.2). 펼침 상태는 여기서 쥔다
+  const [linksOpen, setLinksOpen] = useOpen(`${c.cid}:cmp:links`);
+  // 옮겨 간 목록 머리 옆 "표로 돌아가기"가 누른 칸 링크로 초점을 돌려준다(뒤로 가기는 이 화면을 떠나므로)
+  const [back, setBack] = useState<{ target: string; from: HTMLElement } | null>(null);
+  const jump: Jump = (target, from) => {
+    flushSync(() => {
+      setLinksOpen(true);
+      setBack({ target, from });
+    });
+    const el = document.getElementById(target);
+    el?.scrollIntoView({ block: "start" });
+    el?.focus({ preventScroll: true });
+  };
+  const goBack = () => {
+    const from = back?.from;
+    setBack(null);
+    const el = from?.isConnected ? from : document.getElementById("h-compare");
+    el?.scrollIntoView({ block: "center" });
+    el?.focus({ preventScroll: true });
+  };
   // 덩어리 폭은 비교 표 폭에 맞춘다(열이 적으면 다른 덩어리처럼 760px, 많으면 화면 폭까지). 머리 오른쪽 "실행" 시각이 표 끝에 온다
   const tableW = `${7.5 + cols.length * 15}em`;
   const run = async () => {
@@ -414,7 +435,7 @@ function Compare({ job, fold }: { job: AnalysisJob; fold: ReactNode }) {
         )}
       </div>
 
-      <CompareTable cols={cols} />
+      <CompareTable cols={cols} jump={jump} />
       {/* 칸마다 상태 낱말과 짧은 출처가 있으므로 기관·자료 이름 전체는 펼쳐 본다. 기준 시각 한 줄은 늘 보인다 */}
       <div className="mt-3 max-w-[760px]">
         <p className="source">
@@ -422,6 +443,7 @@ function Compare({ job, fold }: { job: AnalysisJob; fold: ReactNode }) {
             우리 회사 {fmtTime(job.analyzedAt) || "분석 중"} 분석{result ? `, 경쟁사 ${fmtTime(result.queriedAt)} 조회` : ""}. 회사마다 기준 연도가 다를 수 있습니다.
           </span>
         </p>
+        <CompareLinks cols={cols} open={linksOpen} onOpenChange={setLinksOpen} back={back?.target ?? null} onBack={goBack} />
         <Disclosure text={`항목별 출처 ${COMPARE_SOURCES.length}줄 보기`} memoryKey={`${c.cid}:cmp:sources`} className="mt-2">
           <div className="py-2">
             {COMPARE_SOURCES.map((s, i) => (
@@ -446,7 +468,7 @@ function Compare({ job, fold }: { job: AnalysisJob; fold: ReactNode }) {
  * 비교 표. 640px 이상은 표(열 = 회사, 줄 = 항목, 첫 열은 옆으로 밀어도 붙음), 640px 미만은 항목마다 한 덩어리(회사마다 한 줄).
  * 같은 항목끼리 견주는 표의 뜻을 휴대폰에서도 지킨다. 값 크기로 다시 정렬하지 않고, 차이·합계·순위 줄을 두지 않는다.
  */
-function CompareTable({ cols }: { cols: CompareColumn[] }) {
+function CompareTable({ cols, jump }: { cols: CompareColumn[]; jump: Jump }) {
   const c = useCompany();
   // 열이 적을 때(받기 전 우리 회사 열 하나 등) 표가 덩어리 폭으로 늘어나 칸이 휑하지 않게, 열 수에 맞춘 최대 폭(항목 열 7.5em + 회사 열 15em씩)
   const maxW = `${7.5 + cols.length * 15}em`;
@@ -487,9 +509,9 @@ function CompareTable({ cols }: { cols: CompareColumn[] }) {
                   <th scope="row" className="cmp-item py-3 pl-2 pr-3 text-left font-semibold">
                     {it.label}
                   </th>
-                  {cols.map((col) => (
+                  {cols.map((col, ci) => (
                     <td key={col.key} className="cmp-col py-3 pl-3 pr-3">
-                      <CellView c={col.cells[it.key]} item={it.key} />
+                      <CellView c={col.cells[it.key]} item={it.key} at={{ who: col.name, label: it.label, target: linkTarget(ci, it.key), jump }} />
                     </td>
                   ))}
                 </tr>
@@ -506,11 +528,11 @@ function CompareTable({ cols }: { cols: CompareColumn[] }) {
       {/* 좁은 화면: 앞 4줄(핵심 값과 같은 항목)만 1층, 뒤 3줄은 펼쳐 본다(쪽 길이를 줄이려고, 오케스트레이터 검토 2026-11-23) */}
       <div className="mt-5 border-t-2 border-ink sm:hidden" data-compare="items">
         {COMPARE_ITEMS.filter((it) => it.core).map((it) => (
-          <ItemBlock key={it.key} label={it.label} item={it.key} cols={cols} />
+          <ItemBlock key={it.key} label={it.label} item={it.key} cols={cols} jump={jump} />
         ))}
         <Disclosure text={`${COMPARE_ITEMS.filter((it) => !it.core).map((it) => it.label).join(", ")} 보기`} memoryKey={`${c.cid}:cmp:items-rest`}>
           {COMPARE_ITEMS.filter((it) => !it.core).map((it) => (
-            <ItemBlock key={it.key} label={it.label} item={it.key} cols={cols} />
+            <ItemBlock key={it.key} label={it.label} item={it.key} cols={cols} jump={jump} />
           ))}
         </Disclosure>
       </div>
@@ -519,18 +541,18 @@ function CompareTable({ cols }: { cols: CompareColumn[] }) {
 }
 
 /** 좁은 화면의 항목 한 덩어리: 항목 이름 아래 회사마다 한 줄(우리 회사 맨 위) */
-function ItemBlock({ label, item, cols }: { label: string; item: CompareItem; cols: CompareColumn[] }) {
+function ItemBlock({ label, item, cols, jump }: { label: string; item: CompareItem; cols: CompareColumn[]; jump: Jump }) {
   return (
     <div className="border-b border-rule py-3" data-item-block={item}>
       <h3 className="text-base font-semibold">{label}</h3>
       <ul className="mt-1 space-y-1">
-        {cols.map((col) => (
+        {cols.map((col, ci) => (
           <li key={col.key} className="grid grid-cols-[minmax(0,6.5em)_minmax(0,1fr)] items-start gap-x-3 py-1.5" data-company={col.name}>
             <span className={`text-sm ${col.mine ? "font-bold" : "font-medium"}`}>
               {shortCompany(col.name)}
               {col.mine && <span className="block text-xs font-medium text-sub">우리 회사</span>}
             </span>
-            <CellView c={col.cells[item]} item={item} />
+            <CellView c={col.cells[item]} item={item} at={{ who: col.name, label, target: linkTarget(ci, item), jump }} />
           </li>
         ))}
       </ul>
@@ -538,8 +560,14 @@ function ItemBlock({ label, item, cols }: { label: string; item: CompareItem; co
   );
 }
 
-/** 칸 하나: 값(16px) → 기준(13px 보조) → 상태 낱말 + 짧은 출처. 미확보는 낱말과 사유, 엇갈림은 두 값 */
-function CellView({ c, item }: { c: Cell; item: CompareItem }) {
+/** "원문 n건"이 표 아래 목록의 그 칸 머리로 옮긴다(from: 누른 링크, 돌아올 자리) */
+type Jump = (target: string, from: HTMLElement) => void;
+/** 칸 링크에 필요한 자리 정보: 화면 읽기 이름(회사·항목)과 표 아래 목록의 그 칸 머리 id */
+type CellAt = { who: string; label: string; target: string; jump: Jump };
+const linkTarget = (ci: number, item: CompareItem) => `cmp-src-${ci}-${item}`;
+
+/** 칸 하나: 값(16px) → 기준(13px 보조) → 상태 낱말 + 짧은 출처 (+ 원문 링크). 미확보는 낱말과 사유, 엇갈림은 두 값 */
+function CellView({ c, item, at }: { c: Cell; item: CompareItem; at: CellAt }) {
   if (c.kind === "pending") return <span className="text-sub">확인 중</span>;
   if (c.kind === "missing")
     return (
@@ -552,10 +580,17 @@ function CellView({ c, item }: { c: Cell; item: CompareItem }) {
     return (
       <span className="block">
         <StatusWord w="conflicting" />
+        {/* 앞 값 줄에도 원문 링크가 있으면 줄 사이를 벌려 두 링크의 44px 누르는 곳(위아래 12px 덧댐)이 겹치지 않게 한다 */}
         {c.alts.map((a, i) => (
-          <span key={i} className="mt-1 block">
+          <span key={i} className={`${i > 0 && a.link && c.alts[i - 1].link ? "mt-5" : "mt-1"} block`}>
             {i > 0 && <span className="text-sub">다른 자료: </span>}
             <span className="font-medium">{nb(a.text)}</span> {a.source && <span className="text-xs text-sub">({a.source})</span>}
+            {a.link && (
+              <>
+                {" "}
+                <CellLinkView links={[a.link]} at={{ ...at, label: `${at.label} ${a.text}` }} />
+              </>
+            )}
           </span>
         ))}
       </span>
@@ -571,8 +606,89 @@ function CellView({ c, item }: { c: Cell; item: CompareItem }) {
       <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
         <StatusWord w={c.word} />
         {c.source && <span className="text-xs text-sub">{c.source}</span>}
+        {c.links?.length ? <CellLinkView links={c.links} at={at} /> : null}
       </span>
     </span>
+  );
+}
+
+/**
+ * 칸의 원문 링크 하나(screens 4B.2). 주소 1개면 "원문 열기"(새 창, ExtLink 가 http·https 만 링크로 만든다),
+ * 2개 이상이면 "원문 {n}건"(화면 안 이동: 표 아래 "칸별 원문"을 펼쳐 그 칸 목록 머리로). 보이는 글은 짧게, 회사·항목은 화면 읽기 글로.
+ * 인쇄에서는 숨기고(종이에서 누를 수 없다), 끌어 복사할 때 따라가지 않는다(값만 복사되게).
+ */
+function CellLinkView({ links, at }: { links: CellLink[]; at: CellAt }) {
+  const cls = "link cell-link no-print select-none text-xs";
+  if (links.length === 1)
+    return (
+      <ExtLink href={links[0].url} className={cls}>
+        <span className="sr-only">
+          {at.who} {at.label}{" "}
+        </span>
+        원문 열기
+      </ExtLink>
+    );
+  return (
+    <a
+      href={`#${at.target}`}
+      className={cls}
+      data-cell-links={links.length}
+      onClick={(e) => {
+        e.preventDefault();
+        at.jump(at.target, e.currentTarget);
+      }}
+    >
+      <span className="sr-only">
+        {at.who} {at.label}{" "}
+      </span>
+      원문 {links.length}건<span className="sr-only">, 표 아래 목록으로 이동</span>
+      <DownIcon />
+    </a>
+  );
+}
+
+/**
+ * 표 아래 "칸별 원문 {N}건 보기"(screens 4B.2): 회사마다(표 열 순서), 그 안에서 항목마다(표 줄 순서) 원문 목록. 링크가 달린 칸이 없으면 줄도 없다.
+ * 칸의 "원문 n건"이 이 줄을 펼치고 "{회사} {항목} 원문 {n}건" 머리(tabindex -1)로 초점을 옮긴다. 옮겨 간 자리에서 어느 회사인지 보이도록 머리마다 회사 이름을 둔다.
+ */
+function CompareLinks({ cols, open, onOpenChange, back, onBack }: { cols: CompareColumn[]; open: boolean; onOpenChange: (v: boolean) => void; back: string | null; onBack: () => void }) {
+  const groups = cols
+    .map((col, ci) => ({ col, items: COMPARE_ITEMS.map((it) => ({ it, target: linkTarget(ci, it.key), links: cellLinks(col.cells[it.key]) })).filter((x) => x.links.length) }))
+    .filter((g) => g.items.length);
+  const total = groups.reduce((n, g) => n + g.items.reduce((m, x) => m + x.links.length, 0), 0);
+  if (!total) return null;
+  return (
+    <Disclosure text={`칸별 원문 ${total}건 보기`} open={open} onOpenChange={onOpenChange} className="mt-2">
+      <div className="pb-2" data-compare-links>
+        {/* 회사 사이는 가는 선과 넓은 간격, 같은 회사의 항목 사이는 좁은 간격 */}
+        {groups.map(({ col, items }) => (
+          <div key={col.key} className="mt-6 border-t border-rule pt-5 first:mt-3 first:border-t-0 first:pt-0" data-links-company={col.name}>
+            {items.map(({ it, target, links }) => (
+              <div key={it.key} className="mt-4 first:mt-0" data-links-item={it.key}>
+                <div className="flex flex-wrap items-center justify-between gap-x-3">
+                  <h3 id={target} tabIndex={-1} className="anchor text-sm font-semibold">
+                    <span className="font-bold">{col.name}</span> {it.label} 원문 {links.length}건
+                  </h3>
+                  {back === target && (
+                    <button type="button" className="link no-print text-sm" onClick={onBack} data-back-to-table>
+                      표로 돌아가기
+                    </button>
+                  )}
+                </div>
+                <ul>
+                  {links.map((l) => (
+                    <li key={l.url} className="flex flex-wrap items-baseline gap-x-2 border-b border-rule last:border-b-0">
+                      <ExtLink href={l.url}>{l.title}</ExtLink>
+                      {l.note && <span className="num text-xs text-sub">{nb(l.note)}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </Disclosure>
   );
 }
 

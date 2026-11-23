@@ -31,14 +31,20 @@ class LeakError(RuntimeError):
 
 def _fill_new_keys(d: dict) -> None:
     """나중에 계약에 더한 키가 없는 옛 스냅샷을 읽을 때 null 로 채운다(계약 12.1절). 파일은 이 때문에 다시 쓰지 않는다.
-    지금은 Corp.formerNames(identity 의 corp·otherCorps, rivals_deep 의 경쟁사 corp) 하나다."""
+    지금은 Corp.formerNames(identity 의 corp·otherCorps, rivals_deep 의 경쟁사 corp)와
+    rivals_deep 경쟁사의 patents.items·summary.inputArticles(원문 링크 기록, 계약 8.9)다."""
     secs = d.get("sections") if isinstance(d.get("sections"), dict) else {}
     ident = (secs.get("identity") or {}).get("result") or {}
-    rivals = ((secs.get("rivals_deep") or {}).get("result") or {}).get("rivals") or []
-    corps = [ident.get("corp"), *(ident.get("otherCorps") or []), *(r.get("corp") for r in rivals if isinstance(r, dict))]
+    rivals = [r for r in ((secs.get("rivals_deep") or {}).get("result") or {}).get("rivals") or [] if isinstance(r, dict)]
+    corps = [ident.get("corp"), *(ident.get("otherCorps") or []), *(r.get("corp") for r in rivals)]
     for c in corps:
         if isinstance(c, dict):
             c.setdefault("formerNames", None)
+    for r in rivals:
+        if isinstance(r.get("patents"), dict):
+            r["patents"].setdefault("items", None)
+        if isinstance(r.get("summary"), dict):
+            r["summary"].setdefault("inputArticles", None)
 
 
 class Store:

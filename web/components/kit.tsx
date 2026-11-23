@@ -23,6 +23,14 @@ export function NewWindowIcon() {
     </svg>
   );
 }
+/** 이 쪽 아래로 옮기는 링크(비교 표 "원문 n건" → 표 아래 목록). 새 창 아이콘과 같은 크기·굵기 */
+export function DownIcon() {
+  return (
+    <svg aria-hidden width="14" height="14" viewBox="0 0 14 14" className="shrink-0">
+      <path d="M7 2.5v8M3.5 7.5L7 11l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 function PenIcon() {
   return (
     <svg aria-hidden width="11" height="11" viewBox="0 0 12 12">
@@ -122,11 +130,14 @@ export function useOpen(key: string | null, initial = false): [boolean, (v: bool
   return [open, setOpen];
 }
 
+/** open·onOpenChange 를 주면 바깥이 펼침 상태를 쥔다(다른 곳의 링크가 이 줄을 펼칠 때, 예: 비교 표의 "원문 n건"). 그때 memoryKey 는 바깥 useOpen 에 준다 */
 export function Disclosure({
-  text, openText, children, memoryKey, onFirstOpen, className = "", right, label,
-}: { text: string; openText?: string; children: ReactNode; memoryKey?: string; onFirstOpen?: () => void; className?: string; right?: ReactNode; label?: ReactNode }) {
+  text, openText, children, memoryKey, onFirstOpen, className = "", right, label, open: openProp, onOpenChange,
+}: { text: string; openText?: string; children: ReactNode; memoryKey?: string; onFirstOpen?: () => void; className?: string; right?: ReactNode; label?: ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const id = useId();
-  const [open, setOpen] = useOpen(memoryKey ?? null);
+  const [selfOpen, setSelfOpen] = useOpen(openProp === undefined ? memoryKey ?? null : null);
+  const open = openProp ?? selfOpen;
+  const setOpen = (v: boolean) => (onOpenChange ? onOpenChange(v) : setSelfOpen(v));
   const [ever, setEver] = useState(open);
   const shownText = open ? openText ?? (text.endsWith(" 보기") ? `${text.slice(0, -3)} 접기` : text) : text;
   return (

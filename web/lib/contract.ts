@@ -1,7 +1,8 @@
 // 성장노트 서버·화면 데이터 계약(TypeScript 타입). 본문은 docs/contract.md, 서버 쪽 같은 타입은 growth/contract.py.
 // 셋이 다르면 docs/contract.md 를 따른다. 화면 코드는 이 파일의 이름만 쓴다(한글 키 없음).
 //
-// 규칙(계약 1절): 모든 키는 언제나 들어 있다. 값이 없으면 null, 목록은 [] 이다(예외: GpBrief.model).
+// 규칙(계약 1절): 모든 키는 언제나 들어 있다. 값이 없으면 null, 목록은 [] 이다(예외: GpBrief.model. 그리고 나중에 더한
+// RivalDeep 의 patents.items·summary.inputArticles 는 브라우저에 저장된 옛 응답에 없을 수 있어 선택 칸이다, 계약 8.9).
 // 글은 모두 평문이다. HTML 로 해석하지 않는다. url 은 http·https 이거나 null 이다(화면도 한 번 더 확인한다).
 // 시각은 한국 시간 ISO 8601("2026-11-22T20:46:24+09:00"), 날짜는 "YYYY-MM-DD", 달은 "YYYY-MM".
 
@@ -364,6 +365,21 @@ export type PapersResult = {
 
 // ---------------------------------------------------------------- rivals_deep
 
+/** 출원인이 원문에서 그 경쟁사로 확인된 특허 한 건(계약 8.9). 칸의 뜻은 Patent 와 같다. 등록 여부는 registrationNo 유무 */
+export type RivalPatent = {
+  id: string;
+  title: string;
+  assignee: string | null;
+  applicationNo: string | null;
+  filingDate: string | null;
+  publicationNo: string | null;
+  registrationNo: string | null;
+  /** 출원인을 확인하려고 연 원문 주소 */
+  url: string | null;
+};
+/** 경쟁사 요약 모델에 넘긴 기사 한 건(계약 8.9). 모델이 근거로 고른 기사라는 뜻이 아니다 */
+export type RivalSummaryInput = { title: string; url: string | null; naverUrl: string | null; date: string | null; outlet: string | null };
+
 export type RivalDeep = {
   key: string;
   name: string;
@@ -375,9 +391,21 @@ export type RivalDeep = {
   npsReason: string | null;
   funding: { rounds: Round[]; summary: FhSummary; investors: string[] } | null;
   fundingReason: string | null;
-  patents: { total: number; registered: number; byYear: Record<string, number> } | null;
+  patents: {
+    total: number;
+    registered: number;
+    byYear: Record<string, number>;
+    /** 출원일 최근순, 최대 30(items 수 = total). null = 기록 없음(옛 스냅샷). 브라우저에 저장된 옛 응답에는 키가 없을 수 있다. 화면: 비교 표 국내 특허 칸의 원문 링크(compare.ts) */
+    items?: RivalPatent[] | null;
+  } | null;
   patentsReason: string | null;
-  summary: { business: string | null; productsTech: string | null; recentChanges: string[] } | null;
+  summary: {
+    business: string | null;
+    productsTech: string | null;
+    recentChanges: string[];
+    /** 요약 모델에 넘긴 기사(최대 15, 근거 표시 아님). [] = 기사 없이 쓴 요약. null·없음 = 기록 없음(옛 스냅샷). 기록만 하고 화면에는 아직 쓰지 않는다 */
+    inputArticles?: RivalSummaryInput[] | null;
+  } | null;
   errors: string[];
 };
 export type RivalsDeepResult = {

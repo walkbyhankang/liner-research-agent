@@ -45,7 +45,7 @@
 | `F-INTERRUPTED` | 작업 `interrupted`, `official`·`profile`·`funding_history` done(그리고 `identity`) |
 | `F-NOTICE` | 공고문 대조: 충족 4, 미충족 1, 확인 필요 2, 판단 대상 아님 2, 질문 5, 준비 자료 3. 상한 도달(429) 응답 포함 |
 | `F-BRIEF` | 운용사 요약: 사실 4, 맞닿는 점 2, 물어볼 것 2, 검색 결과 6 (지금 코드의 상한이 맞닿는 점·물어볼 것 각 2라서 acceptance.md 의 3·4 대신 2·2) |
-| `F-RIVALS` | `rivals_deep` done: 경쟁사 2곳(하하테크는 재무 미확보), `rivalInvestors` 에 "타파하인베스트" |
+| `F-RIVALS` | `rivals_deep` done: 경쟁사 2곳(하하테크는 재무 미확보), `rivalInvestors` 에 "타파하인베스트". 원문 링크 기록(계약 8.9): 마바사 `patents.items` 6건(등록 4)·`summary.inputArticles` 4건(마지막 건 `naverUrl` null), 하하테크는 둘 다 `[]`(특허 0건, 기사 없이 쓴 요약). 마바사 라운드 2건(Series C·B)에 웹 기사 출처 주소(나란히 비교 표의 투자 칸 원문 링크, `screens.md` 4B.2) |
 | `F-SALES`, `F-SALES-PARTIAL` | 입찰공고 12건(진행 중 7, 예정 2, 마감 3, 관련성 high 4) / 같은 것에 `errorCount` 2, `partial` |
 | `F-HTML` | 기사 제목 `<b>굵게</b>`, 특허 요약 `<img src=x onerror=alert(1)>` (글자 그대로 보여야 한다) |
 

@@ -2,8 +2,18 @@
 import type { AnalysisJob, Bid, NoticeAnalysis, Value, Verdict } from "./contract.ts";
 import { byCurrencyTexts, daysUntil, eok, fmtMD, signed, stageKo } from "./format.ts";
 import { isTerminal } from "./view.ts";
-import { SOON_DAYS, dday } from "./finder.ts";
+import { SOON_DAYS, dday, type Program } from "./finder.ts";
 import { savedNotices, type CheckRecord, type SavedItem } from "./local.ts";
+
+/**
+ * 담은 공고의 마감일(screens 4.0.3·6.1·8절). 회사 분석 "지금 확인할 것", 심사 준비 카드·정렬, 노트가 이 함수 하나를 쓴다.
+ * 지금 공고 자료(/data/programs.json, 자금·판로 목록과 같은 사본)에 그 공고가 있고 마감일이 있으면 그것을 먼저 쓴다(마감이 당겨지거나 늘어난 것이 반영된다).
+ * 자료를 아직 못 받았거나(null) 자료에서 공고가 빠졌거나 마감일이 비었으면 담을 때 저장한 마감일(meta.end)을 쓴다. 둘 다 없으면 null.
+ */
+export function noticeEnd(item: Pick<SavedItem, "itemId" | "meta">, programs: readonly Program[] | null | undefined): string | null {
+  const now = programs?.find((p) => p.id === item.itemId)?.period.end;
+  return now ?? (typeof item.meta.end === "string" ? item.meta.end : null);
+}
 
 export const VERDICT_ORDER: Verdict[] = ["미충족", "확인 필요", "충족", "판단 대상 아님"];
 export const sortRows = (rows: NoticeAnalysis["match"]["rows"]) => [...rows].sort((a, b) => VERDICT_ORDER.indexOf(a.verdict) - VERDICT_ORDER.indexOf(b.verdict));
@@ -104,18 +114,22 @@ export function openValues(job: AnalysisJob): OpenValue[] {
  *   진행 중 작업(live)의 상태로도 본다(새 결과가 오는 동안 개수가 흔들리지 않게).
  * - 마감 임박·미충족 요건: 담은 공고(savedNotices, 두 화면에서 담은 같은 공고는 하나)로 센다. 분석 진행과 상관없다.
  *   마감 임박은 마감일이 14일 안이면 아직 접수 전이어도 센다(screens 4.0.3: 자금·판로 거르기 isSoon 은 접수 중 목록을 줄이는 것이고,
- *   여기는 이미 담은 공고를 놓치지 않게 하는 것이라 일부러 다르다).
+ *   여기는 이미 담은 공고를 놓치지 않게 하는 것이라 일부러 다르다). 마감일은 심사 준비·노트와 같은 noticeEnd(지금 공고 자료 먼저, 없으면 저장값).
+ *   current 는 지금 공고 자료의 공고 목록. null 이면(받는 중·받지 못함·기다림 시간 초과) 저장한 마감일로 센다. 받는 중에 어떻게 보일지는 화면(Analysis.tsx CheckNow)이 정한다.
  */
-export function checkNowCounts(job: AnalysisJob, live: AnalysisJob | null, saved: readonly SavedItem[], checks: Record<string, CheckRecord>, today: string | null) {
+export function checkNowCounts(
+  job: AnalysisJob, live: AnalysisJob | null, saved: readonly SavedItem[], checks: Record<string, CheckRecord>, today: string | null, current: readonly Program[] | null = null,
+) {
   const running = job.status === "running" || live?.status === "running";
   const values = running ? [] : openValues(job);
   const programs = savedNotices(saved);
   const soon = today
-    ? programs.map((s) => (typeof s.meta.end === "string" ? dday(s.meta.end, today) : null)).filter((d): d is number => d !== null && d >= 0 && d <= SOON_DAYS)
+    ? programs.map((s) => dday(noticeEnd(s, current), today)).filter((d): d is number => d !== null && d >= 0 && d <= SOON_DAYS)
     : [];
   const checked = programs.map((s) => checks[s.itemId]).filter((r): r is CheckRecord => Boolean(r?.result));
   const unmet = gaps(checked.map((r) => ({ programId: r.programId, programTitle: "", result: r.result! }))).unmet;
-  return { conflicts: values.filter((o) => o.kind === "conflict"), missing: values.filter((o) => o.kind === "missing"), soon, unmet };
+  // notices: 담은 공고 수(같은 공고는 하나). 화면이 공고 목록을 받는 동안 틀을 미리 둘지 정하는 데 쓴다
+  return { conflicts: values.filter((o) => o.kind === "conflict"), missing: values.filter((o) => o.kind === "missing"), soon, unmet, notices: programs.length };
 }
 
 export const npsChangeText = (job: AnalysisJob) => {

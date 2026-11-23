@@ -54,6 +54,15 @@ PATENT_PAGE = ("KR102000001B1 - 신경망 연산 가속 장치 Info Application 
                "Filing date 2024-03-03 Application filed by 주식회사 가나다테크 filed Critical 주식회사 가나다테크 "
                "2025-09-01 Publication of KR20250000001A publication 2026-02-01 Publication of KR102000001B1 Status Active\n"
                "Abstract <img src=x onerror=alert(1)> 입력을 나눠 처리하는 가속 장치. Description\n")
+# 경쟁사(마바사에이아이) 특허 원문: 출원인이 경쟁사로 확인된다. 아래 MENTION 은 출원인이 다른 문서(언급 문서, 경쟁사 특허로 세지 않음)
+RIVAL_PATENT_PAGE = ("KR102000002B1 - 추론 칩 메모리 배치 Info Application number KR1020230000002A Original Assignee 주식회사 마바사에이아이 "
+                     "Filing date 2023-05-05 Application filed by 주식회사 마바사에이아이 filed Critical 주식회사 마바사에이아이 "
+                     "2024-11-01 Publication of KR20240000002A publication 2025-03-01 Publication of KR102000002B1 Status Active\n"
+                     "Abstract 추론 칩의 메모리 배치. Description\n")
+RIVAL_MENTION_PAGE = ("KR20250000003A - 다른 장치 Info Application number KR1020250000003A Original Assignee 주식회사 다른회사 "
+                      "Filing date 2025-01-01 Application filed by 주식회사 다른회사 filed Critical 주식회사 다른회사 "
+                      "2025-07-01 Publication of KR20250000003A Status Pending\nAbstract 마바사에이아이 칩을 인용한 장치. Description\n")
+PATENT_PAGES = {"KR102000001B1": PATENT_PAGE, "KR102000002B1": RIVAL_PATENT_PAGE, "KR20250000003A": RIVAL_MENTION_PAGE}
 ANSWERS = {
     "company_profile": {
         "name_ko": "가나다테크", "name_en": "Ganada Tech", "aliases": ["GanadaTech"], "is_korean": True, "founders": "홍길동",
@@ -107,6 +116,7 @@ class World:
         self.corps = CORPS              # 회사명 조회가 돌려줄 법인
         self.history: dict[str, list[dict]] = {}  # 법인등록번호 조회(이름 이력)가 돌려줄 기록
         self.history_status = 200
+        self.prompts: dict[str, str] = {}  # 모델 이름 → 마지막으로 받은 사용자 글(요약에 넘긴 자료 확인용)
 
     def hit(self, k: str) -> None:
         with self.lock:
@@ -131,6 +141,7 @@ class World:
         if path == "/api/v1/chat/completions":
             name = body["response_format"]["json_schema"]["name"]
             self.hit(name)
+            self.prompts[name] = "\n".join(str(m.get("content")) for m in body.get("messages") or [] if m.get("role") == "user")
             if self.fail_models:
                 return httpx.Response(500, json={"error": {"message": "model down"}})
             return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(ANSWERS[name], ensure_ascii=False)}}], "usage": {}})
@@ -140,6 +151,10 @@ class World:
             return httpx.Response(200, json={"results": [], "knowledge": [{"title": "Companies", "columns": PDL_COLS, "rows": PDL_ROWS,
                                                                            "sources": ["People Data Labs"]}]})
         self.hit("search")
+        if "site:patents.google.com" in q and "마바사" in q:
+            return httpx.Response(200, json={"results": [
+                {"title": "KR102000002B1 - 추론 칩 메모리 배치", "url": "https://patents.google.com/patent/KR102000002B1/ko", "description": "마바사"},
+                {"title": "KR20250000003A - 다른 장치", "url": "https://patents.google.com/patent/KR20250000003A/ko", "description": "마바사"}]})
         if "site:patents.google.com" in q:
             return httpx.Response(200, json={"results": [{"title": "KR102000001B1 - 신경망 연산 가속 장치",
                                                           "url": "https://patents.google.com/patent/KR102000001B1/ko", "description": "주식회사 가나다테크"}]})
@@ -226,7 +241,8 @@ class World:
 class FakeFetcher:
     def fetch(self, url):
         pub = url.split("/patent/")[1].split("/")[0]
-        return {"ok": pub == "KR102000001B1", "text": PATENT_PAGE, "title": f"{pub} - 신경망 연산 가속 장치 - Google Patents"}
+        text = PATENT_PAGES.get(pub, "")
+        return {"ok": bool(text), "text": text, "title": text.split(" Info ")[0] + " - Google Patents"}
 
 
 class NoFetch:
@@ -842,6 +858,86 @@ def test_old_snapshot_without_former_names_still_reads(world, tmp_path):
     got = m.company_analysis(d["companyId"])
     check_contract(got)
     assert got["sections"]["identity"]["result"]["corp"]["formerNames"] is None
+    assert old.read_text(encoding="utf-8") == text
+
+
+# ---------------------------------------------------------------- 경쟁사 원문 링크 기록(계약 8.9)
+
+def run_rivals(w: World) -> dict:
+    v = run_full(w)
+    w.manager.run_section(v["jobId"], "rivals_deep", [{"key": "rival:마바사에이아이", "name": "마바사", "nameEn": "Mabasa", "crno": None}], None)
+    after = wait_idle(w.manager, v["jobId"])
+    check_contract(after)
+    return after
+
+
+def test_rivals_deep_records_confirmed_patent_items(world):
+    """출원인이 원문에서 경쟁사로 확인된 특허만 낱건으로 남고(언급 문서는 빠짐), 건수 칸과 맞으며, 주소는 연 원문 주소다."""
+    r0 = run_rivals(world)["sections"]["rivals_deep"]["result"]["rivals"][0]
+    pt = r0["patents"]
+    assert pt["items"] == [{"id": "10-2023-0000002", "title": "추론 칩 메모리 배치", "assignee": "주식회사 마바사에이아이",
+                            "applicationNo": "10-2023-0000002", "filingDate": "2023-05-05", "publicationNo": "KR20240000002A",
+                            "registrationNo": "KR102000002B1", "url": "https://patents.google.com/patent/KR102000002B1/ko"}]
+    assert pt["total"] == len(pt["items"]) and pt["registered"] == sum(1 for p in pt["items"] if p["registrationNo"])
+    assert pt["byYear"] == {"2023": 1}
+    assert sections.RIVAL_PATENT_ITEMS == L.PATENT_PAGES_PER_COMPANY == 30  # 원문 확인 상한과 같아 확인된 특허가 잘리지 않는다
+
+
+def test_rivals_deep_records_articles_given_to_summary_model(world):
+    """요약에 넘긴 기사 목록이 그대로(같은 순서·같은 수) 남고, 주소는 받은 http·https 주소뿐이며 발췌 글(키가 섞일 수 있음)은 남기지 않는다."""
+    after = run_rivals(world)
+    r0 = after["sections"]["rivals_deep"]["result"]["rivals"][0]
+    inputs = r0["summary"]["inputArticles"]
+    assert r0["summary"]["business"] == "마바사는 칩을 만든다." and 1 <= len(inputs) <= sections.RIVAL_SUMMARY_ARTICLES
+    prompt = world.prompts["rival_summary"]
+    assert prompt.count("\n- (") == len(inputs)  # 넘긴 기사 줄 수와 같다(경쟁사 한 곳)
+    at = [prompt.index(f") {a['title']} — ") for a in inputs]
+    assert at == sorted(at)  # 넘긴 순서 그대로
+    assert all(a["url"].startswith("https://example.com/news/") and a["naverUrl"].startswith("https://example.com/naver/") for a in inputs)
+    assert all(set(a) == {"title", "url", "naverUrl", "date", "outlet"} and a["date"] and a["outlet"] for a in inputs)
+    saved = world.manager.store.path_of(after["jobId"]).read_text(encoding="utf-8")
+    assert DATA_KEY not in saved and '"inputArticles":[{' in saved and '"items":[{' in saved  # 키 지우기를 거쳐 파일에 남는다
+
+
+def test_rival_link_helpers_keep_only_web_urls():
+    """받은 주소만 옮기고 http·https 가 아닌 주소(javascript:, ftp:, 상대 주소, 빈 글, 없음)는 null 이다. 값을 만들어 내지 않는다."""
+    bad = ["javascript:alert(1)", "ftp://example.com/a", "//example.com/a", "/news/1", "", None, 123]
+    arts = [{"title": f"기사 {i}", "url": u, "naver_url": u, "date": "", "매체": "  "} for i, u in enumerate(bad)]
+    arts.append({"title": "<b>평문</b>", "url": "http://example.com/ok", "naver_url": "https://example.com/naver/ok", "date": "2026-11-01",
+                 "매체": "가나다일보", "description": "발췌 serviceKey=xxx"})
+    out = sections.summary_inputs(arts)
+    assert [(a["url"], a["naverUrl"], a["date"], a["outlet"]) for a in out[:-1]] == [(None, None, None, None)] * len(bad)
+    assert out[-1] == {"title": "<b>평문</b>", "url": "http://example.com/ok", "naverUrl": "https://example.com/naver/ok",
+                       "date": "2026-11-01", "outlet": "가나다일보"}
+    rows = [{"news": {"articles": [{"title": str(i)} for i in range(40)]}}, {"news": None}, {}]
+    assert [len(sections.summary_articles(r)) for r in rows] == [sections.RIVAL_SUMMARY_ARTICLES, 0, 0]
+    pats = [{"pub_no": f"KR10200000{i:02d}B1", "title": f"특허 {i}", "application_no": "", "url": u}
+            for i, u in enumerate(["javascript:alert(1)", "https://patents.google.com/patent/KR1020000001B1/ko", ""])]
+    items = sections.rival_patent_items(pats)
+    assert [p["url"] for p in items] == [None, "https://patents.google.com/patent/KR1020000001B1/ko", None]
+    assert items[0]["id"] == "KR1020000000B1" and items[0]["applicationNo"] is None and items[0]["assignee"] is None
+    many = [{"pub_no": f"KR{i:011d}B1", "title": "t", "url": ""} for i in range(sections.RIVAL_PATENT_ITEMS + 5)]
+    assert len(sections.rival_patent_items(many)) == sections.RIVAL_PATENT_ITEMS
+
+
+def test_old_snapshot_without_rival_links_still_reads(world, tmp_path):
+    """원문 링크 칸(patents.items, summary.inputArticles)이 생기기 전에 저장한 경쟁사 비교 자료: 그대로 읽히고, 응답은 계약 모양
+    (null = 기록 없음)이며 파일은 다시 쓰지 않는다. 예전 값(건수·요약 글)은 바뀌지 않는다."""
+    after = run_rivals(world)
+    path = world.manager.store.path_of(after["jobId"])
+    d = json.loads(path.read_text(encoding="utf-8"))
+    r0 = d["sections"]["rivals_deep"]["result"]["rivals"][0]
+    r0["patents"].pop("items")
+    r0["summary"].pop("inputArticles")
+    old = tmp_path / "old" / d["companyId"] / path.name
+    old.parent.mkdir(parents=True)
+    text = json.dumps(d, ensure_ascii=False)
+    old.write_text(text, encoding="utf-8")
+    got = jobs.Manager(Store(tmp_path / "old")).company_analysis(d["companyId"])
+    check_contract(got)
+    g0 = got["sections"]["rivals_deep"]["result"]["rivals"][0]
+    assert g0["patents"]["items"] is None and g0["summary"]["inputArticles"] is None
+    assert g0["patents"]["total"] == r0["patents"]["total"] == 1 and g0["summary"]["business"] == r0["summary"]["business"]
     assert old.read_text(encoding="utf-8") == text
 
 
