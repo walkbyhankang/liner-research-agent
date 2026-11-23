@@ -24,7 +24,7 @@ test("관련 자료는 분석에 있는 값만 붙이고, 없으면 빈 목록�
   const rel = (id) => QUESTIONS.find((q) => q.id === id).related(ctx).map((r) => r.text);
   assert.deepEqual(rel("q1"), ["설립 2020-09-15", "투자 라운드 10건", "중요 사건 14개"]);
   assert.deepEqual(rel("q6"), []);
-  assert.deepEqual(rel("q7"), ["고른 경쟁사 2곳"]);
+  assert.deepEqual(rel("q7"), ["비교 대상 경쟁사 2곳"]);
   const d12 = DD_ITEMS.find((d) => d.id === "d12").related(ctx)[0].text;
   assert.equal(d12, `투자 라운드 10건, 투자기관 ${job.merged.investors.length}곳 (보도)`);
   const ectx = { job: empty, confirmedRivals: 0, deepDone: false, papersDone: false };

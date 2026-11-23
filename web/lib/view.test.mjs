@@ -153,7 +153,7 @@ test("새로 분석에서 단락이 미확보로 끝나면 합친 값도 이전 
 
 test("깊이 비교 비용 줄은 고른 곳 수 기준이고, 5곳 기준 값은 서버 상한(고정 4 + 한 곳당 6)과 맞는다", () => {
   const est = DEFAULT_ESTIMATES.sections.rivals_deep;
-  assert.deepEqual(rivalsCost(est, 5), { liner: 34, text: "Liner 약 34회 (고른 5곳 기준, 한 곳당 약 6회)" });
+  assert.deepEqual(rivalsCost(est, 5), { liner: 34, text: "Liner 약 34회 (비교 대상 5곳 기준, 한 곳당 약 6회)" });
   assert.equal(rivalsCost(est, 2).liner, 16); // growth.limits.section_caps("rivals_deep", rivals=2) 의 Liner 합
   assert.equal(rivalsCost(est, 1).liner, 10);
   assert.equal(rivalsCost(est, 9).liner, 34); // 서버는 5곳까지만 받는다
@@ -181,6 +181,22 @@ test("처음 고르기: 아무것도 고르지 않았고 비교 자료가 있으
   assert.deepEqual(e5.added, [{ key: "user:가상다섯째", name: "가상다섯째" }]);
   assert.equal(e5.choices["user:가상다섯째"], "yes");
   assert.deepEqual(pickedRivals(five, empty).map((r) => r.key), ["rival:마바사", "rival:하하테크", "user:가상다섯째"]);
+  // 후보 목록에서 빠진 자동 후보("rival:…")는 직접 추가로 보이지 않게 처음 비교 대상에서 뺀다(비교 표에는 남는다)
+  const gone = structuredClone(j);
+  gone.sections.rivals_deep.result.rivals.push({ ...structuredClone(gone.sections.rivals_deep.result.rivals[0]), key: "rival:빠진후보", name: "빠진후보", nameEn: null });
+  gone.sections.rivals_deep.result.rivalSet.push("rival:빠진후보");
+  const eg = effectiveRivalChoices(gone, empty);
+  assert.deepEqual(eg.added, []);
+  assert.equal(eg.choices["rival:빠진후보"], undefined);
+  assert.deepEqual(pickedRivals(gone, empty).map((r) => r.key), ["rival:마바사", "rival:하하테크"]);
+  // 처음 비교 대상은 최대 5곳(서버 상한상 넘지 않지만 넘으면 앞 5곳)
+  const six = structuredClone(five);
+  for (const n of ["여섯째", "일곱째"]) {
+    six.sections.rivals_deep.result.rivals.push({ ...structuredClone(extra), key: `user:${n}`, name: n });
+    six.sections.rivals_deep.result.rivalSet.push(`user:${n}`);
+  }
+  six.sections.rivals_deep.result.rivalSet.unshift("rival:아자차랩스", "rival:카타파");
+  assert.equal(pickedRivals(six, empty).length, 5);
   // 고른 것을 모두 다시 풀었으면(touched) 처음 고르기로 돌아가지 않는다
   assert.deepEqual(pickedRivals(j, { choices: {}, added: [], touched: true }), []);
   // 비교 자료가 없으면 처음 고르기도 없다

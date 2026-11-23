@@ -496,14 +496,14 @@ function CheckNow({ job }: { job: AnalysisJob }) {
 }
 
 /**
- * 경쟁사 분석 줄(screens 4.0): 기술 단락 아래 한 줄. 경쟁사 후보 수와 고른 수, 경쟁사 분석 화면으로 가는 링크.
+ * 경쟁사 분석 줄(screens 4.0): 기술 단락 아래 한 줄. 경쟁사 후보 수와 비교 대상 수, 경쟁사 분석 화면으로 가는 링크.
  * 후보를 받기 전·뒤 모두 한 줄이라 profile 이 와도 높이가 바뀌지 않는다
  */
 function RivalsLine({ job }: { job: AnalysisJob }) {
   const c = useCompany();
   const phase = phaseOf(job.sections.profile);
   const text =
-    phase === "loading" ? "국내 경쟁사 후보 확인 중" : phase === "unavailable" ? "국내 경쟁사 후보 미확보" : `국내 경쟁사 후보 ${visibleRivals(job).length}곳, 고른 곳 ${pickedRivals(job, c.local.rivalChoices).length}곳`;
+    phase === "loading" ? "경쟁사 후보 확인 중" : phase === "unavailable" ? "경쟁사 후보 미확보" : `경쟁사 후보 ${visibleRivals(job).length}곳, 비교 대상 ${pickedRivals(job, c.local.rivalChoices).length}곳`;
   return (
     <div className="no-print flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-ink pt-5" data-rivals-line>
       <p className={phase === "loading" ? "text-sub" : ""}>{text}</p>

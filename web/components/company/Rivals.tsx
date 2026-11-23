@@ -1,12 +1,14 @@
 "use client";
 
-// 경쟁사 분석(screens 4B, 2026-11-23 화면 구조 개편): 회사 분석의 경쟁사 단락(후보 고르기)과 경쟁사 깊이 비교 결과를 단계 화면으로 옮겨 다시 짰다.
+// 경쟁사 분석(screens 4B, 2026-11-23 화면 구조 개편): 회사 분석의 경쟁사 단락(후보 가운데 비교 대상 정하기)과 경쟁사 깊이 비교 결과를 단계 화면으로 옮겨 다시 짰다.
+// 용어(2026-11-23 사용자 결정): 경쟁사 후보(분석이 찾은 회사) / 비교 대상(사용자가 비교하기로 한 회사, 최대 MAX_RIVALS 곳) / 포함·제외(후보마다 단추) /
+// 경쟁사 직접 추가 / 비교 대상 정하기(펼친 제목)·비교 대상 변경(접힌 줄 단추)
 // 새 서버 수집은 없다. 후보는 merged.rivals, 비교 자료는 누를 때만 받는 rivals_deep(유료) 결과다. 점수·순위·종합 판정은 만들지 않는다.
 // 배치 둘(screens 4B.0, 2026-11-23 오케스트레이터 검토 반영):
-// - 고르기 먼저: 고른 경쟁사가 없거나 비교 자료가 없을 때. 경쟁사 고르기(펼친 채) → 나란히 비교(비교 자료 받기 + 우리 회사 열).
-// - 비교 먼저: 고른 경쟁사와 비교 자료가 있을 때. 나란히 비교(머리 아래 "고른 경쟁사 n곳: …" 한 줄을 펼치면 고르기) → 경쟁사별 사업과 최근 변화 → 경쟁사에 투자한 곳.
-// 고르기가 저장된 비교 자료와 달라도 "바뀌었다" 안내는 띄우지 않는다(사용자 결정 2026-11-23). 표는 저장된 자료의 회사 그대로이고 "비교 자료 다시 받기"로 다시 받는다.
-// 배치는 이 화면을 열 때 한 번 정하고 방문 동안 바꾸지 않는다(고르기·받기 중에 덩어리 순서가 바뀌어 화면이 밀리지 않게).
+// - 정하기 먼저: 비교 대상이 없거나 비교 자료가 없을 때. 비교 대상 정하기(펼친 채) → 나란히 비교(비교 자료 받기 + 우리 회사 열).
+// - 비교 먼저: 비교 대상과 비교 자료가 있을 때. 나란히 비교(머리 아래 "비교 대상 n곳: …" 한 줄을 펼치면 정하기) → 경쟁사별 사업과 최근 변화 → 경쟁사에 투자한 곳.
+// 비교 대상이 저장된 비교 자료와 달라도 "바뀌었다" 안내는 띄우지 않는다(사용자 결정 2026-11-23). 표는 저장된 자료의 회사 그대로이고 "비교 자료 다시 받기"로 다시 받는다.
+// 배치는 이 화면을 열 때 한 번 정하고 방문 동안 바꾸지 않는다(정하기·받기 중에 덩어리 순서가 바뀌어 화면이 밀리지 않게).
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DEFAULT_ESTIMATES, type AnalysisJob, type RivalDeep, type RivalsDeepResult } from "@/lib/contract";
@@ -15,7 +17,7 @@ import { elapsedText, fmtDay, fmtMonthDayTime, fmtTime, shortCompany, todayKST }
 import { isExistingInvestor } from "@/lib/finder";
 import { addRival, setRivalChoice } from "@/lib/local";
 import { userRivalKey } from "@/lib/names";
-import { effectiveRivalChoices, errorSentence, phaseOf, pickedRivals, rivalsCost, visibleRivals, type PickedRival } from "@/lib/view";
+import { MAX_RIVALS, effectiveRivalChoices, errorSentence, phaseOf, pickedRivals, rivalsCost, visibleRivals, type PickedRival } from "@/lib/view";
 import { DetailRow, Disclosure, Placeholder, SourceLine, StatusWord, nb, useMore } from "@/components/kit";
 import { FinanceBars, InvestBars, NpsLine, PatentLine, type InvestBar } from "@/components/charts";
 import { useCompany, useTicker } from "@/components/company/context";
@@ -27,12 +29,12 @@ export function RivalsScreen() {
   const c = useCompany();
   const job = c.job;
   const [layout, setLayout] = useState<"pick" | "compare" | null>(null);
-  // 회사 분석과 이 브라우저 고르기를 받은 뒤 한 번 정한다(그리는 중 상태 맞추기, 효과 없이)
+  // 회사 분석과 이 브라우저의 비교 대상을 받은 뒤 한 번 정한다(그리는 중 상태 맞추기, 효과 없이)
   if (layout === null && job && c.local.loaded) setLayout(job.sections.rivals_deep.result && pickedRivals(job, c.local.rivalChoices).length > 0 ? "compare" : "pick");
   const head = (
     <>
       <h1 className="text-2xl font-semibold">경쟁사 분석</h1>
-      <p className="mt-2 max-w-[680px]">회사 분석에서 찾은 국내 경쟁사 후보를 고르고, 고른 곳의 재무·고용·투자·특허를 우리 회사와 같은 항목으로 나란히 봅니다.</p>
+      <p className="mt-2 max-w-[680px]">경쟁사 후보 가운데 비교 대상을 정하면, 그 회사들의 재무·고용·투자·특허를 우리 회사와 같은 항목으로 나란히 봅니다.</p>
     </>
   );
   if (!job || !layout) {
@@ -59,7 +61,7 @@ export function RivalsScreen() {
       {result && <RivalNotes job={job} result={result} />}
       {result && <Backers job={job} result={result} />}
       <p className="no-print mt-10 flex max-w-[760px] flex-wrap items-center gap-x-2 border-t border-rule pt-4 text-sm">
-        <span>고른 경쟁사는 심사 준비의 &lsquo;경쟁사 조건이라면?&rsquo;에도 씁니다.</span>
+        <span>비교 대상 경쟁사는 심사 준비의 &lsquo;경쟁사 조건이라면?&rsquo;에도 씁니다.</span>
         <Link href={`/c/${c.cid}/review`} className="link">
           심사 준비 보기
         </Link>
@@ -92,34 +94,41 @@ const Lines = ({ n = 4 }: { n?: number }) => (
   </span>
 );
 
-// ---------------------------------------------------------------- 경쟁사 고르기(4B.1, 옛 경쟁사 단락)
+// ---------------------------------------------------------------- 비교 대상 정하기(4B.1, 옛 경쟁사 단락)
 
-/** 고르기 먼저 배치: 덩어리 "경쟁사 고르기"(펼친 채) */
+/** 정하기 먼저 배치: 덩어리 "비교 대상 정하기"(펼친 채) */
 function Picker({ job }: { job: AnalysisJob }) {
   const c = useCompany();
   const phase = phaseOf(job.sections.profile);
+  // "후보 n곳 중 k곳"은 후보에서 포함한 수다. 직접 추가한 회사가 있으면 "중"이 틀리지 않게 나눠 쓴다
+  const n = visibleRivals(job).length;
+  const picked = pickedRivals(job, c.local.rivalChoices);
+  const added = picked.filter((p) => p.key.startsWith("user:")).length;
+  const summary = added
+    ? `비교 대상 ${picked.length}곳(경쟁사 후보 ${n}곳 중 ${picked.length - added}곳, 직접 추가 ${added}곳)`
+    : `경쟁사 후보 ${n}곳 중 비교 대상 ${picked.length}곳`;
   return (
-    <Block id="pick" title="경쟁사 고르기" summary={phase === "loading" ? null : `국내 경쟁사 후보 ${visibleRivals(job).length}곳, 고른 곳 ${pickedRivals(job, c.local.rivalChoices).length}곳`}>
+    <Block id="pick" title="비교 대상 정하기" summary={phase === "loading" ? null : summary}>
       <PickerBody job={job} compact={false} />
     </Block>
   );
 }
 
 /**
- * 비교 먼저 배치: "나란히 비교" 머리 아래 한 줄 "고른 경쟁사 n곳: …"과 "고르기 바꾸기". 펼치면 고르기 본문(compact).
+ * 비교 먼저 배치: "나란히 비교" 머리 아래 한 줄 "비교 대상 n곳: …"과 "비교 대상 변경". 펼치면 정하기 본문(compact).
  * 펼친 안에는 더 여는 것을 두지 않는다(0절 깊이 규칙: 이 줄 → 후보 줄 자세히까지)
  */
 function PickerFold({ job }: { job: AnalysisJob }) {
   const c = useCompany();
   const picked = pickedRivals(job, c.local.rivalChoices);
-  const text = picked.length ? `고른 경쟁사 ${picked.length}곳: ${picked.map((p) => p.name).join(", ")}` : "고른 경쟁사 없음";
+  const text = picked.length ? `비교 대상 ${picked.length}곳: ${picked.map((p) => p.name).join(", ")}` : "비교 대상 없음";
   return (
     <Disclosure
-      text="경쟁사 고르기"
+      text="비교 대상 정하기"
       memoryKey={`${c.cid}:rv:fold`}
       className="mb-3"
       label={<span className="font-medium" data-picked-summary>{text}</span>}
-      right={<span className="whitespace-nowrap text-sm font-medium">고르기 바꾸기</span>}
+      right={<span className="whitespace-nowrap text-sm font-medium">비교 대상 변경</span>}
     >
       <div className="py-2" data-picker-fold>
         <PickerBody job={job} compact />
@@ -134,7 +143,7 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
   const phase = phaseOf(env);
   const tick = useTicker(phase === "loading", c.receivedAt);
   const k = (s: string) => `${c.cid}:ri:${s}`;
-  // 처음 고르기: 아무것도 고르지 않았고 비교 자료가 있으면 그 자료가 비교한 곳을 "맞음"으로 보인다. 처음 바꿀 때 그 고르기를 먼저 저장한다
+  // 처음 비교 대상: 아무것도 정하지 않았고 비교 자료가 있으면 그 자료가 비교한 곳을 포함한 것으로 보인다. 처음 바꿀 때 그것을 먼저 저장한다
   const eff = effectiveRivalChoices(job, c.local.rivalChoices);
   const seed = eff.implicit ? { choices: eff.choices, added: eff.added } : undefined;
   const candidates = visibleRivals(job);
@@ -143,6 +152,8 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
   const [name, setName] = useState("");
   const pendingFacts = job.merged.pending.includes("rivals.facts");
   const choose = (key: string, v: "yes" | "no" | null) => setRivalChoice(c.cid, key, v, seed);
+  // 비교 대상은 최대 MAX_RIVALS 곳(서버 계약 2.4). 다 차면 아직 포함하지 않은 후보의 "포함"과 직접 추가를 막는다(포함한 곳의 "제외"는 된다)
+  const full = pickedRivals(job, c.local.rivalChoices).length >= MAX_RIVALS;
 
   const row = (r: (typeof candidates)[number], memo: string) => (
     <div className="flex flex-col gap-2 py-1 sm:flex-row sm:items-start">
@@ -167,7 +178,7 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
           <SourceLine key={i} source={s} />
         ))}
       </DetailRow>
-      <YesNo name={r.name} value={eff.choices[r.key]} onSet={(v) => choose(r.key, v)} />
+      <YesNo name={r.name} value={eff.choices[r.key]} onSet={(v) => choose(r.key, v)} full={full} />
     </div>
   );
 
@@ -177,21 +188,28 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
       onSubmit={(e) => {
         e.preventDefault();
         const n = name.trim();
-        if (n.length < 2) return;
+        if (n.length < 2 || full) return;
         addRival(c.cid, userRivalKey(n), n, seed);
         setName("");
       }}
     >
       <label className="min-w-0 flex-1 text-sm">
         회사 이름
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className="mt-1 block min-h-11 w-full rounded-md border border-edge bg-paper px-3 text-base outline-none focus:border-ledger" />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={60}
+          disabled={full}
+          aria-describedby={full ? `${c.cid}-rival-max` : undefined}
+          className="mt-1 block min-h-11 w-full rounded-md border border-edge bg-paper px-3 text-base outline-none focus:border-ledger disabled:bg-wash"
+        />
       </label>
-      <button type="submit" className="btn">
-        넣기
+      <button type="submit" className="btn" disabled={full}>
+        추가
       </button>
     </form>
   );
-  // 펼친 줄 안(compact)에서는 후보를 모두 보이고, 아님으로 고른 후보·직접 넣기도 더 접지 않고 이어서 둔다
+  // 펼친 줄 안(compact)에서는 후보를 모두 보이고, 제외한 후보·직접 추가도 더 접지 않고 이어서 둔다
   const firstN = compact ? shown.length : 5;
 
   return (
@@ -205,7 +223,7 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
         </div>
       ) : (
         <>
-          <p className="text-sm">맞는 경쟁사를 고르면 비교와 심사 준비의 &lsquo;경쟁사 조건이라면?&rsquo;에 씁니다. 국내 기업만 후보로 보여 줍니다.</p>
+          <p className="text-sm">비교 대상에 포함한 경쟁사는 나란히 비교와 심사 준비의 &lsquo;경쟁사 조건이라면?&rsquo;에 씁니다. 국내 기업만 후보로 보여 줍니다.</p>
           {phase === "unavailable" && (
             <p className="mt-2 flex flex-wrap items-center gap-2">
               <StatusWord w="unavailable" />
@@ -223,17 +241,22 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
                     <span className="font-medium">{a.name}</span>
                     <StatusWord w="edited" />
                   </span>
-                  <YesNo name={a.name} value={eff.choices[a.key]} onSet={(v) => choose(a.key, v)} />
+                  <YesNo name={a.name} value={eff.choices[a.key]} onSet={(v) => choose(a.key, v)} full={full} />
                 </li>
               ))}
             </ul>
+          )}
+          {full && (
+            <p id={`${c.cid}-rival-max`} className="mt-2 text-sm font-medium" data-rival-max>
+              비교 대상은 최대 {MAX_RIVALS}곳입니다.
+            </p>
           )}
           {pendingFacts && <p className="mt-2 text-sm text-sub">후보를 더 찾고 있습니다 (보통 3분 안에 끝남)</p>}
           {compact ? (
             <div className="mt-3 space-y-3">
               {noList.length > 0 && (
                 <div>
-                  <p className="text-sm font-semibold">아님으로 고른 후보 {noList.length}곳</p>
+                  <p className="text-sm font-semibold">제외한 후보 {noList.length}곳</p>
                   <ul className="mt-1 divide-y divide-rule border-y border-rule">
                     {noList.map((r) => (
                       <li key={r.key}>{row(r, k(`n-${r.key}`))}</li>
@@ -242,7 +265,7 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
                 </div>
               )}
               <div>
-                <p className="text-sm font-semibold">경쟁사 직접 넣기</p>
+                <p className="text-sm font-semibold">경쟁사 직접 추가</p>
                 {addForm}
               </div>
             </div>
@@ -258,7 +281,7 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
               </Disclosure>
             )}
             {noList.length > 0 && (
-              <Disclosure text={`아님으로 고른 후보 ${noList.length}곳`} memoryKey={k("no")}>
+              <Disclosure text={`제외한 후보 ${noList.length}곳`} memoryKey={k("no")}>
                 <ul className="divide-y divide-rule">
                   {noList.map((r) => (
                     <li key={r.key}>{row(r, k(`n-${r.key}`))}</li>
@@ -266,7 +289,7 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
                 </ul>
               </Disclosure>
             )}
-            <Disclosure text="경쟁사 직접 넣기" memoryKey={k("add")}>
+            <Disclosure text="경쟁사 직접 추가" memoryKey={k("add")}>
               {addForm}
             </Disclosure>
           </div>
@@ -277,15 +300,16 @@ function PickerBody({ job, compact }: { job: AnalysisJob; compact: boolean }) {
   );
 }
 
-function YesNo({ name, value, onSet }: { name: string; value: "yes" | "no" | undefined; onSet: (v: "yes" | "no" | null) => void }) {
+/** 후보마다 "포함"/"제외"(저장값 yes/no). 비교 대상이 다 찼으면(full) 아직 포함하지 않은 곳의 "포함"을 막는다 */
+function YesNo({ name, value, onSet, full = false }: { name: string; value: "yes" | "no" | undefined; onSet: (v: "yes" | "no" | null) => void; full?: boolean }) {
   return (
     // 넓은 화면에서는 세로선으로 줄 자세히(꺾쇠)와 떼어, 누르는 곳 셋이 한 덩어리로 보이지 않게 한다
-    <div role="group" aria-label={`${name} 경쟁사 고르기`} className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:self-center sm:border-l sm:border-rule sm:pl-4">
-      <button type="button" className={`btn ${value === "yes" ? "btn-pressed" : ""}`} aria-pressed={value === "yes"} onClick={() => onSet(value === "yes" ? null : "yes")}>
-        맞음
+    <div role="group" aria-label={`${name} 비교 대상`} className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:self-center sm:border-l sm:border-rule sm:pl-4">
+      <button type="button" className={`btn ${value === "yes" ? "btn-pressed" : ""}`} aria-pressed={value === "yes"} disabled={full && value !== "yes"} onClick={() => onSet(value === "yes" ? null : "yes")}>
+        포함
       </button>
       <button type="button" className={`btn ${value === "no" ? "btn-pressed" : ""}`} aria-pressed={value === "no"} onClick={() => onSet(value === "no" ? null : "no")}>
-        아님
+        제외
       </button>
     </div>
   );
@@ -300,7 +324,8 @@ function Compare({ job, fold }: { job: AnalysisJob; fold: ReactNode }) {
   const [ask, setAsk] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const picked = pickedRivals(job, c.local.rivalChoices);
-  const sent = picked.slice(0, 5);
+  // 비교 대상은 정할 때 MAX_RIVALS 곳에서 막는다. 요청 본문 자르기는 옛 기록(상한 전)에 대한 방어로만 남긴다
+  const sent = picked.slice(0, MAX_RIVALS);
   const est = job.estimates?.sections?.rivals_deep ?? DEFAULT_ESTIMATES.sections.rivals_deep;
   const running = env.status === "running" || env.status === "waiting" || env.rerun?.status === "running";
   const cost = rivalsCost(est, picked.length);
@@ -330,13 +355,13 @@ function Compare({ job, fold }: { job: AnalysisJob; fold: ReactNode }) {
       maxWidth={`max(760px, calc(${tableW} * 15 / 16))`}
       right={result && env.analyzedAt ? <span className="num text-sm text-sub">{fmtMonthDayTime(env.analyzedAt)} 실행</span> : null}
     >
-      {/* 비교 먼저 배치: 머리 바로 아래 고른 경쟁사 한 줄(펼치면 고르기). 그 아래 다시 받기(지금 고른 경쟁사로, 유료라 누를 때만) */}
+      {/* 비교 먼저 배치: 머리 바로 아래 비교 대상 한 줄(펼치면 정하기). 그 아래 다시 받기(지금 비교 대상으로, 유료라 누를 때만) */}
       {fold && <div className="max-w-[760px]">{fold}</div>}
       <div className="max-w-[760px] space-y-3">
         {running ? (
           <RunningLine text="비교 자료를 받고 있습니다" env={env} />
         ) : result ? (
-          // 저장된 비교 자료가 있으면 표는 그 회사들 그대로. 지금 고른 경쟁사로 다시 받을 수 있게 단추와 비용만 둔다(안내 띠 없음)
+          // 저장된 비교 자료가 있으면 표는 그 회사들 그대로. 지금 비교 대상으로 다시 받을 수 있게 단추와 비용만 둔다(안내 띠 없음)
           canRun && (
             <div className="flex flex-wrap items-center gap-3" data-rerun>
               <button type="button" className="btn" onClick={() => setAsk(true)}>
@@ -350,9 +375,8 @@ function Compare({ job, fold }: { job: AnalysisJob; fold: ReactNode }) {
             {env.status === "unavailable" && env.error && <p className="font-medium text-amber">비교 자료를 받지 못했습니다: {errorSentence(env.error)}</p>}
             <p>
               {picked.length
-                ? `고른 경쟁사 ${Math.min(5, picked.length)}곳의 법인, 재무, 국민연금, 투자, 특허, 최근 기사를 받아 아래 표에 채웁니다.`
-                : "‘맞음’으로 고른 경쟁사가 있으면 재무, 고용, 투자, 특허를 받아 우리 회사와 나란히 봅니다."}
-              {picked.length > 5 && " 고른 순서로 앞의 5곳만 받습니다."}
+                ? `비교 대상 ${sent.length}곳의 법인, 재무, 국민연금, 투자, 특허, 최근 기사를 받아 아래 표에 채웁니다.`
+                : "비교 대상을 정하면 재무, 고용, 투자, 특허를 받아 우리 회사와 나란히 봅니다."}
             </p>
             {!job.isExample && (
               <div className="flex flex-wrap items-center gap-3">
@@ -431,7 +455,7 @@ function CompareTable({ cols }: { cols: CompareColumn[] }) {
       <div className="mt-5 hidden sm:block">
         <div ref={box} role="region" aria-label="비교 표, 옆으로 밀어 볼 수 있습니다" tabIndex={0} className="cmp-scroll overflow-x-auto" data-compare-scroll>
           <table className="cmp num w-full border-t-2 border-ink text-sm" style={{ maxWidth: maxW }} data-compare="table">
-            <caption className="sr-only">우리 회사와 고른 경쟁사 나란히 비교</caption>
+            <caption className="sr-only">우리 회사와 비교 대상 경쟁사 나란히 비교</caption>
             <thead>
               <tr className="border-b border-rule bg-wash text-left align-bottom">
                 <th scope="col" className="cmp-item py-2 pl-2 pr-3 font-medium text-sub">
@@ -674,7 +698,7 @@ function Backers({ job, result }: { job: AnalysisJob; result: RivalsDeepResult }
   return (
     <Block id="backers" title="경쟁사에 투자한 곳">
       <p className="flex flex-wrap items-center gap-x-2">
-        <span>고른 경쟁사의 투자 라운드 자료에 나온 투자기관입니다. 자금 조달 투자받는 돈에서 이름이 같은 모태펀드 운용사에 &lsquo;경쟁사에 투자&rsquo;를 붙입니다.</span>
+        <span>비교 대상 경쟁사의 투자 라운드 자료에 나온 투자기관입니다. 자금 조달 투자받는 돈에서 이름이 같은 모태펀드 운용사에 &lsquo;경쟁사에 투자&rsquo;를 붙입니다.</span>
         <Link href={`/c/${c.cid}/funding?lane=invest`} className="link">
           투자받는 돈에서 보기
         </Link>
@@ -687,7 +711,7 @@ function Backers({ job, result }: { job: AnalysisJob; result: RivalsDeepResult }
           ))}
         </div>
       ) : (
-        <p className="mt-3">고른 경쟁사의 투자 라운드 자료에서 투자기관을 찾지 못했습니다.</p>
+        <p className="mt-3">비교 대상 경쟁사의 투자 라운드 자료에서 투자기관을 찾지 못했습니다.</p>
       )}
       <SourceLine word="reported" label="People Data Labs (Liner Premium) 투자 라운드" detail={`${fmtDay(result.queriedAt)} 조회`} />
     </Block>

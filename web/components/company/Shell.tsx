@@ -157,11 +157,11 @@ function StepNav() {
   const running = Boolean(job && job.status === "running");
   // 단계(2026-11-23 화면 구조 개편): 회사 분석 · 경쟁사 분석 · 자금 조달 · 심사 준비 · 노트. 판로는 자금 조달의 갈래다(screens 5.2).
   // 좁은 화면은 짧은 이름(short)을 보이고 화면 읽기 이름은 늘 전체 이름이다(보이는 글이 이름 안에 들어 있다, WCAG 2.5.3).
-  // 단계 옆 개수(screens 1.1): 경쟁사 분석 = 고른 경쟁사, 자금 조달 = 거기서 담은 것 전체(같은 공고는 하나, 입찰공고 포함),
+  // 단계 옆 개수(screens 1.1): 경쟁사 분석 = 비교 대상, 자금 조달 = 거기서 담은 것 전체(같은 공고는 하나, 입찰공고 포함),
   // 심사 준비 = 담은 항목 전체(입찰공고 제외). 0이면 붙이지 않는다. 회사 분석·노트에는 붙이지 않는다
   const items = [
     { href: base, label: "회사 분석", short: "회사", current: path === base, disabled: false, n: 0, sr: "", unit: "개" },
-    { href: `${base}/rivals`, label: "경쟁사 분석", short: "경쟁사", current: path.startsWith(`${base}/rivals`), disabled: false, n: pickedRivals(job, c.local.rivalChoices).length, sr: "고른 경쟁사", unit: "곳" },
+    { href: `${base}/rivals`, label: "경쟁사 분석", short: "경쟁사", current: path.startsWith(`${base}/rivals`), disabled: false, n: pickedRivals(job, c.local.rivalChoices).length, sr: "비교 대상", unit: "곳" },
     { href: `${base}/funding`, label: "자금 조달", short: "자금", current: path.startsWith(`${base}/funding`), disabled: !officialReady, n: fundingCount(c.local), sr: "담은 자금·판로 후보", unit: "개" },
     { href: `${base}/review`, label: "심사 준비", short: "심사", current: path.startsWith(`${base}/review`), disabled: false, n: reviewCount(c.local), sr: "담은 항목", unit: "개" },
     { href: `${base}/note`, label: "노트", short: "노트", current: path.startsWith(`${base}/note`), disabled: false, n: 0, sr: "", unit: "개" },

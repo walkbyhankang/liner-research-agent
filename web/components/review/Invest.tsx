@@ -422,7 +422,7 @@ function RelatedList({ items }: { items: Related[] }) {
 }
 
 function prepCtx(c: ReturnType<typeof useCompany>, job: AnalysisJob): PrepContext {
-  // 고른 경쟁사 수는 경쟁사 분석 화면과 같은 셈(처음 고르기 포함, screens 4B.1)
+  // 비교 대상 경쟁사 수는 경쟁사 분석 화면과 같은 셈(처음 비교 대상 포함, screens 4B.1)
   const confirmedRivals = pickedRivals(job, c.local.rivalChoices).length;
   return { job, confirmedRivals, deepDone: Boolean(job.sections.rivals_deep.result), papersDone: Boolean(job.sections.papers.result) };
 }

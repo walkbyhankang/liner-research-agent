@@ -42,15 +42,18 @@ export const TOC_TEXT: Record<Phase, string> = { loading: "확인 중", done: "�
 export const isSlow = (env: AnyEnv | null | undefined, extra = 0) =>
   Boolean(env && env.expectedSeconds && env.seconds !== null && env.seconds + extra > env.expectedSeconds * 2);
 
+/** 비교 대상 경쟁사 상한. 서버 계약 2.4 `rivals_deep` 요청 1~5곳과 같다. 경쟁사 분석에서 포함·직접 추가를 이 수에서 막는다(screens 4B.1) */
+export const MAX_RIVALS = 5;
+
 /**
  * 경쟁사 비교 자료(rivals_deep) 비용 줄. 서버 예상값은 5곳 기준 호출 수(liner)와 한 곳당 호출 수(perRival)다.
- * 고른 곳 수(1~5)로 바꿔 "Liner 약 {m}회 (고른 {k}곳 기준, 한 곳당 약 {p}회)"로 쓴다. 한 곳당 값이 없으면 5곳 기준 그대로.
+ * 비교 대상 수(1~5)로 바꿔 "Liner 약 {m}회 (비교 대상 {k}곳 기준, 한 곳당 약 {p}회)"로 쓴다. 한 곳당 값이 없으면 5곳 기준 그대로.
  */
 export function rivalsCost(est: { liner: number; perRival: number | null }, picked: number): { liner: number; text: string } {
   const k = Math.min(5, Math.max(1, picked));
   if (!est.perRival) return { liner: est.liner, text: `Liner 약 ${est.liner}회 (경쟁사 5곳 기준)` };
   const m = Math.max(0, est.liner - est.perRival * (5 - k));
-  return { liner: m, text: `Liner 약 ${m}회 (고른 ${k}곳 기준, 한 곳당 약 ${est.perRival}회)` };
+  return { liner: m, text: `Liner 약 ${m}회 (비교 대상 ${k}곳 기준, 한 곳당 약 ${est.perRival}회)` };
 }
 
 /** 미확보 사유 문장(screens 1.5). 코드에 맞는 문장이 없을 때만 서버 문장을 쓴다 */
@@ -234,27 +237,27 @@ export type RivalChoiceMap = Record<string, "yes" | "no">;
 export type RivalChoicesLike = { choices: RivalChoiceMap; added: { key: string; name: string }[]; touched?: boolean };
 
 /**
- * 이 브라우저의 경쟁사 고르기(screens 4B.1 "처음 고르기"). 아직 한 번도 고르지 않았고(맞음·아님·직접 넣기 모두 없음, touched 아님)
- * 받아 둔 비교 자료가 있으면, 그 자료가 비교한 후보(rivalSet 가운데 후보 목록에 있는 곳)를 "맞음"으로 본다.
- * 예시 회사나 같은 분석을 처음 연 사람이 "경쟁사 고르기가 바뀌었습니다"부터 보지 않게 한다. implicit 이면 저장된 고르기가 아니다.
+ * 이 브라우저의 비교 대상(screens 4B.1 "처음 비교 대상"). 아직 한 번도 정하지 않았고(포함·제외·직접 추가 모두 없음, touched 아님)
+ * 받아 둔 비교 자료가 있으면, 그 자료가 비교한 경쟁사(rivalSet)를 비교 대상에 포함한 것으로 본다(최대 MAX_RIVALS 곳).
+ * 처음 연 사람의 비교 대상·단계 메뉴 개수가 저장된 비교 자료와 같게 한다. implicit 이면 저장된 비교 대상이 아니다.
  */
 export function effectiveRivalChoices(job: AnalysisJob | null, rc: RivalChoicesLike): RivalChoicesLike & { implicit: boolean } {
   const untouched = !rc.touched && Object.keys(rc.choices).length === 0 && rc.added.length === 0;
   const deep = job?.sections.rivals_deep.result;
   const set = deep?.rivalSet ?? [];
   if (!job || !deep || !untouched || !set.length) return { ...rc, implicit: false };
-  // 후보 목록에 없는 열쇠(직접 넣은 회사 "user:…" 등)는 비교 자료의 이름으로 직접 넣은 회사에 둔다. 그래야 처음 연 사람의
-  // 고른 목록·단계 메뉴 개수·비교 표가 저장된 비교 자료와 같다
+  // 직접 추가한 회사 열쇠("user:…")만 비교 자료의 이름으로 직접 추가한 회사에 둔다. 후보 목록에서 빠진 자동 후보("rival:…")는
+  // 직접 입력처럼 보이면 안 되므로 처음 비교 대상에서 뺀다(비교 표는 저장된 비교 자료의 회사를 그대로 보여 표에는 남는다)
   const known = new Set(visibleRivals(job).map((r) => r.key));
   const names = new Map(deep.rivals.map((r) => [r.key, r.name]));
-  const keys = set.filter((k) => known.has(k) || names.has(k));
+  const keys = set.filter((k) => known.has(k) || (k.startsWith("user:") && names.has(k))).slice(0, MAX_RIVALS);
   const choices: RivalChoiceMap = Object.fromEntries(keys.map((k) => [k, "yes" as const]));
   const added = keys.filter((k) => !known.has(k)).map((k) => ({ key: k, name: names.get(k)! }));
   return { choices, added, implicit: keys.length > 0 };
 }
 
 export type PickedRival = { key: string; name: string; nameEn: string | null };
-/** 고른 경쟁사("맞음")를 보이는 순서로: 후보 목록 순서, 그다음 직접 넣은 회사. 비교 자료 요청 본문·심사 준비·단계 메뉴가 같은 목록을 쓴다(D-05) */
+/** 비교 대상(포함한 경쟁사)을 보이는 순서로: 후보 목록 순서, 그다음 직접 추가한 회사. 비교 자료 요청 본문·심사 준비·단계 메뉴가 같은 목록을 쓴다(D-05) */
 export function pickedRivals(job: AnalysisJob | null, rc: RivalChoicesLike): PickedRival[] {
   const eff = effectiveRivalChoices(job, rc);
   const yes = (k: string) => eff.choices[k] === "yes";

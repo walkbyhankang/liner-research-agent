@@ -48,7 +48,7 @@ export const QUESTIONS: Question[] = [
   { id: "q4", group: "매출과 성장", text: "성장을 이끄는 것은 가격, 판매량, 새 고객 중 무엇인가요?", related: (c) => (fin(c).length ? [{ text: `매출 ${fin(c).length}개 사업연도`, to: "finance" }] : []) },
   { id: "q5", group: "매출과 성장", text: "영업은 어떤 과정을 거치고 얼마나 걸리나요? 계약 성사 비율은 어떻게 바뀌어 왔나요?", related: (c) => (contractNews(c) ? [{ text: `"수주·계약" 분류 기사 ${contractNews(c)}건`, to: "news" }] : []) },
   { id: "q6", group: "매출과 성장", text: "앞으로 3~5년 동안 가장 큰 성장 기회는 어디인가요?", related: none },
-  { id: "q7", group: "경쟁", text: "어떤 회사에 계약을 놓치고, 그 이유는 무엇인가요?", related: (c) => (c.confirmedRivals ? [{ text: `고른 경쟁사 ${c.confirmedRivals}곳`, to: "rivals" }] : []) },
+  { id: "q7", group: "경쟁", text: "어떤 회사에 계약을 놓치고, 그 이유는 무엇인가요?", related: (c) => (c.confirmedRivals ? [{ text: `비교 대상 경쟁사 ${c.confirmedRivals}곳`, to: "rivals" }] : []) },
   { id: "q8", group: "경쟁", text: "다른 회사가 쉽게 따라 하기 어려운 강점은 무엇인가요?", related: (c) => [
     ...(patents(c) ? [{ text: `확인된 특허 ${patents(c)}건`, to: "tech" as const }] : []),
     ...(coreTech(c) ? [{ text: "핵심 기술", to: "overview" as const }] : []),
@@ -87,7 +87,7 @@ export const DD_ITEMS: DdItem[] = [
   { id: "d7", group: "사업", text: "주요 계약서 (고객, 공급, 제휴)", related: (c) => (contractNews(c) ? [{ text: `'수주·계약' 분류 기사 ${contractNews(c)}건`, to: "news" }] : []) },
   { id: "d8", group: "사업", text: "영업 진행 현황 (수주 잔고 등)", related: none },
   { id: "d9", group: "사업", text: "시장 규모와 그 근거 자료", related: none },
-  { id: "d10", group: "사업", text: "경쟁사 비교 자료", related: (c) => [{ text: `고른 경쟁사 ${c.confirmedRivals}곳, 비교 자료 ${c.deepDone ? "받음" : "안 받음"}`, to: "rivals" }] },
+  { id: "d10", group: "사업", text: "경쟁사 비교 자료", related: (c) => [{ text: `비교 대상 경쟁사 ${c.confirmedRivals}곳, 비교 자료 ${c.deepDone ? "받음" : "안 받음"}`, to: "rivals" }] },
   { id: "d11", group: "법무", text: "법인 등기부등본", related: (c) => (c.job.company.crno ? [{ text: "법인등록번호 확인 (금융위원회)", to: "overview" }] : []) },
   { id: "d12", group: "법무", text: "주주명부와 지분 구조 (투자 계약서 포함)", related: (c) => (rounds(c) ? [{ text: `투자 라운드 ${rounds(c)}건, 투자기관 ${c.job.merged.investors.length}곳 (보도)`, to: "investment" }] : []) },
   { id: "d13", group: "법무", text: "진행 중인 소송과 분쟁 내역", related: none },

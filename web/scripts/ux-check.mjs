@@ -798,40 +798,40 @@ await run("main", async () => {
   // ---------------------------------------------------------- 경쟁사 분석(screens 4B, 2026-11-23 회사 분석 경쟁사 단락에서 옮김)
   const rvLog0 = (await getLog()).length;
   const rv = await open(`/c/${CID}/rivals`, { ctx });
-  await waitText(rv, "국내 경쟁사 후보 4곳");
+  await waitText(rv, "경쟁사 후보 4곳 중 비교 대상");
   let ri = await text(rv, "#pick");
   check("RI-02", (ri.match(/마바사/g) ?? []).length === 1 && (ri.match(/Mabasa/g) ?? []).length === 1);
   check("C-12", !/후보 \d+곳 더 보기/.test(ri));
   const deepDisabled = () => rv.evaluate(() => [...document.querySelectorAll("#compare button")].find((b) => b.textContent.trim() === "비교 자료 받기")?.disabled);
   check("RI-05 (0곳)", await deepDisabled());
-  const yesNo = (name, which) => rv.evaluate((name, which) => [...document.querySelectorAll("#pick [role=group]")].find((g) => g.getAttribute("aria-label") === `${name} 경쟁사 고르기`)?.querySelectorAll("button")[which === "yes" ? 0 : 1].click(), name, which);
+  const yesNo = (name, which) => rv.evaluate((name, which) => [...document.querySelectorAll("#pick [role=group]")].find((g) => g.getAttribute("aria-label") === `${name} 비교 대상`)?.querySelectorAll("button")[which === "yes" ? 0 : 1].click(), name, which);
   await yesNo("카타파", "no");
   await wait(300);
   ri = await text(rv, "#pick");
   const firstList = await rv.$eval("#pick [data-candidates]", (u) => u.innerText);
-  await openDisclosure(rv, "아님으로 고른 후보", "#pick");
-  const pressed = await rv.evaluate(() => [...document.querySelectorAll("#pick [role=group]")].find((g) => g.getAttribute("aria-label") === "카타파 경쟁사 고르기")?.querySelectorAll("button")[1].getAttribute("aria-pressed"));
-  check("RI-03", pressed === "true" && ri.includes("아님으로 고른 후보 1곳") && !firstList.includes("카타파"));
+  await openDisclosure(rv, "제외한 후보", "#pick");
+  const pressed = await rv.evaluate(() => [...document.querySelectorAll("#pick [role=group]")].find((g) => g.getAttribute("aria-label") === "카타파 비교 대상")?.querySelectorAll("button")[1].getAttribute("aria-pressed"));
+  check("RI-03", pressed === "true" && ri.includes("제외한 후보 1곳") && !firstList.includes("카타파"));
   await yesNo("마바사", "yes");
   await yesNo("하하테크", "yes");
   await wait(300);
   check("RI-05", !(await deepDisabled()) && /Liner 약/.test(await text(rv, "#compare")));
-  check("C-23 (경쟁사)", (await attr(rv, `nav[aria-label=단계] a[href="/c/${CID}/rivals"]`, "aria-label")) === "경쟁사 분석, 고른 경쟁사 2곳" && (await text(rv, "#pick")).includes("고른 곳 2곳"));
-  await openDisclosure(rv, "경쟁사 직접 넣기", "#pick");
+  check("C-23 (경쟁사)", (await attr(rv, `nav[aria-label=단계] a[href="/c/${CID}/rivals"]`, "aria-label")) === "경쟁사 분석, 비교 대상 2곳" && (await text(rv, "#pick")).includes("경쟁사 후보 4곳 중 비교 대상 2곳"));
+  await openDisclosure(rv, "경쟁사 직접 추가", "#pick");
   await rv.type("#pick input", "직접넣은회사");
-  await click(rv, "넣기", { exact: true, within: "#pick" });
+  await click(rv, "추가", { exact: true, within: "#pick" });
   await wait(300);
   const added = await rv.evaluate(() => {
     const li = [...document.querySelectorAll("#pick [data-candidates] > li")].find((l) => l.innerText.includes("직접넣은회사"));
     return { edited: li?.innerText.includes("직접 입력"), yes: li?.querySelector("button[aria-pressed=true]")?.textContent.trim(), last: li === li?.parentElement.lastElementChild };
   });
-  check("RI-10", added.edited && added.yes === "맞음" && added.last);
-  // 직접 넣은 회사는 비교 자료 요청에서 빼고 시험한다
-  await rv.evaluate(() => [...document.querySelectorAll("#pick [role=group]")].find((g) => g.getAttribute("aria-label") === "직접넣은회사 경쟁사 고르기")?.querySelectorAll("button")[0].click());
+  check("RI-10", added.edited && added.yes === "포함" && added.last);
+  // 직접 추가한 회사는 비교 자료 요청에서 빼고 시험한다
+  await rv.evaluate(() => [...document.querySelectorAll("#pick [role=group]")].find((g) => g.getAttribute("aria-label") === "직접넣은회사 비교 대상")?.querySelectorAll("button")[0].click());
   await wait(300);
   const rvReload = await open(`/c/${CID}/rivals`, { ctx });
-  await waitText(rvReload, "아님으로 고른 후보 1곳");
-  check("RI-04", (await rvReload.evaluate(() => [...document.querySelectorAll("#pick [role=group]")].find((g) => g.getAttribute("aria-label") === "마바사 경쟁사 고르기")?.querySelectorAll("button")[0].getAttribute("aria-pressed"))) === "true");
+  await waitText(rvReload, "제외한 후보 1곳");
+  check("RI-04", (await rvReload.evaluate(() => [...document.querySelectorAll("#pick [role=group]")].find((g) => g.getAttribute("aria-label") === "마바사 비교 대상")?.querySelectorAll("button")[0].getAttribute("aria-pressed"))) === "true");
   await rvReload.close();
   const before = count((await getLog()).slice(rvLog0), "POST", /sections\/rivals_deep$/);
   n0 = (await getLog()).length;
@@ -883,11 +883,11 @@ await run("main", async () => {
   await sh(rv, "rivals-deep-1180", true);
   await yesNo("아자차랩스", "yes");
   await wait(300);
-  // RI-09: 고르기를 바꿔도 "바뀌었다" 안내는 없고(사용자 결정), 표는 저장된 비교 자료 그대로, 다시 받기 단추와 지금 고른 곳 기준 비용 줄
+  // RI-09: 비교 대상을 바꿔도 "바뀌었다" 안내는 없고(사용자 결정), 표는 저장된 비교 자료 그대로, 다시 받기 단추와 지금 비교 대상 수 기준 비용 줄
   {
     const t9 = await text(rv, "#compare");
     const heads = await rv.$$eval("table[data-compare=table] thead th", (l) => l.map((x) => x.innerText.split("\n")[0].trim()));
-    check("RI-09", !t9.includes("바뀌었습니다") && !(await rv.$("[data-changed]")) && heads.join() === "항목,주식회사 가나다테크,마바사,하하테크" && t9.includes("비교 자료 다시 받기") && t9.includes("고른 3곳 기준"), `${heads.join()} | ${t9.includes("고른 3곳 기준")}`);
+    check("RI-09", !t9.includes("바뀌었습니다") && !(await rv.$("[data-changed]")) && heads.join() === "항목,주식회사 가나다테크,마바사,하하테크" && t9.includes("비교 자료 다시 받기") && t9.includes("비교 대상 3곳 기준"), `${heads.join()} | ${t9.includes("비교 대상 3곳 기준")}`);
   }
   await yesNo("아자차랩스", "yes");
   await wait(300);
@@ -922,7 +922,7 @@ await run("main", async () => {
     const line = await an.evaluate(() => ({ t: document.querySelector("[data-rivals-line]")?.innerText ?? "", href: document.querySelector("[data-rivals-line] a")?.getAttribute("href"), sec: Boolean(document.getElementById("rivals")), toc: [...document.querySelectorAll("nav[aria-label='단락 목차'] a")].map((a) => a.textContent) }));
     const old = await open(`/c/${CID}#rivals`, { ctx });
     const moved = await old.waitForFunction(() => location.pathname.endsWith("/rivals"), { timeout: 8000 }).then(() => true).catch(() => false);
-    check("RI-12", !line.sec && !line.toc.some((t) => t.startsWith("경쟁사")) && line.t.includes("국내 경쟁사 후보 4곳, 고른 곳 2곳") && line.href === `/c/${CID}/rivals` && moved, `${line.t.replace(/\n/g, " ")} ${line.href} 옛 주소 ${moved}`);
+    check("RI-12", !line.sec && !line.toc.some((t) => t.startsWith("경쟁사")) && line.t.includes("경쟁사 후보 4곳, 비교 대상 2곳") && line.href === `/c/${CID}/rivals` && moved, `${line.t.replace(/\n/g, " ")} ${line.href} 옛 주소 ${moved}`);
     await an.close();
     await old.close();
   }
@@ -1075,7 +1075,7 @@ await run("main", async () => {
   await wait(300);
   // C-23: 단계 메뉴 옆 개수(screens 1.1). 자금 조달 = 거기서 담은 공고·운용사, 심사 준비 = 담은 항목, 0이면 붙이지 않음
   const navNames = await fp.$$eval("nav[aria-label=단계] a", (l) => l.map((a) => a.getAttribute("aria-label") || a.innerText.trim()));
-  check("C-23", navNames.join(" / ") === "회사 분석 / 경쟁사 분석, 고른 경쟁사 2곳 / 자금 조달, 담은 자금·판로 후보 3개 / 심사 준비, 담은 항목 3개 / 노트", navNames.join(" / "));
+  check("C-23", navNames.join(" / ") === "회사 분석 / 경쟁사 분석, 비교 대상 2곳 / 자금 조달, 담은 자금·판로 후보 3개 / 심사 준비, 담은 항목 3개 / 노트", navNames.join(" / "));
   // C-24: 단계 메뉴 다섯(판로 없음). 넓은 화면은 전체 이름, 390 폭은 짧은 이름이 한 줄에 다 보인다(메뉴 안 가로 밀림 없음)
   {
     const wide = await fp.$$eval("nav[aria-label=단계] li", (l) => l.map((x) => x.innerText.replace(/\d+/g, "").trim()));
@@ -1258,7 +1258,7 @@ await run("main", async () => {
   await wait(200);
   const opts = await rp.$$eval("[data-notice='PBLN_000000000000001'] select option", (l) => l.map((o) => o.textContent));
   check("R-13", opts.join() === "마바사,하하테크", opts.join());
-  check("D-05", opts.slice(0, 2).join() === keys.map((k) => k.replace("rival:", "")).join(), "경쟁사 단락·고르기·요청 본문의 맞음 목록");
+  check("D-05", opts.slice(0, 2).join() === keys.map((k) => k.replace("rival:", "")).join(), "경쟁사 분석 비교 대상·심사 준비 고르기·요청 본문의 포함 목록");
   // 값을 고치면 이전 값으로 한 대조 표시(R-12)
   await click(rp, "회사 정보 수정", { exact: true, within: "#panel-grants" });
   await wait(300);
@@ -1678,15 +1678,15 @@ await run("variants", async () => {
   await waitText(page, "분석 중");
   const motion = await page.evaluate(() => [...document.querySelectorAll(".chev, .animate-pulse, [class*=animate]")].map((e) => { const s = getComputedStyle(e); return `${s.animationName}|${s.transitionDuration}`; }));
   check("G-10", motion.every((m) => m.startsWith("none|") && (m.endsWith("0s") || m.endsWith("0s, 0s"))), [...new Set(motion)].join(","));
-  // RI-15: 예시 회사에 저장된 비교 자료가 있으면 표가 보이고, 받기·다시 실행 단추 대신 안내. 처음 고르기로 비교한 후보가 "맞음"이고 "바뀌었습니다"가 없다
+  // RI-15: 예시 회사에 저장된 비교 자료가 있으면 표가 보이고, 받기·다시 받기 단추 대신 안내. 처음 비교 대상으로 비교한 후보가 "포함"이고 "바뀌었습니다"가 없다. 옛 용어(맞음·아님·고른 경쟁사·고르기)가 없다(RI-22)
   {
     await reset({ scenario: "F-EXAMPLE", deep: "two" });
     const ex = await open(`/c/${CID}/rivals`);
     await ex.waitForFunction(() => document.querySelectorAll("table[data-compare=table] thead th").length === 4, { timeout: 8000 }).catch(() => null);
     await wait(500);
-    // 비교 자료가 있으면 비교가 먼저이고 고르기는 "고른 경쟁사 n곳" 한 줄로 접혀 있다(RI-19). 펼쳐서 맞음이 눌린 후보를 본다
+    // 비교 자료가 있으면 비교가 먼저이고 비교 대상 정하기는 "비교 대상 n곳" 한 줄로 접혀 있다(RI-19). 펼쳐서 포함이 눌린 후보를 본다
     const summary = await text(ex, "[data-picked-summary]");
-    await openDisclosure(ex, "고른 경쟁사", "#compare");
+    await openDisclosure(ex, "비교 대상", "#compare");
     const r = await ex.evaluate(() => ({
       t: document.querySelector("main")?.innerText ?? "",
       btns: [...document.querySelectorAll("#compare button:not([aria-pressed])")].map((b) => b.textContent.trim()),
@@ -1697,13 +1697,13 @@ await run("variants", async () => {
     check(
       "RI-15",
       r.t.includes("예시 회사는 비교 자료를 새로 받을 수 없습니다.") && !r.btns.some((b) => b === "비교 자료 받기" || b === "비교 자료 다시 받기") && !r.t.includes("바뀌었습니다") &&
-        r.yes.join() === "마바사 경쟁사 고르기,하하테크 경쟁사 고르기" && r.nav === "경쟁사 분석, 고른 경쟁사 2곳" && posts === 0 && summary === "고른 경쟁사 2곳: 마바사, 하하테크",
+        r.yes.join() === "마바사 비교 대상,하하테크 비교 대상" && r.nav === "경쟁사 분석, 비교 대상 2곳" && posts === 0 && summary === "비교 대상 2곳: 마바사, 하하테크" && !/맞음|아님|고른 경쟁사|고르기|직접 넣기/.test(r.t),
       `${summary} | ${r.btns.join(",")} | ${r.yes.join(",")} | ${r.nav} | 요청 ${posts}회`,
     );
     await sh(ex, "rivals-example-1180");
     await ex.close();
   }
-  // RI-19: 고른 경쟁사와 비교 자료가 있으면 "나란히 비교"가 맨 위(첫 화면)이고 고르기는 한 줄로 접힌다. 펼친 안에는 더 여는 것이 없고,
+  // RI-19: 비교 대상과 비교 자료가 있으면 "나란히 비교"가 맨 위(첫 화면)이고 비교 대상 정하기는 한 줄로 접힌다. 펼친 안에는 더 여는 것이 없고,
   // 고르기를 바꾸면 그 줄 아래·표 위에 안내가 오며 배치는 바뀌지 않는다. 비교 자료가 없으면 고르기가 먼저 펼쳐져 있다
   {
     await reset({ scenario: "F-FULL", deep: "four" });
@@ -1715,11 +1715,11 @@ await run("variants", async () => {
       lens[w] = await pg.evaluate(() => ({ len: document.documentElement.scrollHeight, top: Math.round(document.getElementById("h-compare").getBoundingClientRect().top), pick: Boolean(document.getElementById("pick")), vh: innerHeight }));
       if (w === 1280) {
         const sum = await text(pg, "[data-picked-summary]");
-        const closed = (await disclosure(pg, "고른 경쟁사")) === "false";
-        await openDisclosure(pg, "고른 경쟁사", "#compare");
+        const closed = (await disclosure(pg, "비교 대상")) === "false";
+        await openDisclosure(pg, "비교 대상", "#compare");
         const inner = await pg.evaluate(() => ({ nested: document.querySelectorAll("[data-picker-fold] button.disclosure").length, input: Boolean(document.querySelector("[data-picker-fold] input")), cands: document.querySelectorAll("[data-picker-fold] [role=group]").length }));
         const h0 = lens[w].top;
-        await pg.evaluate(() => [...document.querySelectorAll("[data-picker-fold] [role=group]")].find((g) => g.getAttribute("aria-label") === "카타파 경쟁사 고르기")?.querySelectorAll("button")[1].click());
+        await pg.evaluate(() => [...document.querySelectorAll("[data-picker-fold] [role=group]")].find((g) => g.getAttribute("aria-label") === "카타파 비교 대상")?.querySelectorAll("button")[1].click());
         await wait(400);
         const after = await pg.evaluate(() => {
           const fold = document.querySelector("[data-picker-fold]").getBoundingClientRect();
@@ -1729,7 +1729,7 @@ await run("variants", async () => {
         });
         check(
           "RI-19 (비교 먼저)",
-          !lens[w].pick && lens[w].top < lens[w].vh && closed && sum === "고른 경쟁사 4곳: 마바사, 아자차랩스, 카타파, 하하테크" && inner.nested === 0 && inner.input && inner.cands === 4 && !after.band && after.between && after.again && after.cols === 6 && after.top === h0 && !after.pick,
+          !lens[w].pick && lens[w].top < lens[w].vh && closed && sum === "비교 대상 4곳: 마바사, 아자차랩스, 카타파, 하하테크" && inner.nested === 0 && inner.input && inner.cands === 4 && !after.band && after.between && after.again && after.cols === 6 && after.top === h0 && !after.pick,
           `${JSON.stringify(lens[w])} ${sum} ${JSON.stringify(inner)} ${JSON.stringify(after)}`,
         );
         await globalChecks(pg, "경쟁사 분석 비교 먼저 1280");
@@ -1747,22 +1747,74 @@ await run("variants", async () => {
     check("RI-19 (고르기 먼저)", order.pick < order.cmp && !order.fold, JSON.stringify(order));
     await pp.close();
   }
-  // RI-20: 비교 자료의 rivalSet 에 후보 밖 열쇠(user:가상다섯째)가 있어도 처음 연 사람의 고른 목록·단계 메뉴 개수·표 열이 비교 자료와 같다
+  // RI-20: 비교 자료의 rivalSet 에 후보 밖 열쇠(user:가상다섯째)가 있어도 처음 연 사람의 비교 대상·단계 메뉴 개수·표 열이 비교 자료와 같다
   {
     await reset({ scenario: "F-FULL", deep: "five" });
     const p20 = await open(`/c/${CID}/rivals`);
     await p20.waitForSelector("table[data-compare=table]");
     await wait(500);
     const sum20 = await text(p20, "[data-picked-summary]");
-    await openDisclosure(p20, "고른 경쟁사", "#compare");
+    await openDisclosure(p20, "비교 대상", "#compare");
     const r20 = await p20.evaluate(() => ({
       nav: document.querySelector('nav[aria-label=단계] a[href$="/rivals"]')?.getAttribute("aria-label"),
       cols: document.querySelectorAll("table[data-compare=table] thead th").length - 1,
       extra: [...document.querySelectorAll("[data-picker-fold] li")].find((l) => l.innerText.includes("가상다섯째"))?.innerText ?? "",
-      extraYes: [...document.querySelectorAll("[data-picker-fold] [role=group]")].find((g) => g.getAttribute("aria-label") === "가상다섯째 경쟁사 고르기")?.querySelector("button")?.getAttribute("aria-pressed"),
+      extraYes: [...document.querySelectorAll("[data-picker-fold] [role=group]")].find((g) => g.getAttribute("aria-label") === "가상다섯째 비교 대상")?.querySelector("button")?.getAttribute("aria-pressed"),
     }));
-    check("RI-20", sum20.startsWith("고른 경쟁사 5곳:") && sum20.includes("가상다섯째") && r20.nav === "경쟁사 분석, 고른 경쟁사 5곳" && r20.cols === 6 && r20.extra.includes("직접 입력") && r20.extraYes === "true", `${sum20} | ${JSON.stringify(r20)}`);
+    check("RI-20", sum20.startsWith("비교 대상 5곳:") && sum20.includes("가상다섯째") && r20.nav === "경쟁사 분석, 비교 대상 5곳" && r20.cols === 6 && r20.extra.includes("직접 입력") && r20.extraYes === "true", `${sum20} | ${JSON.stringify(r20)}`);
     await p20.close();
+  }
+  // RI-21: 비교 대상은 최대 5곳. 다 차면 포함하지 않은 후보의 "포함"과 직접 추가가 막히고 "비교 대상은 최대 5곳입니다."가 보이며, 포함한 곳의 "제외"는 된다.
+  // RI-22: 경쟁사 분석 화면 글에 옛 용어(맞음·아님·고른 경쟁사·고른 곳·고르기·직접 넣기)가 없다
+  {
+    await reset({ scenario: "F-FULL" });
+    const pm = await open(`/c/${CID}/rivals`);
+    await waitText(pm, "경쟁사 후보 4곳 중 비교 대상 0곳");
+    const press = (name, which) => pm.evaluate((name, which) => [...document.querySelectorAll("#pick [role=group]")].find((g) => g.getAttribute("aria-label") === `${name} 비교 대상`)?.querySelectorAll("button")[which === "in" ? 0 : 1].click(), name, which);
+    const addOne = async (n) => {
+      await pm.evaluate((n) => {
+        const i = document.querySelector("#pick form input");
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(i, n);
+        i.dispatchEvent(new Event("input", { bubbles: true }));
+      }, n);
+      await wait(100);
+      await click(pm, "추가", { exact: true, within: "#pick" });
+    };
+    for (const n of ["마바사", "아자차랩스", "카타파", "하하테크"]) await press(n, "in");
+    await wait(300);
+    await openDisclosure(pm, "경쟁사 직접 추가", "#pick");
+    await addOne("가상추가하나");
+    await wait(300);
+    const st = () => pm.evaluate(() => ({
+      max: document.querySelector("[data-rival-max]")?.textContent.trim() ?? null,
+      input: document.querySelector("#pick form input")?.disabled,
+      add: [...document.querySelectorAll("#pick form button")].find((b) => b.textContent.trim() === "추가")?.disabled,
+      nav: document.querySelector('nav[aria-label=단계] a[href$="/rivals"]')?.getAttribute("aria-label"),
+      groups: Object.fromEntries([...document.querySelectorAll("#pick [role=group]")].filter((g) => g.getBoundingClientRect().height > 0).map((g) => [g.getAttribute("aria-label"), [...g.querySelectorAll("button")].map((b) => `${b.textContent.trim()}:${b.getAttribute("aria-pressed")}:${b.disabled ? "막힘" : "됨"}`).join("/")])),
+      cost: document.getElementById("compare")?.innerText.includes("비교 대상 5곳 기준"),
+      t: document.querySelector("main").innerText,
+    }));
+    const full1 = await st();
+    await press("카타파", "out");
+    await wait(300);
+    const four = await st();
+    await addOne("가상추가둘");
+    await wait(300);
+    await openDisclosure(pm, "제외한 후보", "#pick");
+    const full2 = await st();
+    const kata = full2.groups["카타파 비교 대상"] ?? "";
+    check(
+      "RI-21",
+      full1.max === "비교 대상은 최대 5곳입니다." && full1.input && full1.add && full1.nav === "경쟁사 분석, 비교 대상 5곳" && full1.cost &&
+        four.max === null && !four.input && !four.add &&
+        full2.max === "비교 대상은 최대 5곳입니다." && kata === "포함:false:막힘/제외:true:됨" && full2.groups["마바사 비교 대상"] === "포함:true:됨/제외:false:됨" && !full2.t.includes("앞의 5곳만"),
+      `${JSON.stringify({ max: full1.max, input: full1.input, add: full1.add, nav: full1.nav })} | 4곳 ${four.max} | ${kata} | ${full2.groups["마바사 비교 대상"]}`,
+    );
+    const old = ["맞음", "아님", "고른 경쟁사", "고른 곳", "고르기", "직접 넣기"].filter((w) => full2.t.includes(w));
+    check("RI-22", old.length === 0 && full2.t.includes("비교 대상 정하기") && full2.t.includes("경쟁사 직접 추가") && full2.t.includes("비교 대상 5곳(경쟁사 후보 4곳 중 3곳, 직접 추가 2곳)"), old.join(",") || "옛 용어 없음");
+    await globalChecks(pm, "경쟁사 분석 비교 대상 5곳 1180");
+    await sh(pm, "rivals-max-1180", true);
+    await pm.close();
   }
   // RI-16: 경쟁사 5곳 비교 표. 820 폭은 표 상자 안에서만 옆으로 밀리고 첫 열이 붙어 있으며, 모든 폭에서 문서 가로 넘침·작은 누르는 곳이 없다
   {

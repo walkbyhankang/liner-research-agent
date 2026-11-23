@@ -397,7 +397,7 @@ const rowKey = (r: { field: string; quote: string }) => `${r.field}|${r.quote}`;
 function RivalCheck({ cid, programId, mine, company }: { cid: string; programId: string; mine: NoticeAnalysis; company: NoticeCompany }) {
   const c = useCompany();
   const job = c.job;
-  // 경쟁사 분석 화면의 고르기와 같은 목록(처음 고르기 포함, screens 4B.1·D-05)
+  // 경쟁사 분석 화면의 비교 대상과 같은 목록(처음 비교 대상 포함, screens 4B.1·D-05)
   const rivals = pickedRivals(job, c.local.rivalChoices);
   const [pick, setPick] = useState(rivals[0]?.key ?? "");
   const key = rivals.some((r) => r.key === pick) ? pick : rivals[0]?.key ?? "";
@@ -407,9 +407,9 @@ function RivalCheck({ cid, programId, mine, company }: { cid: string; programId:
   if (!rivals.length) {
     return (
       <div className="space-y-2">
-        <p>경쟁사 분석에서 경쟁사를 &lsquo;맞음&rsquo;으로 고르면 쓸 수 있습니다.</p>
+        <p>경쟁사 분석에서 비교 대상을 정하면 쓸 수 있습니다.</p>
         <Link href={`/c/${cid}/rivals`} className="link">
-          경쟁사 고르러 가기
+          비교 대상 정하러 가기
         </Link>
       </div>
     );
