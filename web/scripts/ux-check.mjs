@@ -269,22 +269,46 @@ await run("start", async () => {
   let page = await open("/");
   await page.waitForSelector("#company-name");
   await wait(500);
-  check("S-01", (await text(page, "h1")) === "우리 회사를 객관적으로 분석합니다");
+  check("S-01", (await text(page, "h1")) === "우리 회사를 분석하고 경쟁사와 비교하세요.");
   check("S-02", (await text(page, "label[for=company-name]")) === "회사 이름");
   check("S-07", !(await text(page)).includes("이어서 보기"));
   check("S-08 (404)", !(await text(page)).includes("예시 회사로 보기"));
-  const noHome = !(await page.$("#company-home"));
-  await click(page, "홈페이지 주소도 넣기 (선택)");
-  check("S-05", noHome && Boolean(await page.$("#company-home")));
-  const before = await disclosure(page, "어떤 자료로 분석하나요?");
-  await openDisclosure(page, "어떤 자료로 분석하나요?");
-  const items = await page.evaluate(() => [...document.querySelectorAll("[role=region][aria-label='어떤 자료로 분석하나요?'] li")].length);
-  check("S-10", before === "false" && items === 8, `${items}줄`);
+  // S-05: 홈페이지 주소 입력과 펼침 단추가 없고(qa-report HOME-03·주석5 제거 확정), 회사 이름 입력과 "분석 시작"이 한 줄이다(HOME-04)
+  const form = await page.evaluate(() => {
+    const i = document.querySelector("#company-name").getBoundingClientRect();
+    const b = document.querySelector("form button[type=submit]").getBoundingClientRect();
+    return { inputs: document.querySelectorAll("form input").length, row: Math.abs(i.top - b.top) <= 1 && b.left > i.right };
+  });
+  check("S-05", !(await page.$("#company-home")) && !(await text(page)).includes("홈페이지") && form.inputs === 1 && form.row, JSON.stringify(form));
+  const before = await disclosure(page, "분석에 쓰는 자료");
+  await openDisclosure(page, "분석에 쓰는 자료");
+  // S-10: 자료는 정보 종류 4묶음, Liner 역할 한 문장, 출처·확인 여부 안내가 펼친 안에 있고 "공공 API" 되풀이가 없다. 펼침 줄 위 구분선 대신 여백(HOME-05, 주석1·2)
+  const src = await page.evaluate(() => {
+    const r = document.querySelector("[role=region][aria-label='분석에 쓰는 자료']");
+    const btn = [...document.querySelectorAll("button.disclosure")].find((b) => b.textContent.trim().startsWith("분석에 쓰는 자료"));
+    return { kinds: [...(r?.querySelectorAll("dt") ?? [])].map((e) => e.textContent.trim()), text: r?.innerText ?? "", border: btn ? getComputedStyle(btn).borderTopWidth : "없음" };
+  });
+  check(
+    "S-10",
+    before === "false" && src.kinds.join("|") === "기업·재무|고용|자금·판로|특허·뉴스" && /Liner/.test(src.text) && src.text.includes("분석 결과에서 자료의 출처와 확인 여부를 볼 수 있습니다.") && !src.text.includes("공공 API") && src.border === "0px",
+    `${src.kinds.join("|")} 선 ${src.border}`,
+  );
   await globalChecks(page, "시작 1180");
+  // S-13: 시간 안내(HOME-07)와 "회사 없이 자금만 둘러보기"가 글 링크(HOME-06)
+  const fundLink = await page.evaluate(() => [...document.querySelectorAll("a")].find((a) => a.textContent.trim() === "회사 없이 자금만 둘러보기")?.className ?? "없음");
+  check("S-13", (await text(page)).includes("분석은 약 3분 걸립니다. 준비된 자료부터 차례로 보여드립니다.") && /\blink\b/.test(fundLink) && !/\bbtn\b/.test(fundLink), fundLink);
   await page.type("#company-name", "가");
   await click(page, "분석 시작");
   await wait(300);
   check("S-03", (await text(page)).includes("회사 이름을 2글자 이상 넣어 주세요.") && count(await getLog(), "GET", /corp\/search/) === 0);
+  // S-12: 2글자 조건을 채우면 오류가 사라지고, 입력 중에는(다시 1글자 아래로 지워도) 새 오류를 만들지 않는다(HOME-02)
+  await page.type("#company-name", "나");
+  await wait(150);
+  const fixed = { gone: !(await text(page)).includes("회사 이름을 2글자 이상 넣어 주세요."), invalid: await attr(page, "#company-name", "aria-invalid") };
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  await wait(150);
+  check("S-12", fixed.gone && fixed.invalid === null && !(await text(page)).includes("회사 이름을 2글자 이상 넣어 주세요.") && count(await getLog(), "GET", /corp\/search/) === 0, JSON.stringify(fixed));
   await ctl({ delayMs: 1200 });
   await page.$eval("#company-name", (e) => (e.value = ""));
   await page.type("#company-name", "가나다테크");
@@ -294,9 +318,15 @@ await run("start", async () => {
   await page.waitForFunction(() => location.pathname.startsWith("/c/"), { timeout: 10000 }).catch(() => {});
   check("S-04", busyBtn.t === "법인 찾는 중" && busyBtn.d && count(await getLog(), "GET", /corp\/search/) === 1);
   check("K-02", new URL(page.url()).pathname === `/c/${CID}`, page.url());
+  // S-05(요청): 화면은 분석 시작 요청에 홈페이지를 싣지 않는다(서버 계약의 선택 칸은 그대로)
+  const starts = (await getLog()).filter((x) => x.method === "POST" && /\/api\/analysis$/.test(x.path));
+  check("S-05 (요청)", starts.length === 1 && !("homepage" in (starts[0].body ?? {})), JSON.stringify(starts.map((x) => x.body)));
   await ctl({ delayMs: 0, example: true });
   page = await open("/");
   check("S-08 (200)", await waitText(page, "예시 회사로 보기"));
+  // S-13: 예시 보기는 보조(테두리) 단추로 남는다
+  const exampleCls = await page.evaluate(() => [...document.querySelectorAll("a")].find((a) => a.textContent.trim() === "예시 회사로 보기")?.className ?? "없음");
+  check("S-13 (예시)", /\bbtn\b/.test(exampleCls) && !/btn-primary/.test(exampleCls), exampleCls);
   await ctl({ health: "down" });
   page = await open("/");
   await waitText(page, "지금은 분석 서버에 연결할 수 없습니다");
@@ -330,6 +360,61 @@ await run("start", async () => {
   await page.evaluate(() => [...document.querySelectorAll("[role=alert] button")].find((b) => b.textContent.trim() === "지우기")?.click());
   await wait(500);
   check("S-11", asked && (await idbCount(page, "companies")) === 4 && (await getLog()).length === n0);
+  // S-05(옛 주소): 홈페이지를 넣던 옛 주소 ?homepage= 로 열어도 시작 화면이 오류 없이 나오고 홈페이지 입력은 없다
+  page = await open(`/?homepage=${encodeURIComponent("www.example.com")}`);
+  await page.waitForSelector("#company-name");
+  await wait(300);
+  check("S-05 (옛 주소)", (await text(page, "h1")) === "우리 회사를 분석하고 경쟁사와 비교하세요." && !(await page.$("#company-home")) && page.errors.length === 0, page.errors.join(" / "));
+  // S-14(리뷰 P2): 옛 주소에서 로고를 눌러 주소만 바뀌고 시작 화면이 그대로 남아도, 그 뒤 제출은 정상으로 분석 화면까지 간다
+  // (떠남 표시는 그때 진행 중이던 요청만 취소한다. 단추가 "법인 찾는 중"으로 멈추지 않는다)
+  await page.evaluate(() => [...document.querySelectorAll("header a[href='/']")][0]?.click());
+  await page.waitForFunction(() => !location.search.includes("homepage"), { timeout: 5000 }).catch(() => {});
+  await page.$eval("#company-name", (e) => (e.value = ""));
+  await page.type("#company-name", "가나다테크");
+  await click(page, "분석 시작");
+  const reached = await page.waitForFunction(() => location.pathname.startsWith("/c/"), { timeout: 10000 }).then(() => true).catch(() => false);
+  const stuck = reached ? null : await page.$eval("form button[type=submit]", (b) => ({ t: b.textContent.trim(), d: b.disabled })).catch(() => null);
+  check("S-14", reached && new URL(page.url()).pathname === `/c/${CID}`, `${page.url()} ${JSON.stringify(stuck)}`);
+  // S-14(늦게 실패, 리뷰 P2): 옛 주소에서 제출하고 조회가 늦게 실패하는 동안 로고를 누르면, 시작 화면이 남아도
+  // 그 실패("금융위원회 자료에 연결하지 못했습니다"와 "공개 자료만으로 분석")를 보이지 않고 단추는 풀린다
+  page = await open(`/?homepage=${encodeURIComponent("www.example.com")}`);
+  await page.waitForSelector("#company-name");
+  await ctl({ corp: "down", delayMs: 1500 });
+  await page.type("#company-name", "다른회사");
+  await click(page, "분석 시작");
+  await wait(200);
+  await page.evaluate(() => [...document.querySelectorAll("header a[href='/']")][0]?.click());
+  await wait(2500);
+  const late = await page.evaluate(() => ({
+    path: location.pathname + location.search,
+    outage: document.body.innerText.includes("금융위원회 자료에 연결하지 못했습니다"),
+    publicOnly: [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "공개 자료만으로 분석"),
+    btn: (() => { const b = document.querySelector("form button[type=submit]"); return b ? { t: b.textContent.trim(), d: b.disabled } : null; })(),
+  }));
+  await ctl({ corp: null, delayMs: 0 });
+  check("S-14 (늦게 실패)", late.path === "/" && !late.outage && !late.publicOnly && late.btn?.d === false, JSON.stringify(late));
+  // S-14(조회 중에 떠남 / 분석 요청 뒤에 떠남, 리뷰 P2): 모든 응답을 1.5초 늦춘다(조회 1.5초 → 분석 시작 요청 1.5초).
+  // 조회 중에 로고를 누르면 분석 시작 요청은 0번. 분석 시작 요청을 보낸 뒤 누르면 요청은 1번(서버에서 시작됨)이지만 화면은 옮기지 않는다
+  const leaveAt = async (ms) => {
+    page = await open(`/?homepage=${encodeURIComponent("www.example.com")}`);
+    await page.waitForSelector("#company-name");
+    await ctl({ delayMs: 1500 });
+    const p0 = count(await getLog(), "POST", /\/analysis$/);
+    await page.type("#company-name", "가나다테크");
+    await click(page, "분석 시작");
+    await wait(ms);
+    await page.evaluate(() => [...document.querySelectorAll("header a[href='/']")][0]?.click());
+    await wait(200);
+    // 떠난 바로 뒤(버려진 요청이 아직 끝나지 않았을 때) 시작 화면의 단추가 이미 풀려 있다(리뷰 P2)
+    const btnAfterLeave = await page.$eval("form button[type=submit]", (b) => ({ t: b.textContent.trim(), d: b.disabled })).catch(() => null);
+    await wait(3800);
+    const r = { posts: count(await getLog(), "POST", /\/analysis$/) - p0, path: new URL(page.url()).pathname, btnAfterLeave };
+    await ctl({ delayMs: 0 });
+    return r;
+  };
+  const duringLookup = await leaveAt(300);
+  const afterPost = await leaveAt(2200);
+  check("S-14 (조회 중·요청 뒤 떠남)", duringLookup.posts === 0 && duringLookup.path === "/" && duringLookup.btnAfterLeave?.d === false && afterPost.posts === 1 && afterPost.path === "/" && afterPost.btnAfterLeave?.d === false, JSON.stringify({ duringLookup, afterPost }));
 });
 
 await run("confirm", async () => {
@@ -402,6 +487,84 @@ await run("confirm", async () => {
   await page.waitForSelector("#company-name");
   await wait(300);
   check("K-09", (await page.$eval("#company-name", (e) => e.value)) === "가나다테크");
+
+  // ---------------------------------------------------------- 2026-11-24 UX 점검 반영(qa-report CONFIRM-01~04)
+  const NOTE = "법인 정보 없이 분석합니다. 공식 재무·고용 자료는 포함되지 않습니다.";
+  // K-11: 이름이 같은 법인이 여럿이면 위에 한 번 알리고 줄마다 "이름이 같음"을 되풀이하지 않는다. 사업자번호·설립은 줄마다 같은 자리, 이전 이름은 굵게
+  await ctl({ corp: "F-CORP-2" });
+  for (const w of [1180, 390]) {
+    page = await open(`/?name=${encodeURIComponent("가나다테크")}&homepage=${encodeURIComponent("www.example.com")}`, { width: w });
+    await page.waitForSelector("[role=radio]");
+    const tw = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll("[role=radiogroup] [role=radio]")].slice(0, 2);
+      const x = (r, k) => Math.round(r.querySelector(`[data-twin=${k}]`)?.getBoundingClientRect().left ?? -1);
+      const f = rows[0].querySelector("[data-twin=former] .font-semibold");
+      return {
+        notes: (document.body.innerText.match(/이름이 같은 법인 2곳을 찾았어요\. 사업자번호나 설립일을 확인해 주세요\./g) ?? []).length,
+        rowTags: rows.map((r) => r.innerText).join(" ").includes("이름이 같음"),
+        bzno: rows.map((r) => x(r, "bzno")),
+        founded: rows.map((r) => x(r, "founded")),
+        top: rows.map((r) => Math.round(r.querySelector("[data-twin=founded]").getBoundingClientRect().top - r.getBoundingClientRect().top)),
+        former: f ? Number(getComputedStyle(f).fontWeight) : 0,
+      };
+    });
+    check(
+      `K-11 (${w})`,
+      tw.notes === 1 && !tw.rowTags && tw.bzno[0] === tw.bzno[1] && tw.bzno[0] > 0 && tw.founded[0] === tw.founded[1] && tw.top[0] === tw.top[1] && tw.former >= 600,
+      JSON.stringify(tw),
+    );
+    await globalChecks(page, `회사 확정 이름 같음(옛 homepage 주소) ${w}`);
+  }
+  // K-14: 후보 사이에만 선이 있고 목록 위아래 선은 없다. "목록에 없음"은 같은 고르기 묶음 안 맨 끝이고, 후보 더 보기는 그 앞에 온다
+  await ctl({ corp: "F-CORP-7" });
+  page = await open(`/?name=${encodeURIComponent("가나다테크")}`);
+  await page.waitForSelector("[role=radio]");
+  const lines = await page.evaluate(() => {
+    const g = document.querySelector("[role=radiogroup]");
+    const radios = [...g.querySelectorAll("[role=radio]")];
+    const bw = (e, s) => getComputedStyle(e)[`border${s}Width`];
+    const more = [...g.querySelectorAll("button")].find((b) => b.textContent.trim().startsWith("후보 2곳 더 보기"));
+    const none = radios.at(-1);
+    return {
+      // 후보 사이 선은 앞 후보의 아래 선(divide-y). 첫 후보 위와 마지막 후보 아래에는 선이 없다
+      outer: [bw(g, "Top"), bw(g, "Bottom"), bw(radios[0].parentElement, "Top"), bw(radios[0].parentElement, "Bottom"), bw(radios[0], "Top"), bw(radios.at(-2), "Bottom")],
+      between: bw(radios[0], "Bottom"),
+      noneLast: none.innerText.startsWith("목록에 없음") && bw(none, "Top") === "0px",
+      moreBefore: Boolean(more) && Boolean(more.compareDocumentPosition(none) & Node.DOCUMENT_POSITION_FOLLOWING),
+    };
+  });
+  check("K-14", lines.outer.every((x) => x === "0px") && lines.between === "1px" && lines.noneLast && lines.moreBefore, JSON.stringify(lines));
+  // K-12: "목록에 없음"을 고르면 단추가 "공개 자료만으로 분석"이고 설명은 결과 중심 한 문장. 누르면 법인·홈페이지 없이 분석 요청 1회
+  await click(page, "목록에 없음");
+  const noneBtn = await page.$eval("button.btn-primary", (b) => b.textContent.trim());
+  const noneText = await page.evaluate(() => [...document.querySelectorAll("[role=radiogroup] [role=radio]")].at(-1)?.innerText ?? "");
+  const n1 = count(await getLog(), "POST", /\/api\/analysis$/);
+  await click(page, "공개 자료만으로 분석");
+  await page.waitForFunction(() => location.pathname.startsWith("/c/"), { timeout: 5000 }).catch(() => {});
+  const posts = (await getLog()).filter((x) => x.method === "POST" && /\/api\/analysis$/.test(x.path));
+  const sent = posts.at(-1)?.body ?? {};
+  check("K-12", noneBtn === "공개 자료만으로 분석" && noneText.includes(NOTE) && posts.length === n1 + 1 && sent.name === "가나다테크" && !("crno" in sent) && !("homepage" in sent), `${noneBtn} ${JSON.stringify(sent)}`);
+  await ctl({ corp: "F-CORP-0" });
+  page = await open(`/?name=${encodeURIComponent("없는회사")}`);
+  await waitText(page, "법인을 찾지 못했습니다");
+  check("K-12 (0곳)", (await text(page)).includes(NOTE) && (await page.$eval("button.btn-primary", (b) => b.textContent.trim())) === "공개 자료만으로 분석");
+  // K-13: 찾는 중에도 넣은 이름이 보이고, 조회 실패는 제목으로 밝히며 같은 이름으로 다시 조회와 이름 다시 넣기를 나눈다
+  await ctl({ corp: "F-CORP-2", delayMs: 2500 });
+  page = await open(`/?name=${encodeURIComponent("가나다테크")}`);
+  await waitText(page, "가나다테크’ 이름으로");
+  const loading = { h1: await text(page, "h1"), t: await text(page, "main") };
+  check("K-13 (찾는 중)", loading.h1 === "어느 회사인가요?" && loading.t.includes("‘가나다테크’ 이름으로 금융위원회 기업기본정보에서 법인을 찾는 중입니다.") && !(await page.$("[role=radio]")), loading.t.slice(0, 60));
+  await ctl({ corp: "down", delayMs: 0 });
+  page = await open(`/?name=${encodeURIComponent("가나다테크")}`);
+  await waitText(page, "법인을 조회하지 못했습니다");
+  t = await text(page, "main");
+  const failShown = (await text(page, "h1")) === "법인을 조회하지 못했습니다" && t.includes("‘가나다테크’ 이름으로 금융위원회 기업기본정보에 연결하지 못했습니다.") && t.includes("같은 이름으로 다시 조회") && t.includes("이름 다시 넣기") && t.includes("공개 자료만으로 분석") && t.includes(NOTE);
+  await globalChecks(page, "회사 확정 조회 실패 1180");
+  await ctl({ corp: "F-CORP-2" });
+  const s0 = count(await getLog(), "GET", /corp\/search/);
+  await click(page, "같은 이름으로 다시 조회");
+  const back = await page.waitForSelector("[role=radio]", { timeout: 5000 }).then(() => true).catch(() => false);
+  check("K-13 (조회 실패)", failShown && back && count(await getLog(), "GET", /corp\/search/) === s0 + 1, t.slice(0, 80));
 });
 
 // ================================================================ 회사 분석 진행(F-STAGED)
@@ -467,13 +630,13 @@ await run("staged", async () => {
   const live = await page.$$eval("[data-live] p", (l) => l.map((p) => p.textContent));
   const want = ["재무·고용 단락이 준비됐습니다.", "개요 단락이 준비됐습니다.", "투자 단락이 준비됐습니다.", "기술 단락이 준비됐습니다.", "최근 동향 단락이 준비됐습니다.", "회사 분석이 끝났습니다."];
   check("C-21", want.every((w) => live.filter((x) => x === w).length === 1) && live.length === want.length, live.join(" / "));
-  // A-29: 분석이 엇갈린 값을 가진 채 끝나도, 끝나는 순간 "지금 확인할 것"이 생기며 아래(자금·판로 줄·개요 제목)를 밀지 않는다(첫 화면, 1180·390)
+  // A-29: 분석이 엇갈린 값을 가진 채 끝나도, 끝나는 순간 "확인이 필요한 정보"이 생기며 아래(자금·판로 줄·개요 제목)를 밀지 않는다(첫 화면, 1180·390)
   for (const w of [1180, 390]) {
     await reset({ scenario: "F-STAGED", step: 5, stagedConflict: true });
     const pa = await open(`/c/${CID}`, { width: w });
     await waitText(pa, "분석 중");
     await wait(800);
-    const pos = () => pa.evaluate(() => ({ fund: Math.round([...document.querySelectorAll("a,span")].find((e) => e.textContent.trim() === "자금·판로 보기" || e.textContent.trim().startsWith("자금·판로 준비"))?.getBoundingClientRect().top ?? -1), ov: Math.round(document.getElementById("h-overview")?.getBoundingClientRect().top ?? -1), y: scrollY, ck: document.querySelector("[data-checknow]")?.getBoundingClientRect().height.toFixed(1), band: document.querySelector("ul[aria-label='핵심 값']")?.getBoundingClientRect().bottom.toFixed(1) }));
+    const pos = () => pa.evaluate(() => ({ legend: Math.round([...document.querySelectorAll("button.disclosure")].find((e) => e.textContent.trim().startsWith("상태 표시 안내"))?.getBoundingClientRect().top ?? -1), ov: Math.round(document.getElementById("h-overview")?.getBoundingClientRect().top ?? -1), y: scrollY, ck: document.querySelector("[data-checknow]")?.getBoundingClientRect().height.toFixed(1), band: document.querySelector("ul[aria-label='핵심 값']")?.getBoundingClientRect().bottom.toFixed(1) }));
     const before = await pos();
     const frame0 = await text(pa, "[data-checknow]");
     // A-32: 항목 줄이 옆으로 넘쳐도 스크롤 막대가 높이를 차지하지 않는다(일반 스크롤 막대 환경에서 넘침이 생기고 사라질 때 아래가 밀리지 않게)
@@ -502,7 +665,7 @@ await run("staged", async () => {
     const after = await pos();
     const frame1 = await text(pa, "[data-checknow]");
     // 묶음 높이는 그대로여야 한다. 개요 제목은 핵심 값 띠의 소수점 차이(끝날 때 약 1px, 이 묶음과 무관)까지만 허용한다
-    check(`A-29 (${w})`, before.y === 0 && after.y === 0 && before.ck === after.ck && Math.abs(before.ov - after.ov) <= 2 && frame0.includes("분석이 끝나면 셉니다") && /엇갈림\s*값 1개/.test(frame1), `개요 제목 ${before.ov}→${after.ov}, 자금 후보 ${before.fund}→${after.fund}, 묶음 높이 ${before.ck}→${after.ck}, 핵심 값 바닥 ${before.band}→${after.band}, y ${before.y}/${after.y} |${frame0.replace(/\n/g, " ")} → ${frame1.replace(/\n/g, " ")}`);
+    check(`A-29 (${w})`, before.y === 0 && after.y === 0 && before.ck === after.ck && Math.abs(before.ov - after.ov) <= 2 && frame0.includes("분석이 끝나면 셉니다") && /엇갈림\s*값 1개/.test(frame1), `개요 제목 ${before.ov}→${after.ov}, 상태 표시 안내 ${before.legend}→${after.legend}, 묶음 높이 ${before.ck}→${after.ck}, 핵심 값 바닥 ${before.band}→${after.band}, y ${before.y}/${after.y} |${frame0.replace(/\n/g, " ")} → ${frame1.replace(/\n/g, " ")}`);
     await pa.close();
   }
   // A-20: 경과가 예상의 2배를 넘으면
@@ -523,7 +686,7 @@ await run("staged", async () => {
 });
 
 // ================================================================ 새로 분석 중 펼친 값 목록
-// A-30: "지금 확인할 것"의 엇갈림 목록을 펼친 채 새로 분석을 시작하면 목록이 닫히고, 새로 분석이 끝나도 닫힌 채라 아래(개요 제목)가 밀리지 않는다
+// A-30: "확인이 필요한 정보"의 엇갈림 목록을 펼친 채 새로 분석을 시작하면 목록이 닫히고, 새로 분석이 끝나도 닫힌 채라 아래(개요 제목)가 밀리지 않는다
 await run("refresh-list", async () => {
   await reset({ scenario: "F-CONFLICT", refreshJob: true });
   const pr = await open(`/c/${CID}`, { width: 1180 });
@@ -659,7 +822,7 @@ await run("main", async () => {
   check("A-21", (await text(page, "h1")) === "주식회사 가나다테크");
   const tiles = await page.$$eval("ul[aria-label='핵심 값'] > li", (l) => l.map((x) => x.innerText.split("\n")[0]));
   check("A-14", tiles.join(",") === "매출,국민연금 가입자,누적 투자,검색으로 확인한 특허" && !/지역|업력|설립|기업 유형/.test(tiles.join()), tiles.join(","));
-  // A-25: 엇갈림·미확보 값도, 담은 공고도 없으면 "지금 확인할 것" 묶음을 그리지 않는다(F-FULL)
+  // A-25: 엇갈림·미확보 값도, 담은 공고도 없으면 "확인이 필요한 정보" 묶음을 그리지 않는다(F-FULL)
   check("A-25 (모두 0)", !(await page.$("[data-checknow]")));
   await page.evaluate(() => [...document.querySelectorAll("ul[aria-label='핵심 값'] a")].find((a) => a.innerText.startsWith("검색으로 확인한 특허"))?.click());
   await wait(400);
@@ -802,6 +965,111 @@ await run("main", async () => {
   await click(page, "논문 분석하기", { within: "#tech" });
   await wait(800);
   check("TE-06", count((await getLog()).slice(n0), "POST", /sections\/papers$/) === 1);
+  // ---------------------------------------------------------- 회사 분석 UX 점검 반영(docs/ux/qa-report.md 3절 주석 1~10·4절, 2026-11-24)
+  {
+    // A-36: 핵심 값 아래 "자금·판로 보기" 줄이 없고, 본문 끝 다음 단계는 도착 화면을 밝힌 주 단추 "경쟁사 분석 보기"와 옆 보조 글(후보·비교 대상 수)
+    const a36 = await page.evaluate(() => {
+      const main = document.querySelector("main");
+      const ov = document.getElementById("overview");
+      const before = [...main.querySelectorAll("a, button, p")].filter((e) => ov.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_PRECEDING);
+      const line = document.querySelector("[data-rivals-line]");
+      const a = line?.querySelector("a");
+      return {
+        fundBanner: before.some((e) => /자금·판로 보기|이 회사 값으로/.test(e.textContent)),
+        btn: a ? { t: a.textContent.trim(), primary: a.classList.contains("btn") && a.classList.contains("btn-primary"), href: a.getAttribute("href") } : null,
+        sub: line?.querySelector("p")?.textContent.trim() ?? "",
+        last: main.lastElementChild?.lastElementChild === line,
+        oldLink: main.innerText.includes("경쟁사 분석에서 보기"),
+      };
+    });
+    check("A-36", !a36.fundBanner && a36.btn?.t === "경쟁사 분석 보기" && a36.btn.primary && a36.btn.href === `/c/${CID}/rivals` && /^경쟁사 후보 4곳, 비교 대상 \d+곳$/.test(a36.sub) && a36.last && !a36.oldLink, JSON.stringify(a36));
+    // A-37: 핵심 값 칸은 이름 → 숫자 순(이름 줄에 상태 낱말 없음). "원문 확인"은 칸에 없고(단락 출처 줄·상세), 해석을 바꾸는 상태만 숫자보다 작게 남는다:
+    // 누적 투자·웹 조사 매출 "보도", 국민연금 "참고"와 "직원 수와 다름"
+    const a37 = await page.evaluate(() =>
+      [...document.querySelectorAll("ul[aria-label='핵심 값'] > li")].map((li) => {
+        const head = li.querySelector("[data-tile-head]");
+        const big = li.querySelector(".num.block");
+        return {
+          label: head?.innerText.trim(),
+          headWords: head ? head.querySelectorAll(".word").length : -1,
+          words: [...li.querySelectorAll(".word")].map((w) => ({ t: w.textContent.trim(), fs: parseFloat(getComputedStyle(w).fontSize), hidden: getComputedStyle(w).visibility === "hidden" })),
+          second: li.innerText.split("\n")[1] ?? "",
+          text: li.innerText,
+          bigFs: big ? parseFloat(getComputedStyle(big).fontSize) : 0,
+        };
+      }),
+    );
+    const tile37 = (n) => a37.find((t) => t.label === n) ?? { words: [], text: "", bigFs: 0 };
+    const small37 = (n, w) => tile37(n).words.some((x) => x.t === w && x.fs <= 13 && x.fs < tile37(n).bigFs / 2);
+    check(
+      "A-37",
+      a37.length === 4 && a37.every((t) => t.headWords === 0 && /^[\d$]/.test(t.second) && t.words.every((w) => !w.hidden)) && !a37.some((t) => t.words.some((w) => w.t === "원문 확인")) &&
+        small37("누적 투자", "보도") && small37("매출", "보도") && small37("국민연금 가입자", "참고") && tile37("국민연금 가입자").text.includes("직원 수와 다름"),
+      a37.map((t) => `${t.label}: ${t.text.replace(/\n/g, " ")}`).join(" | "),
+    );
+    // C-25: 펼친 항목(줄 자세히 "대표", 펼치기 줄 "재무 표")은 옅은 바탕과 왼쪽 녹색 선이 제목 행 맨 위부터 본문 끝까지 한 덩어리이고, 접힌 줄("본사")은 기본 행.
+    // 출처 줄 위의 짧은 장식선이 없다(qa-report 3절 주석 3·4·5·8, 4절 "경계와 펼침")
+    const c25 = await page.evaluate(() => {
+      const shape = (head) => {
+        const wrap = head.parentElement;
+        const body = document.getElementById(head.getAttribute("aria-controls"));
+        const s = getComputedStyle(wrap);
+        const w = wrap.getBoundingClientRect();
+        // 목록 줄 사이 선(divide-y 의 아래 테두리)은 덩어리 밖 경계라 빼고 잰다. 안쪽 그림자(왼쪽 선)는 테두리 안쪽에 그려진다
+        const top = Math.round(head.getBoundingClientRect().top - w.top - parseFloat(s.borderTopWidth));
+        const bottom = Math.round(w.bottom - parseFloat(s.borderBottomWidth) - body.getBoundingClientRect().bottom);
+        return { open: head.getAttribute("aria-expanded"), bg: s.backgroundColor, line: s.boxShadow, top, bottom };
+      };
+      const rb = [...document.querySelectorAll("#overview .row-btn")].find((x) => x.innerText.startsWith("대표"));
+      const db = [...document.querySelectorAll("#finance button.disclosure")].find((x) => x.textContent.startsWith("재무 표"));
+      const cb = [...document.querySelectorAll("#overview .row-btn")].find((x) => x.innerText.startsWith("본사"));
+      return { row: shape(rb), disc: shape(db), closed: shape(cb), src: getComputedStyle(document.querySelector("#finance .source"), "::before").content };
+    });
+    const block25 = (x) => x.open === "true" && x.bg === "rgb(243, 245, 248)" && /rgb\(12, 107, 88\) 2px 0px 0px 0px inset/.test(x.line) && x.top === 0 && x.bottom === 0;
+    check("C-25", block25(c25.row) && block25(c25.disc) && c25.closed.open === "false" && c25.closed.bg === "rgba(0, 0, 0, 0)" && c25.closed.line === "none" && /^(none|normal)$/.test(c25.src), JSON.stringify(c25));
+    // A-38: 위계(qa-report 3절 주석 7·9): 단락 제목 24px > 한 줄 요약 18px, 단락 안 하위 항목 제목은 옅은 바탕·굵은 글, 진한 바탕·흰 글은 주 단추 말고는 본문에 없다
+    const a38 = await page.evaluate(() => {
+      const fs = (e) => (e ? parseFloat(getComputedStyle(e).fontSize) : 0);
+      const subs = [...document.querySelectorAll("main .subhead")].map((e) => ({ t: e.textContent.trim().slice(0, 14), bg: getComputedStyle(e).backgroundColor, fw: getComputedStyle(e).fontWeight, sec: e.closest("section")?.id }));
+      const dark = [...document.querySelectorAll("main *")].filter((e) => {
+        const s = getComputedStyle(e);
+        return s.color === "rgb(255, 255, 255)" && e.getBoundingClientRect().height > 0 && !e.closest(".btn-primary") && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+      }).map((e) => e.textContent.trim().slice(0, 12));
+      return { h2: [...document.querySelectorAll("main section > div h2")].map(fs), sum: fs(document.querySelector("#investment > div:nth-of-type(2) > p")), subs, dark };
+    });
+    check(
+      "A-38",
+      a38.h2.length === 5 && a38.h2.every((x) => x === 24) && a38.sum === 18 && ["finance", "investment", "tech"].every((s) => a38.subs.filter((x) => x.sec === s).length >= 2) && a38.subs.every((x) => x.bg === "rgb(243, 245, 248)" && x.fw === "700") && a38.dark.length === 0,
+      JSON.stringify({ h2: a38.h2, sum: a38.sum, subs: a38.subs.map((x) => `${x.sec}:${x.t}`), dark: a38.dark }),
+    );
+    // FI-09: 국민연금 선의 시작·끝 점은 짙고 크게(값 104명·132명 굵게), 중간 점은 작고 옅게. 축 시작값 안내("세로축은 100명부터")는 남는다
+    const fi09 = await page.evaluate(() => {
+      const svg = document.querySelectorAll("#finance svg[role=img]")[1];
+      return {
+        c: [...svg.querySelectorAll("circle")].map((c) => ({ r: +c.getAttribute("r"), fill: c.getAttribute("fill"), end: c.hasAttribute("data-end") })),
+        t: [...svg.querySelectorAll("text")].map((t) => ({ t: t.textContent, w: t.getAttribute("font-weight") })),
+      };
+    });
+    const ends9 = fi09.c.filter((x) => x.end);
+    const mids9 = fi09.c.filter((x) => !x.end);
+    check(
+      "FI-09",
+      ends9.length === 2 && ends9.every((x) => x.r >= 4 && x.fill.includes("ink")) && mids9.length >= 1 && mids9.every((x) => x.r < 4 && x.fill.includes("sub")) &&
+        ["104명", "132명"].every((v) => fi09.t.some((x) => x.t === v && x.w === "700")) && fi09.t.some((x) => x.t === "세로축은 100명부터"),
+      `끝 점 ${ends9.map((x) => x.r).join("/")}, 중간 점 ${mids9.length}개 r=${mids9[0]?.r}, 글 ${fi09.t.map((x) => x.t).join("·")}`,
+    );
+    // FI-10: 재무·고용 요약은 값마다 이름 → 큰 숫자 → 기준(국민연금은 측정월 → 12개월 변화) 순이고, 요약 안에서 숫자가 가장 크다
+    const fi10 = await page.evaluate(() =>
+      [...document.querySelectorAll("#finance [data-summary] > div")].map((d) => ({ dt: d.querySelector("dt").textContent, dd: [...d.querySelectorAll("dd > span")].map((s) => ({ t: s.textContent, fs: parseFloat(getComputedStyle(s).fontSize) })) })),
+    );
+    const nps10 = fi10.find((x) => x.dt === "국민연금 가입자")?.dd ?? [];
+    check(
+      "FI-10",
+      fi10.map((x) => x.dt).join() === "매출,국민연금 가입자" && fi10.every((x) => x.dd[0].fs >= 24 && x.dd.slice(1).every((s) => s.fs < x.dd[0].fs)) &&
+        nps10.map((s) => s.t).join("|") === "132명|2026-10 기준|2025-11보다 +28명" && fi10[0].dd[0].t === "56.7억원",
+      fi10.map((x) => `${x.dt}: ${x.dd.map((s) => `${s.t}(${s.fs})`).join(" ")}`).join(" / "),
+    );
+  }
   // ---------------------------------------------------------- 경쟁사 분석(screens 4B, 2026-11-23 회사 분석 경쟁사 단락에서 옮김)
   const rvLog0 = (await getLog()).length;
   const rv = await open(`/c/${CID}/rivals`, { ctx });
@@ -933,6 +1201,57 @@ await run("main", async () => {
     await an.close();
     await old.close();
   }
+  // ---- 2026-11-24 UX 점검(docs/ux/qa-report.md 주석12·19, 4절 경쟁사 분석) 반영 기준
+  // RI-34: 본문 끝(마지막 덩어리) 다음 단계는 문장과 도착 화면을 밝힌 주 단추 "자금·판로 보기"(btn btn-primary → 자금·판로) 하나이고,
+  // 심사 준비 재사용 안내는 단추 아래 보조 글(링크 없음)이다. 본문 중간에 같은 목적의 띠·링크가 없다
+  {
+    const nx = await rv.evaluate(() => {
+      const main = document.querySelector("main");
+      const s = main.querySelector("[data-next-step]");
+      const a = s?.querySelector("a");
+      const ps = [...(s?.querySelectorAll("p") ?? [])];
+      return {
+        last: s === main.lastElementChild,
+        first: ps[0]?.textContent ?? "",
+        a: a ? { t: a.textContent.trim(), href: a.getAttribute("href"), cls: a.className } : null,
+        links: s?.querySelectorAll("a").length ?? 0,
+        note: ps[1] ? { t: ps[1].textContent, below: a.getBoundingClientRect().bottom <= ps[1].getBoundingClientRect().top, size: parseFloat(getComputedStyle(ps[1]).fontSize) } : null,
+        fundingLinks: [...main.querySelectorAll(`a[href$="/funding"]`)].length,
+        reviewLinks: [...main.querySelectorAll(`a[href$="/review"]`)].length,
+      };
+    });
+    check(
+      "RI-34",
+      nx.last && nx.first === "우리 회사와 경쟁사를 비교했으니, 다음으로 맞는 자금·판로를 살펴보세요." && nx.a?.t === "자금·판로 보기" && nx.a.href === `/c/${CID}/funding` && /\bbtn\b/.test(nx.a.cls) && nx.a.cls.includes("btn-primary") &&
+        nx.links === 1 && nx.note?.t.includes("‘경쟁사 조건이라면?’") && nx.note.below && nx.note.size <= 15 && nx.fundingLinks === 1 && nx.reviewLinks === 0,
+      JSON.stringify(nx),
+    );
+  }
+  // RI-35: 비교 표의 우리 회사 열(390은 우리 회사 줄)만 옅은 회색(wash) 바탕이고 경쟁사 열은 바탕이 없다(우열 색 없음).
+  // 칸 안 자리: 원문 링크는 값·상태 줄과 따로 한 줄(엇갈림은 값 아래 출처 줄)이고, 미확보 칸의 사유는 같은 줄 다른 칸의 기준 글과 같은 높이다
+  {
+    const t35 = await rv.evaluate(() => {
+      const t = document.querySelector("table[data-compare=table]");
+      const rows = [...t.querySelectorAll("tbody tr")];
+      const bgs = rows.map((r) => [...r.querySelectorAll("td")].map((td) => getComputedStyle(td).backgroundColor));
+      const links = [...t.querySelectorAll("a.cell-link")].map((a) => Boolean(a.closest("[data-cell-link]")) || Boolean(a.parentElement.previousElementSibling?.querySelector(".font-medium")));
+      const rev = rows.find((r) => r.getAttribute("data-item-row") === "revenue");
+      const basis = rev?.querySelectorAll("td")[0].querySelector(".text-xs")?.getBoundingClientRect().top;
+      const reason = [...(rev?.querySelectorAll("td") ?? [])].find((td) => td.querySelector(".word-unavailable"))?.querySelector(".text-sm")?.getBoundingClientRect().top;
+      return { mine: bgs.every((r) => r[0] === "rgb(243, 245, 248)"), others: bgs.every((r) => r.slice(1).every((b) => b === "rgba(0, 0, 0, 0)")), links, align: basis !== undefined && reason !== undefined ? Math.round(reason - basis) : null };
+    });
+    const r35 = await open(`/c/${CID}/rivals`, { ctx, width: 390 });
+    await r35.waitForSelector("[data-compare=items] [data-mine]");
+    const m35 = await r35.evaluate(() => [...document.querySelectorAll("[data-compare=items] li")].filter((l) => l.getBoundingClientRect().height > 0).map((l) => `${l.hasAttribute("data-mine")}:${getComputedStyle(l).backgroundColor}`));
+    await globalChecks(r35, "경쟁사 분석 우리 회사 줄 390");
+    await r35.close();
+    check(
+      "RI-35",
+      t35.mine && t35.others && t35.links.length > 0 && t35.links.every(Boolean) && t35.align !== null && Math.abs(t35.align) <= 3 &&
+        m35.length > 0 && m35.every((x) => (x.startsWith("true") ? x.endsWith("rgb(243, 245, 248)") : x.endsWith("rgba(0, 0, 0, 0)"))),
+      `${JSON.stringify(t35)} | 390 ${[...new Set(m35)].join(",")}`,
+    );
+  }
   // 직접 입력(C-08), 확인 창(C-15~C-19)
   await click(page, "회사 정보 수정", { exact: true });
   await wait(400);
@@ -1017,15 +1336,43 @@ await run("main", async () => {
   // ---------------------------------------------------------- 자금 조달
   n0 = (await getLog()).length;
   const fp = await open(`/c/${CID}/funding`, { ctx });
-  await waitText(fp, "회사 분석 값으로 채운 조건");
+  await waitText(fp, "회사 분석 결과로 채운 조건");
   const chips = await fp.$$eval("label.chip select", (l) => l.map((s) => s.options[s.selectedIndex]?.text));
   const gate = (await text(fp)).includes("기업 유형을 골라 주세요") && (await text(fp)).includes("창업·벤처기업으로 보입니다");
   check("F-01", chips[0] === "서울" && chips[1] === "골라 주세요" && chips[2] === "융자·보증" && chips[3] === "AI·딥테크·소프트웨어" && gate, `${chips.join(",")} (기업 유형은 decisions 2번대로 자동으로 채우지 않고 고르기를 먼저 보인다)`);
+  // F-25(아래 덩어리 끝에서 판정): 기업 유형 상자를 고르기 전·후로 읽는다
+  const bizStep = () =>
+    fp.evaluate(() => {
+      const box = document.querySelector("[data-biz-step]");
+      if (!box) return null;
+      const group = box.querySelector("[role=group]");
+      const hint = box.querySelector("[data-biz-hint]");
+      const btns = [...group.querySelectorAll("button")];
+      return {
+        bg: getComputedStyle(box).backgroundColor,
+        h: box.querySelector("h2")?.textContent ?? "",
+        order: Boolean(hint) ? Boolean(group.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING) && Boolean(box.querySelector("h2").compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING) : null,
+        btns: btns.map((b) => ({ t: b.textContent.trim(), p: b.getAttribute("aria-pressed"), svg: Boolean(b.querySelector("svg")), cls: b.className })),
+        status: box.querySelector("[role=status]")?.textContent.trim() ?? null,
+      };
+    });
+  const biz0 = await bizStep();
   await click(fp, "창업·벤처기업", { exact: true });
   await wait(400);
-  await openDisclosure(fp, "조건은 어디서 왔나요?");
-  const from = await fp.evaluate(() => [...document.querySelectorAll("[role=region]")].find((r) => r.getAttribute("aria-label") === "조건은 어디서 왔나요?")?.innerText.split("\n").filter(Boolean));
-  check("F-02", from?.length === 4 && from[3].includes("추정"), from?.join(" / "));
+  const biz1 = await bizStep();
+  await openDisclosure(fp, "자료 출처");
+  // F-02: "자료 출처"는 회사 분석 결과에서 가져온 조건(지역·관심 투자 분야, 상태 낱말)과 직접 고르는 조건(기업 유형·필요한 지원)을 나눈다(UX 점검 주석16)
+  const from = await fp.evaluate(() => {
+    const r = [...document.querySelectorAll("[role=region]")].find((x) => x.getAttribute("aria-label") === "자료 출처");
+    const g = (k) => [...(r?.querySelectorAll(`[data-cond-group=${k}] [data-cond]`) ?? [])].map((li) => ({ k: li.getAttribute("data-cond"), t: li.innerText.replace(/\s+/g, " ") }));
+    return { data: g("data"), user: g("user"), heads: [...(r?.querySelectorAll("[data-cond-group] > p") ?? [])].map((p) => p.textContent) };
+  });
+  check(
+    "F-02",
+    from.data.map((x) => x.k).join() === "region,field" && from.user.map((x) => x.k).join() === "biz,need" && from.data[1].t.includes("추정") && from.data[0].t.includes("원문 확인") &&
+      from.heads.join() === "회사 분석 결과에서 가져온 조건,직접 고르는 조건",
+    JSON.stringify(from).slice(0, 300),
+  );
   await fp.waitForSelector("[data-program]");
   const debtCards = await fp.$$eval("section[aria-label='빌리는 돈'] [data-program]", (l) => l.length);
   const debtMore = await text(fp, "section[aria-label='빌리는 돈']");
@@ -1039,10 +1386,10 @@ await run("main", async () => {
   check("F-04", existing.inGroup.includes("가나다벤처스") && existing.all === 1, existing.inGroup.join(","));
   const t1 = await text(fp);
   check("F-06 (비교 자료 뒤)", !t1.includes("경쟁사 분석으로 가기"), "비교 자료를 이미 받아 표시가 있는 상태");
-  await openDisclosure(fp, "거르기와 정렬");
+  await openDisclosure(fp, "필터 및 정렬");
   await click(fp, "운전자금", { exact: true });
   await wait(300);
-  check("F-12", (await fp.evaluate(() => [...document.querySelectorAll("button.disclosure")].find((b) => b.textContent.startsWith("거르기와 정렬"))?.textContent)).includes("낱말: 운전자금"));
+  check("F-12", (await fp.evaluate(() => [...document.querySelectorAll("button.disclosure")].find((b) => b.textContent.startsWith("필터 및 정렬"))?.textContent)).includes("낱말: 운전자금"));
   await click(fp, "운전자금", { exact: true });
   await fp.$eval("input[placeholder='결과 안에서 찾기']", (e) => e.focus());
   await fp.keyboard.type("파트너스");
@@ -1083,6 +1430,12 @@ await run("main", async () => {
   // C-23: 단계 메뉴 옆 개수(screens 1.1). 자금 조달 = 거기서 담은 공고·운용사, 심사 준비 = 담은 항목, 0이면 붙이지 않음
   const navNames = await fp.$$eval("nav[aria-label=단계] a", (l) => l.map((a) => a.getAttribute("aria-label") || a.innerText.trim()));
   check("C-23", navNames.join(" / ") === "회사 분석 / 경쟁사 분석, 비교 대상 2곳 / 자금·판로, 담은 후보 3개 / 심사 준비, 담은 항목 3개 / 노트", navNames.join(" / "));
+  // F-27(덩어리 끝에서 판정): 담은 항목 막대가 담은 내역과 다음 행동(주 단추)을 함께 보인다
+  const bar27 = await fp.evaluate(() => {
+    const b = document.querySelector("[data-saved-bar]");
+    const a = b?.querySelector("a");
+    return b ? { t: b.innerText.replace(/\s+/g, " "), a: a?.textContent.trim(), cls: a?.className ?? "", href: a?.getAttribute("href"), fixed: getComputedStyle(b).position } : null;
+  });
   // C-24: 단계 메뉴 다섯(판로 없음). 넓은 화면은 전체 이름, 390 폭은 짧은 이름이 한 줄에 다 보인다(메뉴 안 가로 밀림 없음)
   {
     const wide = await fp.$$eval("nav[aria-label=단계] li", (l) => l.map((x) => x.innerText.replace(/\d+/g, "").trim()));
@@ -1179,13 +1532,100 @@ await run("main", async () => {
       const d = document.querySelector("section[aria-label='빌리는 돈']").getBoundingClientRect();
       const e = document.querySelector("section[aria-label='투자받는 돈']").getBoundingClientRect();
       const s = document.getElementById("lane-sales").getBoundingClientRect();
-      return { side: Math.abs(d.top - e.top) < 2 && e.left > d.right, below: s.top >= Math.max(d.bottom, e.bottom), line: getComputedStyle(document.querySelector("#lane-sales .lane-sales")).boxShadow.includes("107, 78, 138") };
+      // 판로 머리에는 색 윗선이 없고(UX 점검 주석14), 제목은 두 갈래 제목과 같은 크기·굵기이며 안의 덩어리 제목(h3)은 그보다 크지 않다. 앞 구역과는 여백 40px 이상
+      const head = document.querySelector("#lane-sales [data-lane-head]");
+      const h2 = head?.querySelector("h2");
+      const debtH2 = document.querySelector("section[aria-label='빌리는 돈'] h2");
+      const hs = [...document.querySelectorAll("#lane-sales h3")].map((h) => parseFloat(getComputedStyle(h).fontSize));
+      const fs = (e) => `${getComputedStyle(e).fontSize}/${getComputedStyle(e).fontWeight}`;
+      return {
+        side: Math.abs(d.top - e.top) < 2 && e.left > d.right, below: s.top >= Math.max(d.bottom, e.bottom),
+        noLine: Boolean(head) && [head, document.getElementById("lane-sales")].every((x) => getComputedStyle(x).boxShadow === "none" && parseFloat(getComputedStyle(x).borderTopWidth) === 0),
+        sameHead: Boolean(h2 && debtH2) && fs(h2) === fs(debtH2), h3: hs.every((x) => x <= parseFloat(getComputedStyle(h2).fontSize)), gap: Math.round(s.top - Math.max(d.bottom, e.bottom)),
+      };
     });
     const pre = count((await getLog()).slice(l0), "POST", /sections\/sales$/);
     // 판로 단이 화면에 들어오면 1회 부르는 것은 아래 P-01(옛 판로 주소로 열면 판로 단으로 스크롤한다)에서 본다
-    check("F-20", lay.side && lay.below && lay.line && pre === 0, `${JSON.stringify(lay)} 판로 단이 보이기 전 나라장터 요청 ${pre}회`);
+    check("F-20", lay.side && lay.below && lay.noLine && lay.sameHead && lay.h3 && lay.gap >= 40 && pre === 0, `${JSON.stringify(lay)} 판로 단이 보이기 전 나라장터 요청 ${pre}회`);
     await globalChecks(pf, "자금·판로 판로 단 1180");
     await pf.close();
+  }
+  // ---- 2026-11-24 UX 점검(docs/ux/qa-report.md 주석13·15–19, 4절 자금·판로) 반영 기준
+  // F-25: 기업 유형 상자는 옅은 회색 칠이고 질문(제목) → 선택지 → 추정 안내 순서다. 고르면 상자가 남아 고른 단추가 눌린 모양·확인 표시와 글("…을 골랐습니다")로 구별된다
+  check(
+    "F-25",
+    Boolean(biz0 && biz1) && biz0.bg === "rgb(243, 245, 248)" && biz0.h.includes("기업 유형을 골라 주세요") && biz0.order === true && biz0.btns.length === 3 && biz0.btns.every((b) => b.p === "false" && !b.svg && /\bbtn\b/.test(b.cls)) && biz0.status === "" &&
+      biz1.btns.filter((b) => b.p === "true").map((b) => b.t).join() === "창업·벤처기업" && biz1.btns.find((b) => b.p === "true").svg && biz1.btns.find((b) => b.p === "true").cls.includes("btn-pressed") && biz1.status.startsWith("창업·벤처기업을 골랐습니다"),
+    JSON.stringify({ biz0, biz1 }).slice(0, 400),
+  );
+  // F-26: 도움말은 "도움말" 한 구역에 펼치기 줄 넷(자료 출처, 상태 표시 안내, 용어 풀이, 판단 범위)이 차례로 있고, 옛 이름이 없으며,
+  // 용어 짝(상태 표시 안내·용어 풀이)은 정의 목록, 기준일·출처는 펼치기 줄 뒤 따로 놓인 보조 문단(각주선 없음)이다
+  {
+    const ph = await open(`/c/${CID}/funding`, { ctx });
+    await ph.waitForSelector("[data-help]", { timeout: 8000 }).catch(() => null);
+    for (const t of ["상태 표시 안내", "용어 풀이"]) await openDisclosure(ph, t, "[data-help]");
+    const h = await ph.evaluate(() => {
+      const box = document.querySelector("[data-help]");
+      const dls = (label) => {
+        const b = [...box.querySelectorAll("button.disclosure")].find((x) => x.textContent.trim().startsWith(label));
+        const r = b && document.getElementById(b.getAttribute("aria-controls"));
+        return r ? { dt: r.querySelectorAll("dl dt").length, dd: r.querySelectorAll("dl dd").length, tags: r.querySelectorAll("dt .tag").length } : null;
+      };
+      const src = box.querySelector("[data-help-source]");
+      const discs = [...box.querySelectorAll("button.disclosure")];
+      return {
+        h2: box.querySelector("h2")?.textContent,
+        discs: discs.map((b) => b.textContent.trim()),
+        marks: dls("상태 표시 안내"),
+        gloss: dls("용어 풀이"),
+        srcAfter: Boolean(src) && discs.every((b) => b.compareDocumentPosition(src) & Node.DOCUMENT_POSITION_FOLLOWING),
+        srcLine: src ? getComputedStyle(src, "::before").content : null,
+        old: ["조건은 어디서 왔나요", "표시의 뜻", "거르기와 정렬", "회사 분석 값으로"].filter((w) => document.querySelector("main").innerText.includes(w)),
+      };
+    });
+    check(
+      "F-26",
+      h.h2 === "도움말" && h.discs.join("|") === "자료 출처|상태 표시 안내|용어 풀이|이 목록이 판단하는 것과 하지 않는 것" && h.marks?.dt === 3 && h.marks.dd === 3 && h.marks.tags === 3 && h.gloss?.dt === 5 && h.gloss.dd === 5 &&
+        h.srcAfter && (h.srcLine === "none" || h.srcLine === "normal") && h.old.length === 0,
+      JSON.stringify(h),
+    );
+    await ph.close();
+  }
+  // F-27: 담은 항목 막대에 담은 개수·내역과 다음 행동 주 단추 "심사 준비로 가기"(btn btn-primary)가 함께 있다
+  check(
+    "F-27",
+    Boolean(bar27) && bar27.t.includes("담은 항목 3개") && bar27.t.includes("공고 2건, 운용사 1곳") && bar27.a === "심사 준비로 가기" && /\bbtn\b/.test(bar27.cls) && bar27.cls.includes("btn-primary") && bar27.href === `/c/${CID}/review` && bar27.fixed === "fixed",
+    JSON.stringify(bar27),
+  );
+  // F-28: 목록 줄 순서(4절 "제목·마감·지원 유형·담기"): 공고·운용사 카드에서 제목이 첫 줄이고(위에 꼬리표 줄 없음), 꼬리표(지원 유형·지역)가 제목 아래,
+  // 기한·표시는 넓은 곳 오른쪽 끝(제목과 같은 높이), 좁은 곳 제목 아래 줄 오른쪽이며, 좁은 곳 제목은 카드 안 폭을 다 쓴다
+  {
+    const rowOf = (pg) =>
+      pg.evaluate(() =>
+        [...document.querySelectorAll("[data-program], [data-gp]")].filter((c) => c.getBoundingClientRect().height > 0).slice(0, 4).map((c) => {
+          const row = c.querySelector(".lrow");
+          const t = row.querySelector("h3").getBoundingClientRect();
+          const m = row.querySelector(".lrow-meta").getBoundingClientRect();
+          const e = row.querySelector(".lrow-end").getBoundingClientRect();
+          const save = [...c.querySelectorAll("button[aria-pressed]")][0]?.getBoundingClientRect();
+          return { first: row.firstElementChild.tagName, below: m.top >= t.bottom - 1, endTop: Math.round(e.top - t.top), endBelowTitle: e.top >= t.bottom - 1, saveBelow: save ? save.top > Math.max(m.bottom, e.bottom) : false, fullTitle: Math.round(row.getBoundingClientRect().width - t.width) };
+        }),
+      );
+    const w1180 = await open(`/c/${CID}/funding`, { ctx });
+    await w1180.waitForSelector("[data-program]");
+    await wait(500);
+    const r1 = await rowOf(w1180);
+    await w1180.close();
+    const w390 = await open(`/c/${CID}/funding?lane=invest`, { ctx, width: 390 });
+    await w390.waitForSelector("[data-gp]");
+    await wait(500);
+    const r3 = await rowOf(w390);
+    await w390.close();
+    check(
+      "F-28",
+      r1.length >= 2 && r3.length >= 2 && [...r1, ...r3].every((r) => r.first === "H3" && r.below && r.saveBelow) && r1.every((r) => Math.abs(r.endTop) <= 4) && r3.every((r) => r.endBelowTitle && r.fullTitle <= 1),
+      JSON.stringify({ r1, r3 }).slice(0, 400),
+    );
   }
   // ---------------------------------------------------------- 심사 준비
   const rp = await open(`/c/${CID}/review`, { ctx });
@@ -1221,7 +1661,7 @@ await run("main", async () => {
   await ctl({ noticeDelayMs: 200 });
   const c1 = await text(rp, "[data-notice='PBLN_000000000000001']");
   check("R-06", c1.includes("대상 아님") && c1.includes("충족 4") && c1.includes("미충족 1") && c1.includes("확인 필요 2"));
-  await click(rp, "자세히", { exact: true, within: "[data-notice='PBLN_000000000000001']" });
+  await click(rp, "조건별 판단 보기", { exact: true, within: "[data-notice='PBLN_000000000000001']" });
   const rowsV = await rp.$$eval("[data-notice='PBLN_000000000000001'] [data-rows] > li", (l) => l.map((x) => x.innerText.split("\n")[0].trim().split(" ")[0]));
   const c1o = await text(rp, "[data-notice='PBLN_000000000000001']");
   check("R-07", rowsV.length === 7 && rowsV.join() === "미충족,확인,확인,충족,충족,충족,충족" && c1o.includes("신청 방법·제출 서류 등 2건"), rowsV.join(","));
@@ -1233,14 +1673,15 @@ await run("main", async () => {
   check("R-09", qs === 5 && innerDisc === 0);
   await click(rp, "공고문으로 자격 대조", { within: "[data-notice='PBLN_000000000000002']" });
   await waitText(rp, "대조한 공고 2건", 5000);
-  const gl = await text(rp, "#panel-grants");
+  const gl = await text(rp, "[data-gaps]");
+  const gapN = await rp.$$eval("[data-gap-count]", (l) => l.map((e) => e.innerText.replace(/\s+/g, "")).join());
   await openDisclosure(rp, "부족한 요건");
   const groups = await rp.$$eval("[data-gap-group]", (l) => l.length);
-  check("R-10", gl.includes("미충족 2개, 확인 필요 4개 (대조한 공고 2건)") && groups >= 2, `${groups}묶음`);
-  // A-25: 담은 공고 중 14일 안 마감(가짜 공고 D-8, D-13)과 대조한 공고의 미충족 요건(2개)을 회사 분석 "지금 확인할 것"에 센다
+  check("R-10", gapN === "미충족2개,확인필요4개" && gl.includes("대조한 공고 2건") && groups >= 2, `${gapN} ${groups}묶음`);
+  // A-25: 담은 공고 중 14일 안 마감(가짜 공고 D-8, D-13)과 대조한 공고의 미충족 요건(2개)을 회사 분석 "확인이 필요한 정보"에 센다
   {
     const cp = await open(`/c/${CID}`, { ctx: rp.browserContext() });
-    await waitText(cp, "지금 확인할 것");
+    await waitText(cp, "확인이 필요한 정보");
     // 새 페이지라 공고 목록을 받는 동안은 "마감 임박은 공고 목록을 받으면 셉니다"(A-33). 받은 뒤의 개수를 본다
     await cp.waitForFunction(() => (document.querySelector("[data-checknow]")?.innerText ?? "").includes("마감 임박 담은 공고"), { timeout: 8000 }).catch(() => null);
     const ck = await text(cp, "[data-checknow]");
@@ -1350,6 +1791,47 @@ await run("main", async () => {
   const kept = await text(rp2, "#panel-grants");
   check("R-14", kept.includes("충족 4") && count((await getLog()).slice(n0), "POST", /notice|brief/) === 0 && (await text(rp2)).length > 0);
   await rp2.close();
+  // R-28~R-30(QA 주석20·4절): 미충족·확인 필요 개수가 갈래 맨 위, 공고 카드는 판정 요약(접힌 채)과 조건별 판단(펼친 안)을 나누고,
+  // 펼친 조건은 머리 줄(판정 낱말 글) → 공고문 근거 → 판단 이유 → 관련 있을 수 있는 회사 정보. 근거 인용선은 바깥 왼쪽 선에서 띄운다
+  {
+    const rv = await open(`/c/${CID}/review?tab=grants`, { ctx });
+    await waitText(rv, "공고별 판정");
+    await wait(500);
+    const top = await rv.evaluate(() => {
+      const panel = document.getElementById("panel-grants");
+      const gapsEl = panel.querySelector("[data-gaps]");
+      const cards = panel.querySelector("section[aria-labelledby=notices-h]");
+      const counts = Object.fromEntries([...panel.querySelectorAll("[data-gap-count]")].map((e) => [e.getAttribute("data-gap-count"), e.innerText.replace(/\s+/g, "")]));
+      return { first: panel.firstElementChild?.firstElementChild === gapsEl, above: Boolean(gapsEl && cards && gapsEl.getBoundingClientRect().top < cards.getBoundingClientRect().top), counts, old: /대조에 쓴|대조에 쓰는 회사 값|회사 값 보기/.test(panel.innerText) };
+    });
+    check("R-28", top.first && top.above && top.counts["미충족"] === "미충족2개" && top.counts["확인 필요"] === "확인필요4개" && !top.old, JSON.stringify(top));
+    const card = "[data-notice='PBLN_000000000000001']";
+    const c0 = await rv.evaluate((card) => {
+      const el = document.querySelector(card);
+      return { sum: el.querySelector("[data-summary]")?.innerText ?? "", detH: el.querySelector("[id^=detail-]")?.getBoundingClientRect().height ?? -1, btn: [...el.querySelectorAll("button[aria-expanded]")].map((b) => b.textContent.trim()) };
+    }, card);
+    await click(rv, "조건별 판단 보기", { exact: true, within: card });
+    await wait(200);
+    await rv.evaluate((card) => document.querySelector(`${card} [data-rows] .row-btn`).click(), card);
+    await wait(200);
+    const c1 = await rv.evaluate((card) => {
+      const el = document.querySelector(card);
+      const li = el.querySelector("[data-rows] > li");
+      const body = li.querySelector("[data-cond-body]");
+      const outer = body.closest(".row-body") ?? body.parentElement;
+      return {
+        h4: el.querySelector("h4")?.textContent.replace(/\s+/g, " ").trim(), detH: el.querySelector("[id^=detail-]").getBoundingClientRect().height,
+        head: li.querySelector(".row-btn").innerText.replace(/\s+/g, " ").trim(), parts: [...body.querySelectorAll("[data-cond-part]")].map((p) => p.getAttribute("data-cond-part")),
+        labels: [...body.querySelectorAll("[data-cond-part] > p:first-child")].map((p) => p.textContent),
+        gap: Math.round(body.querySelector("blockquote").getBoundingClientRect().left - outer.getBoundingClientRect().left),
+        clamp: getComputedStyle(li.querySelector(".row-btn .clamp-2")).webkitLineClamp, old: /대조에 쓴 회사 값/.test(el.innerText),
+      };
+    }, card);
+    check("R-29", c0.sum.includes("대상 아님") && c0.sum.includes("제외 대상 조건 하나가 맞지 않습니다") && c0.detH === 0 && c0.btn.includes("조건별 판단 보기") && c1.detH > 0 && c1.h4 === "조건별 판단 7건", `${JSON.stringify(c0)} ${c1.h4}`);
+    check("R-30", c1.head.startsWith("미충족 ") && c1.parts.join() === "quote,reason,company" && c1.labels.join() === "공고문 근거,판단 이유,관련 있을 수 있는 회사 정보" && c1.gap >= 12 && c1.clamp !== "2" && !c1.old, JSON.stringify(c1));
+    await globalChecks(rv, "심사 준비 조건 펼침 1180");
+    await rv.close();
+  }
 
   // ---------------------------------------------------------- 자금 조달 판로 갈래(옛 판로 화면, 옛 주소로 열어 넓은 화면에서 판로 단으로 간다)
   n0 = (await getLog()).length;
@@ -1434,12 +1916,12 @@ await run("main", async () => {
     check("F-21", r.path === `/c/${CID}/funding` && r.q.includes("lane=sales") && r.sel === "판로", JSON.stringify(r));
     await po.close();
   }
-  // F-23: 390 폭 판로 탭에서는 빠른 거르기·거르기와 정렬이 없고, 탭을 바꿔도 탭 줄이 움직이지 않는다
+  // F-23: 390 폭 판로 탭에서는 빠른 필터·필터 및 정렬이 없고, 탭을 바꿔도 탭 줄이 움직이지 않는다
   {
     const pt = await open(`/c/${CID}/funding?lane=sales`, { ctx, width: 390 });
     await pt.waitForSelector("[role=tablist][aria-label=갈래]");
     await wait(800);
-    const st = () => pt.evaluate(() => ({ tabs: Math.round(document.querySelector("[role=tablist][aria-label=갈래]").getBoundingClientRect().top + scrollY), quick: document.querySelector("[aria-label='빠른 거르기']")?.getBoundingClientRect().height ?? 0 }));
+    const st = () => pt.evaluate(() => ({ tabs: Math.round(document.querySelector("[role=tablist][aria-label=갈래]").getBoundingClientRect().top + scrollY), quick: document.querySelector("[aria-label='빠른 필터']")?.getBoundingClientRect().height ?? 0 }));
     const a = await st();
     await click(pt, "빌리는 돈", { within: "[role=tablist][aria-label=갈래]" });
     await pt.evaluate(() => window.scrollTo(0, 0));
@@ -1451,11 +1933,11 @@ await run("main", async () => {
 
   // ---------------------------------------------------------- 노트
   const np = await open(`/c/${CID}/note`, { ctx });
-  await waitText(np, "회사 핵심 값");
+  await np.waitForSelector("[data-part=values] [data-row]", { timeout: 8000 }).catch(() => null);
   await wait(500);
   const parts = await np.$$eval("[data-note] [data-part]", (l) => l.map((x) => x.getAttribute("data-part")));
   check("N-01", parts.join() === "head,values,programs,gps,sales,todo,memo,foot", parts.join());
-  const vrows = await np.$$eval("[data-part=values] tbody tr", (l) => l.map((r) => ({ w: r.querySelectorAll(".word").length, src: r.querySelectorAll(".text-xs").length, t: r.innerText })));
+  const vrows = await np.$$eval("[data-part=values] [data-row]", (l) => l.map((r) => ({ w: r.querySelectorAll(".word").length, src: r.querySelectorAll("[data-src]").length, t: r.innerText })));
   check("N-02", vrows.length === 9 && vrows.every((r) => r.w >= 1) && vrows.filter((r) => !r.t.includes("미확보")).every((r) => r.src >= 1));
   check("P-09", (await text(np, "[data-part=sales]")).includes(bidTitle));
   check("R-22", (await text(np, "[data-part=todo]")).includes("메모시험") && memo === "메모시험");
@@ -1463,7 +1945,8 @@ await run("main", async () => {
   check("N-04", lists.every((l) => l.n <= 5) && lists.some((l) => /\d+개 더 보기/.test(l.more)));
   check("N-11", (await text(np, "[data-part=foot]")).includes("회사 분석에 쓴 Liner 호출 19회"));
   check("D-04 (노트)", (await text(np, "[data-part=values]")).includes("투자기관 35곳"));
-  check("D-03 (노트)", /매출[^\n]*\n?[^\n]*사업연도, 별도/.test(await text(np, "[data-part=values]")));
+  // 매출 줄 안에 "사업연도, 별도"(회사 정보는 이름표·구분·값·낱말이 따로 놓여 줄바꿈 수로 보지 않고 매출 줄 하나만 본다)
+  check("D-03 (노트)", await np.evaluate(() => [...document.querySelectorAll("[data-part=values] [data-row]")].some((r) => r.querySelector("dt").textContent.startsWith("매출") && r.querySelector("dd").innerText.includes("사업연도, 별도"))));
   await np.focus("#note-memo");
   await np.keyboard.type("노트 메모 시험");
   const savedShown = await waitText(np, "저장됨", 3000);
@@ -1495,7 +1978,7 @@ await run("main", async () => {
   await wait(500);
   check("N-13", (await text(np)).includes("성장노트에서 내보낸 파일이 아닙니다.") && !(await np.$("dialog[open]")) && savedBefore >= 3 && (await idbCount(np, "saved")) === savedBefore && (await np.$eval("#note-memo", (e) => e.value)) === "노트 메모 시험", `담은 항목 ${savedBefore}`);
   const npr = await open(`/c/${CID}/note`, { ctx });
-  await waitText(npr, "회사 핵심 값");
+  await npr.waitForSelector("[data-part=values] [data-row]", { timeout: 8000 }).catch(() => null);
   await wait(500);
   check("N-05", savedShown && (await npr.$eval("#note-memo", (e) => e.value)) === "노트 메모 시험");
   await globalChecks(npr, "노트 1180");
@@ -1515,11 +1998,75 @@ await run("main", async () => {
   check("PR-01 (바닥 문장 한 번)", siteFoot === 0 && (await npr.evaluate(() => (document.querySelector("[data-note]")?.innerText.match(/점수나 선정 확률은 만들지 않습니다/g) ?? []).length)) === 1);
   await npr.emulateMediaType("screen");
   const n390 = await open(`/c/${CID}/note`, { ctx, width: 390 });
-  await waitText(n390, "회사 핵심 값");
+  await n390.waitForSelector("[data-part=values] [data-row]", { timeout: 8000 }).catch(() => null);
   const btns = await n390.$$eval("main > div.no-print button", (l) => l.filter((b) => b.getBoundingClientRect().height > 0).map((b) => b.textContent.trim()));
   check("N-12", btns.join() === "인쇄·PDF 저장,더 보기", btns.join());
   await globalChecks(n390, "노트 390");
   await sh(n390, "note-390");
+  // N-14(QA 주석21·22): 제목 "회사 정보", 이름표 열과 값 열이 고정(줄마다 값 왼쪽 끝이 같다), 출처·기준일은 값 아래 같은 왼쪽 끝,
+  // 공식 자료 칸과 웹 조사 칸은 값 앞 이름으로 가른다(매출 줄. 업종은 이 흐름에서 고친 값이라 이름이 없다)
+  {
+    const nv = await npr.evaluate(() => {
+      const vals = document.querySelector("[data-part=values]");
+      const rows = [...vals.querySelectorAll("[data-row]")];
+      const ddL = [...new Set(rows.map((r) => Math.round(r.querySelector("dd").getBoundingClientRect().left)))];
+      const srcL = [...new Set([...vals.querySelectorAll("[data-src]")].map((s) => Math.round(s.getBoundingClientRect().left)))];
+      const rev = rows.find((r) => r.querySelector("dt").textContent.startsWith("매출"));
+      return { h2: vals.querySelector("h2").textContent, ddL, srcL, tags: rev ? [...rev.querySelectorAll("dd .meta")].map((t) => t.textContent) : [], rows: rows.length };
+    });
+    const old = (await text(npr, "[data-note]")).includes("회사 핵심 값");
+    check("N-14", nv.h2 === "회사 정보" && !old && nv.rows === 9 && nv.ddL.length === 1 && nv.srcL.length === 1 && Math.abs(nv.srcL[0] - nv.ddL[0]) <= 1 && nv.tags.join() === "공식 자료,웹 조사", JSON.stringify(nv));
+  }
+  // N-16(QA 주석23·4절): 담은 자금 후보는 공고 전체 상태(신청 검토 가능 → 확인 후 판단 → 대조 전 → 대상 아님)로 묶고, 공고마다
+  // 제목·마감 → 판정 요약 → 들여 쓴 조건(미충족·확인 필요) → 근거 줄 순서. 제목 크기는 구역 > 상태 묶음 > 공고 > 조건 묶음
+  let noteGroups = [];
+  {
+    const pg = await npr.evaluate(() => {
+      const info = [...document.querySelectorAll("[data-part=programs] [data-notice-group]")].map((g) => ({ state: g.getAttribute("data-notice-group"), head: g.querySelector("h3").textContent.replace(/\s+/g, " ").trim(), n: g.querySelectorAll("[data-note-notice]").length }));
+      const art = [...document.querySelectorAll("[data-part=programs] [data-note-notice]")].find((a) => a.querySelector("[data-conditions]"));
+      if (!art) return { info };
+      const title = art.querySelector("h4");
+      const summary = title.parentElement.nextElementSibling;
+      const cond = art.querySelector("[data-conditions]");
+      const basis = cond.nextElementSibling;
+      const tops = [title, summary, cond, basis].map((e) => e.getBoundingClientRect().top);
+      const fs = (e) => parseFloat(getComputedStyle(e).fontSize);
+      return {
+        info, ordered: tops.every((t, i) => i === 0 || t > tops[i - 1]), indent: Math.round(cond.querySelector("h5").getBoundingClientRect().left - title.getBoundingClientRect().left),
+        sizes: [fs(document.querySelector("[data-part=programs] > h2")), fs(document.querySelector("[data-notice-group] h3")), fs(title), fs(cond.querySelector("h5 span"))],
+        cond: [...cond.querySelectorAll("h5")].map((h) => h.textContent.replace(/\s+/g, " ").trim()), basis: basis?.textContent ?? "",
+      };
+    });
+    const ORDER = ["신청 검토 가능", "확인 후 판단", "대조 전", "대상 아님"];
+    const idx = pg.info.map((g) => ORDER.indexOf(g.state));
+    noteGroups = pg.info.map((g) => g.state);
+    check(
+      "N-16",
+      // 이 흐름의 담은 공고는 대조한 자금 공고 2건(둘 다 대상 아님)과 판로 갈래에서 담은 판로 지원사업 1건(대조 전)이다.
+      // 판로 지원사업도 자격 대조 대상이라 판정 묶음에 들어간다(screens 8절 3, 리뷰 P2). 여러 묶음의 순서는 아래 idx 와 단위 시험이 본다
+      pg.info.length >= 1 && pg.info.reduce((s, g) => s + g.n, 0) === 3 && pg.info.some((g) => g.state === "대조 전" && g.n === 1) && idx.every((v, i) => v >= 0 && (i === 0 || v > idx[i - 1])) && pg.info.every((g) => g.head === `${g.state} ${g.n}건`) && pg.ordered &&
+        pg.indent >= 16 && pg.sizes.every((s, i) => i === 0 || s < pg.sizes[i - 1]) && pg.cond.join() === "미충족 1,확인 필요 2" && pg.basis.startsWith("근거: 공고문"),
+      JSON.stringify(pg),
+    );
+  }
+  // N-17(QA 주석22·4절): 인쇄에서도 정보 순서가 화면과 같고(구역·상태 묶음), 회사 정보는 두 열 그대로,
+  // 제목은 내용과 떨어지지 않고(break-after: avoid) 공고 하나·회사 정보 한 줄은 쪽에서 쪼개지지 않는다(break-inside: avoid)
+  {
+    await npr.emulateMediaType("print");
+    const pr = await npr.evaluate(() => {
+      const vis = (e) => e.getBoundingClientRect().height > 0;
+      const r = document.querySelector("[data-part=values] [data-row]");
+      return {
+        parts: [...document.querySelectorAll("[data-note] [data-part]")].filter(vis).map((x) => x.getAttribute("data-part")),
+        groups: [...document.querySelectorAll("[data-notice-group]")].filter(vis).map((g) => g.getAttribute("data-notice-group")),
+        avoid: [...document.querySelectorAll("[data-note-notice], [data-part=values] [data-row]")].every((e) => getComputedStyle(e).breakInside === "avoid"),
+        after: [...document.querySelectorAll("[data-note] :is(h2, h3, h4, h5)")].every((e) => getComputedStyle(e).breakAfter === "avoid"),
+        twoCols: Math.abs(r.querySelector("dd").getBoundingClientRect().top - r.querySelector("dt").getBoundingClientRect().top) < 2,
+      };
+    });
+    await npr.emulateMediaType("screen");
+    check("N-17", pr.parts.join() === parts.join() && pr.groups.join() === noteGroups.join() && pr.avoid && pr.after && pr.twoCols, JSON.stringify(pr));
+  }
   // D-07: 브라우저 자료가 대조·요약 밖의 요청에 실리지 않는다
   const lgAll = await getLog();
   const leaks = lgAll.filter((x) => !/notice\/analyze|gp\/brief/.test(x.path) && JSON.stringify(x.body ?? "").match(/운전자금 [35]억|고친 업종|노트 메모|메모시험/));
@@ -1559,7 +2106,7 @@ await run("variants", async () => {
   await waitText(page, "다른 자료:");
   const row = await page.evaluate(() => [...document.querySelectorAll("#overview .row-btn")].find((b) => b.innerText.startsWith("설립"))?.innerText ?? "");
   check("C-04", row.includes("2020-09-15") && row.includes("다른 자료: 2021-01") && (row.match(/엇갈림/g) ?? []).length === 1, row.replace(/\n/g, " "));
-  // A-26: 엇갈린 값 1개(설립)가 "지금 확인할 것"에 있고, 누르면 두 값과 "개요 단락에서 보기"가 펼쳐지며 링크는 개요 제목으로 간다
+  // A-26: 엇갈린 값 1개(설립)가 "확인이 필요한 정보"에 있고, 누르면 두 값과 "개요 단락에서 보기"가 펼쳐지며 링크는 개요 제목으로 간다
   {
     const ck0 = await text(page, "[data-checknow]");
     await page.evaluate(() => document.querySelector("[data-checknow] button[aria-controls=checknow-list]")?.click());
@@ -1578,9 +2125,15 @@ await run("variants", async () => {
   const ov = await rp.$eval("[data-open-values]", (e) => e.innerText).catch(() => "");
   check("R-19", /설립[\s\S]*2020-09-15[\s\S]*다른 자료: 2021-01/.test(ov));
   const np = await open(`/c/${CID}/note`, { ctx: page.browserContext() });
-  await waitText(np, "회사 핵심 값");
-  const fr = await np.evaluate(() => [...document.querySelectorAll("[data-part=values] tr")].find((r) => r.innerText.startsWith("업력"))?.innerText ?? "");
+  await np.waitForSelector("[data-part=values] [data-row]", { timeout: 8000 }).catch(() => null);
+  const fr = await np.evaluate(() => [...document.querySelectorAll("[data-part=values] [data-row]")].find((r) => r.innerText.startsWith("업력"))?.innerText ?? "");
   check("N-03", fr.includes("2020-09-15") && fr.includes("2021-01"));
+  // N-15(QA 주석22): 엇갈린 줄은 이름표 옆에 "엇갈림" 한 번, 둘째 값 앞에 "다른 자료", 두 값 모두 바로 아래 출처
+  const cf = await np.evaluate(() => {
+    const r = [...document.querySelectorAll("[data-part=values] [data-row]")].find((x) => x.innerText.startsWith("업력"));
+    return r ? { dtWord: r.querySelectorAll("dt .word-conflicting").length, ddWord: r.querySelectorAll("dd .word").length, tags: [...r.querySelectorAll("dd .meta")].map((t) => t.textContent), src: r.querySelectorAll("dd [data-src]").length } : null;
+  });
+  check("N-15", Boolean(cf && cf.dtWord === 1 && cf.ddWord === 0 && cf.tags.join() === "다른 자료" && cf.src === 2), JSON.stringify(cf));
   check("D-06 (노트, 근거 묶음)", fr.includes("2021-01") && ov.includes("2021-01"));
   await reset({ scenario: "F-MONEY" });
   page = await open(`/c/${CID}`);
@@ -1619,7 +2172,7 @@ await run("variants", async () => {
   check("NE-08", !/중요 사건 \d+개 더 보기/.test(t));
   const tiles = await page.$$eval("ul[aria-label='핵심 값'] li", (l) => l.map((x) => x.innerText));
   check("C-06", tiles.filter((x) => x.includes("미확보:")).length >= 2 && !tiles.some((x) => /\n(0|-)\n/.test(`\n${x}\n`)));
-  // A-35: 특허 값 이름("검색으로 확인한 특허", 2026-11-23)을 바꾼 뒤에도 "지금 확인할 것" 미확보 값의 특허 줄이 기술 단락으로 간다
+  // A-35: 특허 값 이름("검색으로 확인한 특허", 2026-11-23)을 바꾼 뒤에도 "확인이 필요한 정보" 미확보 값의 특허 줄이 기술 단락으로 간다
   // (review.ts openValues 라벨과 Analysis.tsx VALUE_SECTION 키가 같은 PATENT_LABEL)
   {
     await page.evaluate(() => [...document.querySelectorAll("[data-checknow] button[aria-controls=checknow-list]")].find((b) => b.innerText.includes("미확보"))?.click());
@@ -1650,9 +2203,25 @@ await run("variants", async () => {
   await waitText(page, "법인이 확인되지 않아 공식 재무·고용 자료가 없습니다.");
   const fi = await text(page, "#finance");
   check("FI-07", fi.includes("미확보") && fi.includes("법인 다시 고르기"));
+  // FI-11: 재무만 없음(official partial, 서버 no_data "금융위원회 재무 자료 없음")이면 그 사유는 매출·영업이익 자리에 한 번만 있고 구역 경고("일부 자료를 얻지 못했습니다")는 없다.
+  // 웹 조사 매출(보도)은 같은 자리 바로 아래에서 공식 자료와 구분해 읽힌다(qa-report 4절 회사 분석, 2026-11-24)
+  {
+    const off = JSON.parse(readFileSync(new URL("../../fixtures/analysis/F-FULL.json", import.meta.url), "utf8")).exchanges[0].response.sections.official;
+    const reason = "금융위원회 재무 자료 없음";
+    await reset({ scenario: "F-FULL", overrides: { official: { ...off, status: "partial", error: { code: "no_data", message: reason, source: null, retryAt: null }, result: { ...off.result, financials: [], financialsAll: [], financialsReason: reason } } } });
+    const p11 = await open(`/c/${CID}`);
+    await waitText(p11, "웹 조사 매출:");
+    const f11 = await p11.evaluate((reason) => {
+      const fin = document.getElementById("finance");
+      const fig = fin.querySelector("figure");
+      return { n: fin.innerText.split(reason).length - 1, warn: fin.innerText.includes("일부 자료를 얻지 못했습니다"), webInFig: fig.innerText.includes("웹 조사 매출:"), figHead: fig.querySelector("figcaption")?.textContent };
+    }, reason);
+    check("FI-11", f11.n === 1 && !f11.warn && f11.webInFig && f11.figHead === "매출과 영업이익", JSON.stringify(f11));
+    await p11.browserContext().close();
+  }
   await reset({ scenario: "F-NOCORP", nocorpPhase: 0 });
   page = await open("/c/n-d8839daa56981b49/funding");
-  await waitText(page, "회사 분석 값으로 채운 조건");
+  await waitText(page, "회사 분석 결과로 채운 조건");
   const r0 = await page.$eval("label.chip select", (s) => s.value);
   await ctl({ nocorpPhase: 1 });
   const asked = await waitText(page, "조건을 바꿀까요?", 6000);
@@ -2241,7 +2810,7 @@ await run("variants", async () => {
     });
     if (target && !(await fs.$(`section[aria-label='빌리는 돈'] [data-program='${target.id}']`))) {
       // 빌리는 돈 첫 5장에 없으면 결과 안에서 찾기로 그 공고를 앞으로 꺼낸다
-      await openDisclosure(fs, "거르기와 정렬");
+      await openDisclosure(fs, "필터 및 정렬");
       await fs.type("input[placeholder='결과 안에서 찾기']", target.title.slice(0, 12));
       await wait(500);
     }
@@ -2293,7 +2862,7 @@ await run("browse", async () => {
   check("F0-04", (await text(rp)).includes("담은 공고 0건"));
   check("R-03", (await text(rp)).includes("아직 담은 공고가 없습니다.") && (await text(rp)).includes("자금·판로에서 고르기"));
   const np = await open(`/c/${CID}/note`, { ctx });
-  await waitText(np, "회사 핵심 값");
+  await np.waitForSelector("[data-part=values] [data-row]", { timeout: 8000 }).catch(() => null);
   check("N-10", (await text(np)).includes("담은 항목이 없습니다.") && (await text(np)).includes("자금·판로로 가기") && (await text(np)).includes("메모"));
   // 운용사만 담았으면 투자 갈래(R-01)
   const fp = await open(`/c/${CID}/funding?lane=invest`, { ctx });
@@ -2460,11 +3029,11 @@ await run("header-height", async () => {
   check("L-02 (머리줄 높이 49·로고 위치)", fails.length === 0, fails.slice(0, 4).join(" | ") || (seen.logo ?? []).join(" · "));
 });
 
-// A-33·D-08: 담은 공고 마감일은 지금 공고 자료 먼저, 없으면 담을 때 저장값(lib/review.ts noticeEnd). "지금 확인할 것"·심사 준비·노트가 같은 날짜다.
+// A-33·D-08: 담은 공고 마감일은 지금 공고 자료 먼저, 없으면 담을 때 저장값(lib/review.ts noticeEnd). "확인이 필요한 정보"·심사 준비·노트가 같은 날짜다.
 // 공고 목록을 받는 동안은 마감 임박 개수를 보이지 않고(저장값으로 셌다가 바뀌지 않게), 담은 공고가 있으면 틀을 먼저 두어 아래가 밀리지 않는다.
 // A-34: 이 묶음은 목록을 5초만 기다리고 저장값으로 센다. 공용 요청은 끊지 않아 늦게 오면 지금 자료로 다시 센다(위치 그대로)
 await run("deadline-basis", async () => {
-  await reset({ scenario: "F-FULL" }); // 엇갈림·미확보 0: "지금 확인할 것"에는 담은 공고 항목만 나온다
+  await reset({ scenario: "F-FULL" }); // 엇갈림·미확보 0: "확인이 필요한 정보"에는 담은 공고 항목만 나온다
   const ctx = await browser.createBrowserContext();
   const P3 = "PBLN_000000000000003";
   const P4 = "PBLN_000000000000004";
@@ -2512,8 +3081,8 @@ await run("deadline-basis", async () => {
   check("A-33 (지금 자료 우선)", ck1.includes("마감 임박 담은 공고 1건") && ck1.includes("D-5"), ck1.replace(/\n/g, " "));
   check("D-08 (세 화면 같은 마감일)", ck1.includes("D-5") && card1.includes("D-5, 11.27 마감") && note1.includes("11.27 마감") && !note1.includes("12.7"), `${card1} | ${note1.split("\n").find((l) => l.includes("마감")) ?? "노트 없음"}`);
 
-  // 2) 공고 목록을 받지 못함 → 세 화면 모두 저장값(12.7, D-15). 지금 확인할 것에는 마감 임박이 없다
-  //    (F-FULL 이라 다른 항목도 없다. 오류 전 받는 동안 틀을 잡았으면 "지금 확인할 것이 없습니다"로 남는다)
+  // 2) 공고 목록을 받지 못함 → 세 화면 모두 저장값(12.7, D-15). 확인이 필요한 정보에는 마감 임박이 없다
+  //    (F-FULL 이라 다른 항목도 없다. 오류 전 받는 동안 틀을 잡았으면 "확인이 필요한 정보가 없습니다"로 남는다)
   const a2 = await open(`/c/${CID}`, { ctx, blockData: true });
   await a2.waitForSelector("#h-overview", { timeout: 8000 }).catch(() => null);
   await wait(1500);
@@ -2529,9 +3098,9 @@ await run("deadline-basis", async () => {
   await wait(800);
   const note2 = await text(n2, "[data-part=programs]");
   await n2.close();
-  check("A-33 (목록 못 받음 → 저장값)", !ck2.includes("마감 임박 담은 공고") && (ck2 === "" || ck2.includes("지금 확인할 것이 없습니다")) && card2.includes("D-15, 12.7 마감") && note2.includes("12.7 마감"), `묶음 "${ck2.replace(/\n/g, " ") || "없음"}" | ${card2} | ${note2.split("\n").find((l) => l.includes("마감")) ?? "노트 없음"}`);
+  check("A-33 (목록 못 받음 → 저장값)", !ck2.includes("마감 임박 담은 공고") && (ck2 === "" || ck2.includes("확인이 필요한 정보가 없습니다")) && card2.includes("D-15, 12.7 마감") && note2.includes("12.7 마감"), `묶음 "${ck2.replace(/\n/g, " ") || "없음"}" | ${card2} | ${note2.split("\n").find((l) => l.includes("마감")) ?? "노트 없음"}`);
 
-  // 화면 기록: 개요 제목이 그려진 뒤 40ms 마다 "지금 확인할 것" 글(없으면 null)과 개요 제목 위치
+  // 화면 기록: 개요 제목이 그려진 뒤 40ms 마다 "확인이 필요한 정보" 글(없으면 null)과 개요 제목 위치
   const record = (pg, ms = 3800) =>
     pg.evaluate((ms) => {
       window.__ck = [];
@@ -2575,7 +3144,7 @@ await run("deadline-basis", async () => {
     const ok = seen.length > 0 && seen.every((x) => x.t !== null) && seen[0].t.includes(HOLD) && !seen.some((x) => /마감 임박 담은 공고 1건/.test(x.t)) && last.includes("마감 임박 담은 공고 2건") && last.includes("D-5") && ovs.length === 1;
     check(`A-33 (받는 중 ${w})`, ok, `처음 "${seen[0]?.t ?? "없음"}" → 끝 "${last}", 개요 제목 위치 ${ovs.join("/")}`);
   }
-  // 받은 뒤 마감 임박이 없으면(둘 다 마감이 늘어남) 틀은 이 방문 동안 "지금 확인할 것이 없습니다"로 남는다(아래가 다시 밀리지 않게)
+  // 받은 뒤 마감 임박이 없으면(둘 다 마감이 늘어남) 틀은 이 방문 동안 "확인이 필요한 정보가 없습니다"로 남는다(아래가 다시 밀리지 않게)
   {
     const pd = await open(`/c/${CID}`, { ctx, programs: list({ [P3]: "2026-12-30", [P4]: "2026-12-30" }), dataDelay: 1500 });
     await record(pd);
@@ -2584,7 +3153,7 @@ await run("deadline-basis", async () => {
     await pd.close();
     const ovs = [...new Set(seen.map((x) => x.ov))];
     const last = seen.at(-1)?.t ?? "";
-    check("A-33 (받는 중 → 마감 임박 없음)", seen.length > 0 && seen.every((x) => x.t !== null) && seen[0].t.includes(HOLD) && !seen.some((x) => x.t.includes("마감 임박 담은 공고")) && last.includes("지금 확인할 것이 없습니다") && ovs.length === 1, `처음 "${seen[0]?.t ?? "없음"}" → 끝 "${last}", 개요 제목 위치 ${ovs.join("/")}`);
+    check("A-33 (받는 중 → 마감 임박 없음)", seen.length > 0 && seen.every((x) => x.t !== null) && seen[0].t.includes(HOLD) && !seen.some((x) => x.t.includes("마감 임박 담은 공고")) && last.includes("확인이 필요한 정보가 없습니다") && ovs.length === 1, `처음 "${seen[0]?.t ?? "없음"}" → 끝 "${last}", 개요 제목 위치 ${ovs.join("/")}`);
   }
   // A-34: 목록이 기다림 시간(5초)보다 늦게(7초) 온다. 대기 줄 → 5초 뒤 저장값 개수(P4 만 임박 "1건") → 목록이 오면 지금 자료 개수("2건").
   //       개요 제목은 처음부터 끝까지 같은 자리. 공용 요청은 끊지 않으므로 같은 페이지에서 심사 준비로 가면 지금 자료 마감이 보인다
@@ -2610,15 +3179,16 @@ await run("deadline-basis", async () => {
   await ctx.close();
 });
 
-// P-12: 판로 머리의 "위 빠른 거르기는 걸리지 않습니다."는 빠른 거르기 줄이 실제로 위에 보일 때만(1180). 820·390 판로 탭에서는 없다
+// P-12: 판로 머리의 "위 필터와 정렬은 판로에 적용되지 않습니다."는 빠른 필터 줄이 실제로 위에 보일 때만(1180). 820·390 판로 탭에서는 없다
+// (2026-11-24 UX 점검 주석14·15: 판로 색 윗선을 걷어내 머리는 [data-lane-head], "거르기" → "필터")
 await run("sales-head", async () => {
   await reset({ scenario: "F-FULL" });
   const ctx = await browser.createBrowserContext();
-  const S = "위 빠른 거르기는 걸리지 않습니다.";
+  const S = "위 필터와 정렬은 판로에 적용되지 않습니다.";
   const head = (pg) =>
     pg.evaluate(() => ({
-      head: document.querySelector("#lane-sales .lane-sales p")?.innerText ?? null,
-      quick: [...document.querySelectorAll("[aria-label='빠른 거르기']")].some((e) => e.getBoundingClientRect().height > 0),
+      head: document.querySelector("#lane-sales [data-lane-head] p")?.innerText ?? null,
+      quick: [...document.querySelectorAll("[aria-label='빠른 필터']")].some((e) => e.getBoundingClientRect().height > 0),
     }));
   const pg = await open(`/c/${CID}/funding?lane=sales`, { ctx });
   await waitText(pg, "기업 유형을 골라 주세요");
@@ -2626,7 +3196,7 @@ await run("sales-head", async () => {
   await wait(300);
   const before = await head(pg);
   await click(pg, "창업·벤처기업", { exact: true });
-  await pg.waitForSelector("[aria-label='빠른 거르기']", { timeout: 8000 }).catch(() => null);
+  await pg.waitForSelector("[aria-label='빠른 필터']", { timeout: 8000 }).catch(() => null);
   await wait(300);
   const after = await head(pg);
   await globalChecks(pg, "자금·판로 판로 머리 1180");

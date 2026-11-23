@@ -81,7 +81,7 @@ function scenarioJob() {
   let job;
   if (st.scenario === "F-STAGED") job = clone(FIX["F-STAGED"].exchanges[Math.min(st.step, 6)].response);
   else job = jobOf(st.scenario);
-  // stagedConflict: 단계별 분석이 끝날 때 설립이 엇갈린 채로 끝난다(ux-check A-29: 끝나는 순간 "지금 확인할 것"이 아래를 밀지 않는지)
+  // stagedConflict: 단계별 분석이 끝날 때 설립이 엇갈린 채로 끝난다(ux-check A-29: 끝나는 순간 "확인이 필요한 정보"가 아래를 밀지 않는지)
   if (st.scenario === "F-STAGED" && st.stagedConflict && job.status !== "running") job.merged.founded = jobOf("F-CONFLICT").merged.founded;
   if (st.deep) job.sections.rivals_deep = { ...deepEnv(st.deep), retryable: !job.isExample };
   for (const [k, env] of Object.entries(st.overrides)) job.sections[k] = clone(env);

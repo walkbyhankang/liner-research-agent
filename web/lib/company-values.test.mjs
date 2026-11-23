@@ -69,3 +69,16 @@ test("경쟁사 조건: 지역·기업 유형·필요한 자금은 우리 값, �
   assert.equal(r2.industry, "");
   assert.equal(rivalNoticeCompany("rival:없음", job("F-FULL"), mine), null);
 });
+
+test("심사 준비 조건의 '관련 있을 수 있는 회사 정보': 맞는 칸이 있으면 그 값, 제외 대상·그 밖은 무엇을 넘겼는지만 중립으로(쓴 입력을 단정하지 않음, 리뷰 P2)", async () => {
+  const { conditionCompanyLine } = await import("./company-values.ts");
+  const base = { name: "가", region: "서울", biz: "venture", founded: "2020-09", industry: "AI", employees: "", revenue: "", need: "", notes: "" };
+  const neutral = "이 조건에 맞는 회사 정보 칸을 따로 정하지 않았습니다. 대조에는 회사 정보 전체와 '그 밖의 사항'을 함께 넘겼습니다.";
+  // 그 밖의 사항(자동 메모의 특허·국민연금 수치 포함)이 있어도 내용을 판단 근거로 보이지 않는다
+  assert.equal(conditionCompanyLine("제외대상", { ...base, notes: "검색으로 확인한 특허 11건. 국민연금 가입자 314명" }), neutral);
+  assert.equal(conditionCompanyLine("제외대상", base), neutral);
+  assert.equal(conditionCompanyLine("신청 방법", base), neutral);
+  assert.ok(conditionCompanyLine("지역", base).endsWith(" 서울"));
+  assert.ok(conditionCompanyLine("기업 유형", base).endsWith(" 창업·벤처기업"));
+  assert.ok(conditionCompanyLine("업력", { ...base, founded: "" }).endsWith(" 비어 있음"));
+});

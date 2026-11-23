@@ -302,14 +302,14 @@ export function Tech() {
       ) : (
         <>
           <figure>
-            <figcaption className="mb-2 text-sm font-semibold">출원연도별 {PATENT_LABEL} (최근 5년)</figcaption>
+            <figcaption className="subhead">출원연도별 {PATENT_LABEL} (최근 5년)</figcaption>
             <div className="max-w-[360px]">
               <PatentLine series={[{ name: job.company.name, byYear: r?.summary.byYear ?? {}, mine: true }]} endYear={endYear} />
             </div>
             <p className="mt-1 text-xs text-sub">공개 전 기간이라 적게 보일 수 있습니다.</p>
             <SourceLine word="confirmed" label="특허 공개 원문 (Google Patents)" detail={`${fmtDay(r?.queriedAt)} 조회, ${PATENT_SCOPE}`} />
           </figure>
-          <p className="mt-5 text-sm font-semibold">주요 특허</p>
+          <p className="subhead mt-6">주요 특허</p>
           <ul className="divide-y divide-rule border-y border-rule">
             {patents.slice(0, 3).map((p) => (
               <li key={p.id}>

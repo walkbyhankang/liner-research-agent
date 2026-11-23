@@ -13,13 +13,15 @@ import { SectionDialog } from "@/components/company/Dialogs";
 type AnyEnv = SectionEnvelope<unknown>;
 
 export function SectionFrame({
-  id, label, env, envKey, summary, children, footer, menu, partialNote = true, unavailableBody, twoLineSummary = false,
+  id, label, env, envKey, summary, summaryNode, children, footer, menu, partialNote = true, unavailableBody, twoLineSummary = false,
 }: {
   id: ScreenKey;
   label: string;
   env: AnyEnv;
   envKey: SectionKey;
   summary: string | null;
+  /** 한 줄 요약 대신 보일 요약 덩어리(재무·고용: 숫자를 가장 크게, 값·기준월·변화를 나눠서). 있으면 summary 글 대신 쓴다 */
+  summaryNode?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   menu?: ReactNode;
@@ -42,12 +44,13 @@ export function SectionFrame({
   const fresh = env.analyzedAt && job.analyzedAt && env.analyzedAt > job.analyzedAt && phase !== "loading";
 
   return (
-    // 단락 경계는 잉크색 1px 머리줄과 넉넉한 위 여백으로, 단락 안의 펼치기 줄·목록 선(회색 1px)과 구분한다.
-    // 단락 이름은 18px 굵게(이정표), 바로 아래 한 줄 요약은 21px(첫인상). 굵은 2px 선은 핵심 값 띠에만 쓴다
-    <section id={id} aria-labelledby={`h-${id}`} aria-busy={phase === "loading" || undefined} className="anchor border-t border-ink pb-10 pt-6 sm:pt-8">
+    // 단락 경계는 잉크색 1px 머리줄과 넉넉한 위 여백(32~40px)으로, 단락 안의 펼치기 줄·목록 선(회색 1px)과 구분한다.
+    // 위계(qa-report 3절 주석 7·9, 2026-11-24): 단락 이름 24px 굵게(상위 제목) → 한 줄 요약 18px(제목 아래 8px) → 단락 안 하위 항목은 옅은 바탕 굵은 글(.subhead).
+    // 전에는 이름 18px·요약 21px 이라 요약이 제목보다 컸다. 굵은 2px 선은 핵심 값 띠에만 쓴다
+    <section id={id} aria-labelledby={`h-${id}`} aria-busy={phase === "loading" || undefined} className="anchor border-t border-ink pb-10 pt-8 sm:pt-10">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
-          <h2 id={`h-${id}`} data-anchor tabIndex={-1} className="flex flex-wrap items-center gap-2 text-lg font-bold leading-snug">
+          <h2 id={`h-${id}`} data-anchor tabIndex={-1} className="flex flex-wrap items-center gap-2 text-[24px] font-bold leading-[1.3]">
             {label}
             {phase === "unavailable" && <StatusWord w="unavailable" />}
           </h2>
@@ -56,9 +59,9 @@ export function SectionFrame({
       </div>
 
       {phase === "loading" ? (
-        <div className="mt-1">
+        <div className="mt-2">
           {/* 끝나면 이 자리에 한 줄 요약이 온다. "보통 n초"를 같은 줄에 두어 높이를 요약 한 줄과 같게 한다(도착할 때 아래가 밀리지 않게) */}
-          <p className={`text-xl text-sub ${summaryBox}`}>
+          <p className={`text-lg text-sub ${summaryBox}`}>
             확인 중 <span className="num">({elapsedText((env.seconds ?? 0) + tick)})</span>
             {env.expectedSeconds ? <span className="ml-2 text-sm">보통 {elapsedText(env.expectedSeconds)} 안에 끝납니다</span> : null}
           </p>
@@ -67,11 +70,13 @@ export function SectionFrame({
       ) : phase === "unavailable" ? (
         <UnavailableHead env={env} envKey={envKey} label={label} />
       ) : (
-        <div className="mt-1">
-          {twoLineSummary ? (
-            <p className={`text-xl font-medium md:line-clamp-2 ${summaryBox}`}>{summary ? nb(summary) : ""}</p>
+        <div className="mt-2">
+          {summaryNode ? (
+            summaryNode
+          ) : twoLineSummary ? (
+            <p className={`text-lg font-medium md:line-clamp-2 ${summaryBox}`}>{summary ? nb(summary) : ""}</p>
           ) : (
-            summary && <p className="text-xl font-medium">{nb(summary)}</p>
+            summary && <p className="text-lg font-medium">{nb(summary)}</p>
           )}
           {phase === "partial" && partialNote && env.error && <p className="mt-1 text-sm font-medium text-amber">일부 자료를 얻지 못했습니다: {errorSentence(env.error)}</p>}
           {refreshing && (

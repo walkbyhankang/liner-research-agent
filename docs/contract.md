@@ -459,7 +459,7 @@
 ### 7.6 국민연금·특허 (`npsLatest`, `patentCount`)
 
 - `npsLatest`: 가입자 수가 있는 마지막 달. `display` "{n}명", `raw` 정수, 상태 `reference`, 출처 `nps`(`asOf` 그 달), `note` "국민연금 가입자 수는 상시근로자 수와 다릅니다." 없으면 `unavailable`("국민연금 사업장을 찾지 못함").
-- `patentCount`: `patents.result.summary.total`. `display` "{n}건", `raw` 정수, `confirmed`, 출처 `patents`. 0건이면 `unavailable`("출원인이 확인된 특허를 검색에서 찾지 못함". 2026-11-23 전 "출원인이 확인된 특허를 찾지 못함". 8.7 미확보 문장과 같은 말의 짧은 꼴이고, 화면 핵심 값 칸·"지금 확인할 것"·비교 표 우리 회사 칸에 "미확보: {사유}"로 보인다. `patents` 단락이 `no_data`로 끝나도 사유는 이 글이다. `why()`는 오류 코드만 짧은 글로 바꾸고 `no_data`는 이 기본값을 쓴다).
+- `patentCount`: `patents.result.summary.total`. `display` "{n}건", `raw` 정수, `confirmed`, 출처 `patents`. 0건이면 `unavailable`("출원인이 확인된 특허를 검색에서 찾지 못함". 2026-11-23 전 "출원인이 확인된 특허를 찾지 못함". 8.7 미확보 문장과 같은 말의 짧은 꼴이고, 화면 핵심 값 칸·"확인이 필요한 정보"·비교 표 우리 회사 칸에 "미확보: {사유}"로 보인다. `patents` 단락이 `no_data`로 끝나도 사유는 이 글이다. `why()`는 오류 코드만 짧은 글로 바꾸고 `no_data`는 이 기본값을 쓴다).
 
 ### 7.7 낱말과 투자 분야
 

@@ -33,7 +33,10 @@ const ROUTES: { method: "GET" | "POST"; path: RegExp; timeoutMs: number }[] = [
 
 type Ctx = { params: Promise<{ path: string[] }> };
 type Code = "not_found" | "bad_request" | "upstream_error" | "internal";
-const fail = (detail: string, code: Code, status: number) => Response.json({ detail, code, retryAt: null }, { status, headers: { "cache-control": "no-store" } });
+const fail = (detail: string, code: Code, status: number, relay = false) =>
+  // relay: 화면 서버가 분석 서버에 닿지 못한 실패(연결 실패·시간 초과). 금융위원회 등 바깥 자료 실패(분석 서버가 준 upstream_error)와
+  // 화면이 구별하도록 머리글을 붙인다(계약의 오류 코드는 그대로)
+  Response.json({ detail, code, retryAt: null }, { status, headers: { "cache-control": "no-store", ...(relay ? { "x-growth-relay-error": "1" } : {}) } });
 
 /** fetch 는 응답 머리말을 5분까지만 기다리므로, 더 오래 걸릴 수 있는 요청을 위해 http 모듈을 직접 쓴다. */
 function send(method: string, pathAndQuery: string, body: string | undefined, timeoutMs: number, forwardedFor: string | null): Promise<{ status: number; text: string }> {
@@ -69,9 +72,9 @@ async function forward(req: Request, ctx: Ctx): Promise<Response> {
     return new Response(res.text, { status: res.status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
   } catch (e) {
     const reason = e instanceof Error ? e.message : "";
-    if (reason === "timeout") return fail("분석 서버가 제때 응답하지 않았습니다", "upstream_error", 504);
+    if (reason === "timeout") return fail("분석 서버가 제때 응답하지 않았습니다", "upstream_error", 504, true);
     if (reason === "protocol") return fail("분석 서버 주소 설정은 http 또는 https 여야 합니다", "internal", 500);
-    return fail("분석 서버에 연결하지 못했습니다", "upstream_error", 502);
+    return fail("분석 서버에 연결하지 못했습니다", "upstream_error", 502, true);
   }
 }
 

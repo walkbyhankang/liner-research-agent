@@ -94,11 +94,14 @@ export function ValueBox({ v, edit, onRevert, usedNote, extra }: { v: Value | nu
   );
 }
 
-/** 근거 문장(원문 그대로). 3줄을 넘으면 접고 "전체 보기" */
+/**
+ * 근거 문장(원문 그대로). 3줄을 넘으면 접고 "전체 보기".
+ * 인용 선은 회색 1px 로 펼친 덩어리의 녹색 2px 선보다 가볍게, 바깥 선과 띄워 둔다(qa-report 4절 "경계와 펼침", 주석 20)
+ */
 export function Quote({ text }: { text: string }) {
   const long = text.length > 120;
   return (
-    <blockquote className="border-l-2 border-rule pl-3 text-sm">
+    <blockquote className="ml-1 border-l border-rule pl-3 text-sm">
       {long ? (
         <details>
           <summary className="list-none">

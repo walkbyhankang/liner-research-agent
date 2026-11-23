@@ -18,7 +18,7 @@ import { elapsedText, fmtDay, fmtMonthDayTime, fmtTime, shortCompany, todayKST }
 import { isExistingInvestor } from "@/lib/finder";
 import { addRival, setRivalChoice } from "@/lib/local";
 import { userRivalKey } from "@/lib/names";
-import { MAX_RIVALS, PATENT_LABEL, effectiveRivalChoices, errorSentence, phaseOf, pickedRivals, rivalsCost, visibleRivals, type PickedRival } from "@/lib/view";
+import { MAX_RIVALS, PATENT_LABEL, effectiveRivalChoices, errorSentence, isTerminal, phaseOf, pickedRivals, rivalsCost, visibleRivals, type PickedRival } from "@/lib/view";
 import { DetailRow, Disclosure, DownIcon, ExtLink, Placeholder, SourceLine, StatusWord, nb, useMore, useOpen } from "@/components/kit";
 import { FinanceBars, InvestBars, NpsLine, PatentLine, type InvestBar } from "@/components/charts";
 import { useCompany, useTicker } from "@/components/company/context";
@@ -61,13 +61,36 @@ export function RivalsScreen() {
       <Compare job={job} fold={layout === "compare" ? <PickerFold job={job} /> : null} />
       {result && <RivalNotes job={job} result={result} />}
       {result && <Backers job={job} result={result} />}
-      <p className="no-print mt-10 flex max-w-[760px] flex-wrap items-center gap-x-2 border-t border-rule pt-4 text-sm">
-        <span>비교 대상 경쟁사는 심사 준비의 &lsquo;경쟁사 조건이라면?&rsquo;에도 씁니다.</span>
-        <Link href={`/c/${c.cid}/review`} className="link">
-          심사 준비 보기
-        </Link>
-      </p>
+      <NextStep cid={c.cid} compared={Boolean(result)} ready={isTerminal(job.sections.official)} />
     </main>
+  );
+}
+
+/**
+ * 본문 끝 다음 단계(screens 4B.5, 2026-11-24 UX 점검 주석12·19): 도착 화면을 밝힌 주 단추 "자금·판로 보기" 하나.
+ * 단계 메뉴로도 갈 수 있으므로 본문 중간에는 같은 목적의 띠를 두지 않는다. 심사 준비에서 비교 대상을 다시 쓴다는 안내는 단추 아래 보조 글.
+ * 비교 자료가 없으면 "비교했으니"가 맞지 않아 비교 없이도 볼 수 있다는 문장을 쓴다
+ */
+function NextStep({ cid, compared, ready }: { cid: string; compared: boolean; ready: boolean }) {
+  return (
+    <section aria-label="다음 단계" className="no-print mt-12 max-w-[760px] border-t border-rule pt-6" data-next-step>
+      <p>{compared ? "우리 회사와 경쟁사를 비교했으니, 다음으로 맞는 자금·판로를 살펴보세요." : "경쟁사 비교 자료가 없어도 회사 분석 결과로 맞는 자금·판로를 살펴볼 수 있습니다."}</p>
+      {/* 단계 메뉴와 같은 기준(Shell officialReady): 공식 자료 단락이 끝나기 전(미확보로 끝나도 끝난 것)에는 자금·판로를 열지 않는다.
+          자금·판로는 들어갈 때 지역 조건을 한 번 채우므로, 공식 자료가 오기 전에 들어가면 자동으로 채울 지역을 묻게 된다(리뷰 P2) */}
+      {ready ? (
+        <Link href={`/c/${cid}/funding`} className="btn btn-primary mt-3">
+          자금·판로 보기
+        </Link>
+      ) : (
+        <>
+          <button type="button" className="btn btn-primary mt-3" disabled aria-describedby="next-step-wait">
+            자금·판로 보기
+          </button>
+          <p id="next-step-wait" className="mt-2 text-sm text-sub">공식 자료를 받으면 열립니다.</p>
+        </>
+      )}
+      <p className="mt-4 text-sm text-sub">비교 대상 경쟁사는 심사 준비의 &lsquo;경쟁사 조건이라면?&rsquo;에서도 씁니다.</p>
+    </section>
   );
 }
 
@@ -467,6 +490,12 @@ function Compare({ job, fold }: { job: AnalysisJob; fold: ReactNode }) {
 }
 
 /**
+ * 우리 회사 열(좁은 화면은 우리 회사 줄)의 옅은 회색 바탕: 견주는 기준점이 어디인지 보이게 한다(2026-11-24 UX 점검 4절).
+ * 우열이 아니라 "우리 회사" 표시라서 색이 아닌 중립 회색(표 머리와 같은 wash)이다. 그 안의 미확보 낱말(회색 칠)은 흰색으로 뒤집어 구분을 지킨다
+ */
+const MINE = "bg-wash [&_.word-unavailable]:bg-paper";
+
+/**
  * 비교 표. 640px 이상은 표(열 = 회사, 줄 = 항목, 첫 열은 옆으로 밀어도 붙음), 640px 미만은 항목마다 한 덩어리(회사마다 한 줄).
  * 같은 항목끼리 견주는 표의 뜻을 휴대폰에서도 지킨다. 값 크기로 다시 정렬하지 않고, 차이·합계·순위 줄을 두지 않는다.
  */
@@ -512,7 +541,7 @@ function CompareTable({ cols, jump }: { cols: CompareColumn[]; jump: Jump }) {
                     {it.label}
                   </th>
                   {cols.map((col, ci) => (
-                    <td key={col.key} className="cmp-col py-3 pl-3 pr-3">
+                    <td key={col.key} className={`cmp-col py-3 pl-3 pr-3 ${col.mine ? MINE : ""}`} data-mine={col.mine || undefined}>
                       <CellView c={col.cells[it.key]} item={it.key} at={{ who: col.name, label: it.label, target: linkTarget(ci, it.key), jump }} />
                     </td>
                   ))}
@@ -549,12 +578,12 @@ function ItemBlock({ label, item, cols, jump }: { label: string; item: CompareIt
       <h3 className="text-base font-semibold">{label}</h3>
       <ul className="mt-1 space-y-1">
         {cols.map((col, ci) => (
-          <li key={col.key} className="grid grid-cols-[minmax(0,6.5em)_minmax(0,1fr)] items-start gap-x-3 py-1.5" data-company={col.name}>
+          <li key={col.key} className={`-mx-2 grid grid-cols-[minmax(0,6.5em)_minmax(0,1fr)] items-start gap-x-3 px-2 py-1.5 ${col.mine ? MINE : ""}`} data-company={col.name} data-mine={col.mine || undefined}>
             <span className={`text-sm ${col.mine ? "font-bold" : "font-medium"}`}>
               {shortCompany(col.name)}
               {col.mine && <span className="block text-xs font-medium text-sub">우리 회사</span>}
             </span>
-            <CellView c={col.cells[item]} item={item} at={{ who: col.name, label, target: linkTarget(ci, item), jump }} />
+            <CellView c={col.cells[item]} item={item} at={{ who: col.name, label, target: linkTarget(ci, item), jump }} linkInline />
           </li>
         ))}
       </ul>
@@ -568,30 +597,43 @@ type Jump = (target: string, from: HTMLElement) => void;
 type CellAt = { who: string; label: string; target: string; jump: Jump };
 const linkTarget = (ci: number, item: CompareItem) => `cmp-src-${ci}-${item}`;
 
-/** 칸 하나: 값(16px) → 기준(13px 보조) → 상태 낱말 + 짧은 출처 (+ 원문 링크). 미확보는 낱말과 사유, 엇갈림은 두 값 */
-function CellView({ c, item, at }: { c: Cell; item: CompareItem; at: CellAt }) {
+/**
+ * 칸 하나는 칸마다 같은 자리 순서(2026-11-24 UX 점검 4절 "값·단위·기준일 위치 맞춤, 출처 링크와 미확보 상태는 숫자와 분리"):
+ * ① 값 자리(16px, 값과 단위) → ② 기준 자리(13px 보조, 기준 연도·달·기준 이름) → ③ 상태 낱말 + 짧은 출처 → ④ 원문 링크(따로 한 줄).
+ * 미확보 칸은 값 자리에 숫자 대신 "미확보" 낱말을 값 줄 높이로 두고, 사유를 그 아래에 둔다(같은 줄 다른 칸의 기준 자리와 높이가 맞는다).
+ * 엇갈림은 두 값을 함께 두고 값마다 출처·원문 링크를 값 아래 줄로 뗀다(값 줄에는 숫자만).
+ * linkInline: 640 미만 항목 덩어리는 회사가 옆으로 나란히 있지 않아 칸끼리 자리를 맞출 일이 없으므로 원문 링크를 ③ 상태·출처 줄 끝에 둔다
+ * (숫자 줄과는 여전히 떨어져 있고, 링크마다 한 줄씩 늘어 390 쪽 길이가 RI-19 상한을 넘지 않게)
+ */
+function CellView({ c, item, at, linkInline = false }: { c: Cell; item: CompareItem; at: CellAt; linkInline?: boolean }) {
   if (c.kind === "pending") return <span className="text-sub">확인 중</span>;
   if (c.kind === "missing")
     return (
       <span className="block">
-        <StatusWord w="unavailable" />
-        <span className="mt-1 block text-sm">{c.reason}</span>
+        <span className="flex min-h-[27px] items-center">
+          <StatusWord w="unavailable" />
+        </span>
+        <span className="block text-sm">{c.reason}</span>
       </span>
     );
   if (c.kind === "conflict")
     return (
       <span className="block">
-        <StatusWord w="conflicting" />
-        {/* 앞 값 줄에도 원문 링크가 있으면 줄 사이를 벌려 두 링크의 44px 누르는 곳(위아래 12px 덧댐)이 겹치지 않게 한다 */}
+        <span className="flex min-h-[27px] items-center">
+          <StatusWord w="conflicting" />
+        </span>
+        {/* 값 줄 사이에 출처 줄이 끼어 두 링크의 44px 누르는 곳(위아래 12px 덧댐)이 겹치지 않는다 */}
         {c.alts.map((a, i) => (
-          <span key={i} className={`${i > 0 && a.link && c.alts[i - 1].link ? "mt-5" : "mt-1"} block`}>
-            {i > 0 && <span className="text-sub">다른 자료: </span>}
-            <span className="font-medium">{nb(a.text)}</span> {a.source && <span className="text-xs text-sub">({a.source})</span>}
-            {a.link && (
-              <>
-                {" "}
-                <CellLinkView links={[a.link]} at={{ ...at, label: `${at.label} ${a.text}` }} />
-              </>
+          <span key={i} className={`${i > 0 ? "mt-2" : "mt-0.5"} block`}>
+            <span className="block">
+              {i > 0 && <span className="text-sub">다른 자료: </span>}
+              <span className="font-medium">{nb(a.text)}</span>
+            </span>
+            {(a.source || a.link) && (
+              <span className="flex flex-wrap items-center gap-x-1.5 text-xs text-sub">
+                {a.source && <span>{a.source}</span>}
+                {a.link && <CellLinkView links={[a.link]} at={{ ...at, label: `${at.label} ${a.text}` }} />}
+              </span>
             )}
           </span>
         ))}
@@ -605,11 +647,16 @@ function CellView({ c, item, at }: { c: Cell; item: CompareItem; at: CellAt }) {
         </span>
       ))}
       {c.basis && <span className="block text-xs text-sub">{nb(c.basis)}</span>}
-      <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+      <span className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5" data-cell-meta>
         <StatusWord w={c.word} />
         {c.source && <span className="text-xs text-sub">{c.source}</span>}
-        {c.links?.length ? <CellLinkView links={c.links} at={at} /> : null}
+        {linkInline && c.links?.length ? <CellLinkView links={c.links} at={at} /> : null}
       </span>
+      {!linkInline && c.links?.length ? (
+        <span className="no-print mt-0.5 flex" data-cell-link>
+          <CellLinkView links={c.links} at={at} />
+        </span>
+      ) : null}
     </span>
   );
 }

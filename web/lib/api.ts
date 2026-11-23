@@ -8,13 +8,22 @@ export class ApiFail extends Error {
   status: number;
   code: ApiErrorCode | null;
   retryAt: string | null;
-  constructor(status: number, code: ApiErrorCode | null, message: string, retryAt: string | null) {
+  /** 화면 서버가 분석 서버에 닿지 못한 실패(연결 실패·시간 초과, 연결 자체 실패 포함). 바깥 자료(금융위원회 등) 실패가 아니다 */
+  relay: boolean;
+  constructor(status: number, code: ApiErrorCode | null, message: string, retryAt: string | null, relay = false) {
     super(message);
     this.status = status;
     this.code = code;
     this.retryAt = retryAt;
+    this.relay = relay;
   }
 }
+
+/**
+ * 분석 서버가 바깥 자료(금융위원회 등) 연결 실패라고 밝힌 오류인가. 계약 코드 upstream_error 가 있어야 하고,
+ * 화면 서버가 분석 서버에 닿지 못한 실패(relay)나 코드 없는 게이트웨이 502·504 는 아니다(그때는 분석 서버 자체가 안 되므로 리뷰 P2)
+ */
+export const isUpstreamFailure = (e: unknown): boolean => e instanceof ApiFail && !e.relay && e.code === "upstream_error";
 
 const SUSPICIOUS = /traceback|exception|error:|\/users\/|\/home\/|\.py\b|api_key|secret|token/i;
 
@@ -43,13 +52,13 @@ export async function api<T>(path: string, init?: { method?: "GET" | "POST"; bod
     });
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") throw e;
-    throw new ApiFail(0, null, failText(0, null, null), null);
+    throw new ApiFail(0, null, failText(0, null, null), null, true);
   }
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     const b = body as { code?: unknown; retryAt?: unknown } | null;
     const code = typeof b?.code === "string" ? (b.code as ApiErrorCode) : null;
-    throw new ApiFail(res.status, code, failText(res.status, body, code), typeof b?.retryAt === "string" ? b.retryAt : null);
+    throw new ApiFail(res.status, code, failText(res.status, body, code), typeof b?.retryAt === "string" ? b.retryAt : null, res.headers.get("x-growth-relay-error") === "1");
   }
   return body as T;
 }

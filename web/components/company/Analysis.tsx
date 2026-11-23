@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DEFAULT_ESTIMATES, type AnalysisJob } from "@/lib/contract";
 import { elapsedText } from "@/lib/format";
-import { SCREEN_SECTIONS, TOC_TEXT, PATENT_LABEL, isTerminal, keyTiles, phaseOf, pickedRivals, stillChecking, unavailableScreens, visibleRivals, type ScreenKey, type Tile, type Word } from "@/lib/view";
+import { SCREEN_SECTIONS, TOC_TEXT, PATENT_LABEL, keyTiles, phaseOf, pickedRivals, stillChecking, unavailableScreens, visibleRivals, type ScreenKey, type Tile, type Word } from "@/lib/view";
 import { checkNowCounts, type OpenValue } from "@/lib/review";
 import { Chevron, Disclosure, Placeholder, StatusWord, VerdictMark, nb, useOpen } from "@/components/kit";
 import { restoreAnchor, useCompany, useTicker } from "@/components/company/context";
@@ -60,8 +60,8 @@ export function AnalysisScreen() {
         <ProgressLine job={job} />
         <KeyStrip job={job} />
         <CheckNow job={job} />
-        <FundingRow job={job} />
-        <Disclosure text="상태 표시 안내" memoryKey={`${c.cid}:legend`} className="mt-2">
+        {/* 핵심 값 아래 "자금·판로 보기" 줄은 2026-11-24 뺐다(qa-report 3절 주석 2): 단계 메뉴로 바로 가고, 본문 끝의 다음 단계는 경쟁사 분석이다 */}
+        <Disclosure text="상태 표시 안내" memoryKey={`${c.cid}:legend`} className="mt-4">
           <dl className="space-y-2 py-2">
             {(["confirmed", "reported", "inferred", "conflicting", "unavailable", "reference", "edited"] as Word[]).map((w) => (
               <div key={w} className="grid grid-cols-[6.5em_1fr] items-start gap-3">
@@ -79,7 +79,7 @@ export function AnalysisScreen() {
           <Investment />
           <News />
           <Tech />
-          <RivalsLine job={job} />
+          <RivalsNext job={job} />
         </div>
       </main>
     </div>
@@ -306,18 +306,22 @@ function KeyStrip({ job }: { job: AnalysisJob }) {
 }
 
 /**
- * 칸마다 값이 오면 붙는 상태 낱말(view.ts keyTiles 와 같음). 확인 중·미확보일 때 이 낱말 폭을 보이지 않게 미리 잡아,
- * 값이 와서 낱말이 붙어도 이름표가 꺾이는 줄 수가 바뀌지 않게 한다(아래 TileCell)
+ * 칸 안의 상태(qa-report 3절 주석 1, 2026-11-24): 이름과 숫자를 먼저 읽게 이름 옆 상태 낱말을 뺐다.
+ * 숫자의 해석을 바꾸는 상태(보도·추정·엇갈림·참고)만 기준 글 아래 보조 크기로 남기고, "원문 확인"과 나머지 출처는 각 단락의
+ * 묶음 출처 줄·3층 상세에 있다(매출 "금융위원회 요약재무제표", 특허 "특허 공개 원문"). 참고(국민연금)는 낱말 뜻 "직원 수와 다름"을 함께 쓴다
  */
-const TILE_WORD: Record<Tile["key"], Word> = { revenue: "confirmed", nps: "reference", invest: "reported", patents: "confirmed" };
+const TILE_NOTE: Partial<Record<Word, string>> = { reference: "직원 수와 다름" };
 
 function TileCell({ t }: { t: Tile }) {
   // 칸 높이는 값이 다 왔을 때(기준 줄 2줄 + 나중에 오는 "웹 조사" 줄)에 맞춰 미리 잡는다. 늦게 오는 줄이 띠 높이를 바꿔 아래가 밀리지 않게.
   // 실측(업스테이지·기준 기업, 2026-11-23): 끝난 칸 내용 높이 최대 1180 폭 167px, 820 폭 140px, 390 폭 162px.
   // 글 크기 조정(숫자 32~36px, 이름표·기준 15px) 뒤 다시 잼: 기준 기업·가짜 F-FULL 최대 1180 폭 165px, 820 폭 141px, 390 폭 161px
-  // 특허 칸 이름 "검색으로 확인한 특허"(2026-11-23) 뒤: 칸 안쪽 폭이 좁은 640 미만(147px 안팎)과 1024 이상(157px)에서는 이름표(128px)와
-  // 상태 낱말(52px)이 한 줄에 들지 않아 이름표가 두 줄로 꺾인다. 그래서 그 폭에서는 네 칸 모두 이름표 줄을 두 줄 높이(48px)로 잡고
-  // 아래에 붙여(표 머리처럼) 숫자가 네 칸에서 같은 높이에 오게 한다. 칸 최소 높이도 그만큼(24px) 올린다: 164 → 188, 168 → 192
+  // 이름표 줄(2026-11-24): 이름 옆 상태 낱말(52px)을 뺐으므로 "검색으로 확인한 특허"(실제 글꼴 128px)가 360px 이상 모든 폭의 칸 안쪽(139px 이상)에
+  // 한 줄로 든다. 그래서 2026-11-23의 이름표 두 줄 예약(48px)을 풀었다. 이름표 글은 확인 중·끝남이 같아 꺾이는 줄 수가 상태에 따라 바뀌지 않는다(A-23).
+  // 360px 미만은 이름이 두 줄로 꺾여(상태와 무관하게 같음) 그만큼 최소 높이를 올린다.
+  // 다시 잰 끝난 칸 내용 높이(가짜 F-FULL·F-STAGED t6, 이름 줄 예약 없음, 상태 줄 포함): 1024 이상 165px, 640~1023 141px, 360~639 161px, 확인 중 120px
+  // → 최소 높이 168 / 144 / 164(360 미만 188). 누적 투자가 두 통화(F-MONEY)면 큰 값이 두 줄이라 이보다 높다(전에도 같음)
+  const word = t.word && t.word !== "confirmed" ? t.word : null;
   return (
     <a
       href={`#${t.anchor}`}
@@ -326,20 +330,11 @@ function TileCell({ t }: { t: Tile }) {
         goSection(t.anchor);
       }}
       aria-busy={t.loading || undefined}
-      className="block h-full min-h-[188px] px-3 py-3 hover:bg-wash sm:min-h-[144px] sm:px-4 lg:min-h-[192px]"
+      className="block h-full min-h-[164px] px-3 py-3 hover:bg-wash max-[359px]:min-h-[188px] sm:min-h-[144px] sm:px-4 lg:min-h-[168px]"
     >
-      {/* 위계: 이름표(15 굵게) → 숫자(32~36 가장 굵게, 단위는 18로 붙임) → 기준(15 보조 글, 숫자 바로 밑) */}
-      <span className="flex min-h-12 items-end justify-between gap-2 sm:min-h-0 sm:items-start lg:min-h-12 lg:items-end" data-tile-head>
+      {/* 위계: 이름표(15 굵게) → 숫자(32~36 가장 굵게, 단위는 18로 붙임) → 기준(15 보조 글, 숫자 바로 밑) → 해석을 바꾸는 상태(13 낱말 + 뜻) */}
+      <span className="block" data-tile-head>
         <span className="text-sm font-semibold">{t.label}</span>
-        {t.word ? (
-          <StatusWord w={t.word} />
-        ) : (
-          // 확인 중·미확보: 올 낱말의 폭만 보이지 않게 잡는다(화면 읽기·복사에 나오지 않음). flex 로 감싸야 줄 상자(27px)가 생기지 않고
-          // 실제 낱말(24px)과 높이가 같다
-          <span aria-hidden className="invisible flex">
-            <StatusWord w={TILE_WORD[t.key]} />
-          </span>
-        )}
       </span>
       {t.loading ? (
         <span className="mt-1 block space-y-2">
@@ -360,11 +355,18 @@ function TileCell({ t }: { t: Tile }) {
               {nb(b)}
             </span>
           ))}
+          {word && (
+            <span className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm leading-snug" data-tile-word>
+              <StatusWord w={word} />
+              {TILE_NOTE[word] && <span>{TILE_NOTE[word]}</span>}
+            </span>
+          )}
         </span>
       )}
       {t.extra && (
         <span className="mt-1 block text-sm leading-snug">
-          {nb(t.extra)} {t.extraWord && <StatusWord w={t.extraWord} />}
+          {/* 칸 안 상태는 해석을 바꾸는 것만(A-37): 덧붙는 웹 조사 값도 "원문 확인"은 빼고 보도·추정 등만 둔다 */}
+          {nb(t.extra)} {t.extraWord && t.extraWord !== "confirmed" && <StatusWord w={t.extraWord} />}
         </span>
       )}
     </a>
@@ -387,7 +389,7 @@ function BigNumber({ text }: { text: string }) {
   );
 }
 
-// ---------------------------------------------------------------- 지금 확인할 것
+// ---------------------------------------------------------------- 확인이 필요한 정보(옛 이름 "지금 확인할 것")
 
 /** 회사 값 이름 → 그 값이 보이는 단락(openValues 의 이름표) */
 const VALUE_SECTION: Record<string, ScreenKey> = {
@@ -396,13 +398,13 @@ const VALUE_SECTION: Record<string, ScreenKey> = {
 };
 
 /**
- * "지금 확인할 것"이 공고 목록(/data/programs.json)을 기다리는 시간(screens 4.0.3 "오래 걸림"). 지나면 저장한 마감일로 센다.
+ * "확인이 필요한 정보"가 공고 목록(/data/programs.json)을 기다리는 시간(screens 4.0.3 "오래 걸림"). 지나면 저장한 마감일로 센다.
  * 근거: 목록은 압축 전송 약 485KB. Chrome 개발 도구 "Fast 3G"(약 1.44Mbps, 왕복 약 0.56초)에서 약 4초에 오므로 여유를 둔 5초.
  */
 const CHECKNOW_WAIT_MS = 5000;
 
 /**
- * "지금 확인할 것"(screens 4.0.3): 사실을 센 개수만 둔다(점수·확률 없음). 0인 항목은 숨기고, 끝난 분석을 열었을 때 모두 0이면 묶음을 그리지 않는다.
+ * "확인이 필요한 정보"(screens 4.0.3, 2026-11-24 "지금 확인할 것"에서 이름을 바꿈. 제목만 읽어도 목적이 드러나게): 사실을 센 개수만 둔다(점수·확률 없음). 0인 항목은 숨기고, 끝난 분석을 열었을 때 모두 0이면 묶음을 그리지 않는다.
  * 이 방문에서 분석이 진행되는 것을 봤으면 틀을 끝까지 두고 항목은 한 줄로 둔다(끝나는 순간 아래가 밀리지 않게).
  * - 엇갈린 값·미확보 값: 합친 회사 값(merged)의 상태로 센다. 미팅 근거 묶음 "미팅 전에 정리할 값"과 같은 셈(openValues). 분석이 진행 중이면(새로 분석 포함) 세지 않는다.
  * 셈 자체는 lib/review.ts checkNowCounts(단위 시험이 있다).
@@ -468,14 +470,14 @@ function CheckNow({ job }: { job: AnalysisJob }) {
   return (
     <section aria-labelledby="checknow-h" className="no-print mt-4 bg-wash px-3 py-3 sm:px-4" data-checknow>
       <h2 id="checknow-h" className="text-sm font-semibold">
-        지금 확인할 것
+        확인이 필요한 정보
       </h2>
       {/* 항목은 늘 한 줄(넘치면 옆으로 밀어 보기): 항목 수가 바뀌어도 묶음 높이가 같아 아래가 밀리지 않는다. 초점 테두리가 잘리지 않게 덧댐을 둔다 */}
       <ul className="scroll-row -mx-1.5 mt-1.5 flex gap-2 overflow-x-auto p-1.5">
         {running && (
           <li className="flex min-h-11 shrink-0 items-center text-sm text-sub">엇갈린 값·미확보 값은 분석이 끝나면 셉니다</li>
         )}
-        {!running && !any && !holdSoon && <li className="flex min-h-11 shrink-0 items-center text-sm text-sub">지금 확인할 것이 없습니다</li>}
+        {!running && !any && !holdSoon && <li className="flex min-h-11 shrink-0 items-center text-sm text-sub">확인이 필요한 정보가 없습니다</li>}
         {conflicts.length > 0 && <li>{valueButton("conflict", conflicts.length)}</li>}
         {missing.length > 0 && <li>{valueButton("missing", missing.length)}</li>}
         {/* 마감 임박 자리: 공고 목록을 받으면 같은 자리에 개수가 들어온다 */}
@@ -545,42 +547,21 @@ function CheckNow({ job }: { job: AnalysisJob }) {
 }
 
 /**
- * 경쟁사 분석 줄(screens 4.0): 기술 단락 아래 한 줄. 경쟁사 후보 수와 비교 대상 수, 경쟁사 분석 화면으로 가는 링크.
- * 후보를 받기 전·뒤 모두 한 줄이라 profile 이 와도 높이가 바뀌지 않는다
+ * 본문 끝 다음 단계(screens 4.0, qa-report 3절 주석 10·4절 "행동", 2026-11-24): 도착 화면을 밝힌 주 단추 "경쟁사 분석 보기"와
+ * 옆의 보조 글(경쟁사 후보 수, 비교 대상 수). 경쟁사 분석 끝 "자금·판로 보기", 자금·판로 "심사 준비로 가기"와 같은 모양(btn btn-primary)이다.
+ * 후보를 받기 전·뒤 모두 한 줄이라 profile 이 와도 높이가 바뀌지 않는다. 후보 확인 중에도 경쟁사 분석으로 갈 수 있다(그 화면도 확인 중을 보인다)
  */
-function RivalsLine({ job }: { job: AnalysisJob }) {
+function RivalsNext({ job }: { job: AnalysisJob }) {
   const c = useCompany();
   const phase = phaseOf(job.sections.profile);
   const text =
     phase === "loading" ? "경쟁사 후보 확인 중" : phase === "unavailable" ? "경쟁사 후보 미확보" : `경쟁사 후보 ${visibleRivals(job).length}곳, 비교 대상 ${pickedRivals(job, c.local.rivalChoices).length}곳`;
   return (
-    <div className="no-print flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-ink pt-5" data-rivals-line>
-      <p className={phase === "loading" ? "text-sub" : ""}>{text}</p>
-      <Link href={`/c/${c.cid}/rivals`} className="link">
-        경쟁사 분석에서 보기
+    <div className="no-print flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-ink pt-8" data-rivals-line>
+      <Link href={`/c/${c.cid}/rivals`} className="btn btn-primary">
+        경쟁사 분석 보기
       </Link>
-    </div>
-  );
-}
-
-function FundingRow({ job }: { job: AnalysisJob }) {
-  const c = useCompany();
-  const ready = isTerminal(job.sections.official);
-  return (
-    <div className="no-print mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <p>이 회사 값으로 받을 수 있는 자금과 판로 기회를 찾습니다.</p>
-      {ready ? (
-        <Link href={`/c/${c.cid}/funding`} className="btn btn-primary">
-          자금·판로 보기
-        </Link>
-      ) : (
-        <span className="flex items-center gap-2">
-          <button type="button" className="btn" disabled>
-            자금·판로 보기
-          </button>
-          <span className="text-sm text-sub">공식 자료를 받으면 열립니다</span>
-        </span>
-      )}
+      <p className="text-sm text-sub">{text}</p>
     </div>
   );
 }

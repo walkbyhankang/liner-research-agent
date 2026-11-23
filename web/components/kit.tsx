@@ -94,6 +94,7 @@ export function ExtLink({ href, children, className = "link", inline = false }: 
 
 /**
  * 출처 줄. 화면에는 두 부분({label} / 작게 {기준일}, {기준}), 화면 읽기·복사에는 한 줄.
+ * 본문과는 위 여백과 작은 보조 글로만 나눈다(위의 짧은 장식선은 2026-11-24 없앰).
  * word 를 주면 묶음 출처 줄(앞에 상태 낱말)이다.
  */
 export function SourceLine({ source, label, detail, word, url, className = "" }: { source?: Source | null; label?: string; detail?: string | null; word?: Word; url?: string | null; className?: string }) {
@@ -141,7 +142,8 @@ export function Disclosure({
   const [ever, setEver] = useState(open);
   const shownText = open ? openText ?? (text.endsWith(" 보기") ? `${text.slice(0, -3)} 접기` : text) : text;
   return (
-    <div className={className}>
+    // 펼치면 제목 행과 내용이 한 덩어리(옅은 바탕 + 왼쪽 선, globals.css .disc). 접히면 기본 행
+    <div className={`disc ${className}`} data-open={open || undefined}>
       <button
         type="button"
         className="disclosure"
@@ -167,12 +169,12 @@ export function Disclosure({
   );
 }
 
-/** 줄 자세히(3층): 줄 전체가 단추이고 아래에 열린다 */
+/** 줄 자세히(3층): 줄 전체가 단추이고 아래에 열린다. 펼치면 줄과 내용이 한 덩어리(globals.css .xrow, 펼치기 줄과 같은 모양) */
 export function DetailRow({ head, children, className = "", memoryKey }: { head: ReactNode; children: ReactNode; className?: string; memoryKey?: string }) {
   const id = useId();
   const [open, setOpen] = useOpen(memoryKey ?? null);
   return (
-    <div className={className}>
+    <div className={`xrow ${className}`} data-open={open || undefined}>
       <button type="button" className="row-btn" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
         <span className="min-w-0 flex-1">{head}</span>
         <Chevron className="mt-0.5 text-sub" />

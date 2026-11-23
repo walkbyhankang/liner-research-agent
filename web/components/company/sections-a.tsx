@@ -7,11 +7,11 @@ import type { FinancialRow, MergedInvestor, Round, Value } from "@/lib/contract"
 import { normName } from "@/lib/names";
 import { eok, fmtDay, num, stageKo } from "@/lib/format";
 import { setEdit } from "@/lib/local";
-import { phaseOf, summaryLine } from "@/lib/view";
-import { DetailRow, Disclosure, ExtLink, MoreButton, Placeholder, SourceLine, StatusWord, useMore } from "@/components/kit";
+import { npsChangeSince, phaseOf, summaryLine } from "@/lib/view";
+import { DetailRow, Disclosure, ExtLink, MoreButton, Placeholder, SourceLine, StatusWord, nb, useMore } from "@/components/kit";
 import { FinanceBars, NpsLine } from "@/components/charts";
 import { useCompany } from "@/components/company/context";
-import { FactRow, ValueBox } from "@/components/company/values";
+import { ConflictLines, FactRow, ValueBox } from "@/components/company/values";
 import { NextLine, SectionFrame } from "@/components/company/Section";
 import { NewsList } from "@/components/company/sections-b";
 
@@ -301,6 +301,55 @@ function FinanceTable({ rows }: { rows: FinancialRow[] }) {
   );
 }
 
+/**
+ * 재무·고용 요약(qa-report 3절 주석 7·9, 4절): 긴 한 문장 대신 값마다 이름 → 큰 숫자 → 기준(매출은 사업연도·연결/별도, 국민연금은 측정월 → 12개월 변화) 순.
+ * 요약 안에서 숫자가 가장 크다. 값이 없는 쪽은 뺀다(사유는 아래 그림 자리에 한 번). 둘 다 없으면 요약이 없다
+ */
+function FinanceSummary() {
+  const c = useCompany();
+  const job = c.job!;
+  const off = job.merged.revenue.official;
+  const npsV = job.merged.npsLatest;
+  const change = npsChangeSince(job.sections.official.result?.nps);
+  const big = "num text-[28px] font-bold leading-[1.2] tracking-tight";
+  const items: ReactNode[] = [];
+  if (off && off.status !== "unavailable") {
+    items.push(
+      <div key="rev" className="min-w-0">
+        <dt className="text-sm font-semibold">매출</dt>
+        {off.status === "conflicting" ? (
+          <dd>
+            <ConflictLines v={off} />
+          </dd>
+        ) : (
+          <dd className="flex flex-wrap items-baseline gap-x-2">
+            <span className={big}>{off.display}</span>
+            <span className="num text-sm text-sub">{nb([off.source?.asOf, off.source?.basis].filter(Boolean).join(", "))}</span>
+          </dd>
+        )}
+      </div>,
+    );
+  }
+  if (npsV && npsV.status !== "unavailable") {
+    items.push(
+      <div key="nps" className="min-w-0">
+        <dt className="text-sm font-semibold">국민연금 가입자</dt>
+        <dd className="flex flex-wrap items-baseline gap-x-2">
+          <span className={big}>{npsV.display}</span>
+          {npsV.source?.asOf && <span className="num text-sm text-sub">{nb(npsV.source.asOf)} 기준</span>}
+          {change && <span className="num text-sm text-sub">{change}</span>}
+        </dd>
+      </div>,
+    );
+  }
+  if (!items.length) return null;
+  return (
+    <dl className="flex flex-wrap gap-x-10 gap-y-3" data-summary>
+      {items}
+    </dl>
+  );
+}
+
 export function Finance() {
   const c = useCompany();
   const job = c.job!;
@@ -319,6 +368,9 @@ export function Finance() {
         <ValueBox v={web} />
       </DetailRow>
     ) : null;
+  // 재무만 없을 때 서버는 "금융위원회 재무 자료 없음"을 단락 오류(no_data)로도 준다. 구역 경고("일부 자료를 얻지 못했습니다: …")와
+  // 매출 자리("미확보: …")가 같은 말을 되풀이하지 않게, 같은 사유면 매출·영업이익 자리에 한 번만 쓴다(qa-report 4절 회사 분석)
+  const sameAsFigure = env.status === "partial" && env.error?.code === "no_data" && (env.error.message === r?.financialsReason || env.error.message === r?.npsReason);
 
   return (
     <SectionFrame
@@ -327,12 +379,14 @@ export function Finance() {
       env={env}
       envKey="official"
       summary={summaryLine(job, "finance")}
+      summaryNode={<FinanceSummary />}
+      partialNote={!sameAsFigure}
       unavailableBody={webLine}
     >
       {/* 재무가 미확보면 그 사유를 한 줄로 먼저 두고, 국민연금 차트가 빈 반쪽 옆에 끼지 않게 한 단으로 둔다 */}
       <div className={!loading && !fin.length ? "space-y-6" : "grid gap-8 md:grid-cols-2"}>
         <figure>
-          <figcaption className="mb-2 text-sm font-semibold">매출과 영업이익</figcaption>
+          <figcaption className="subhead">매출과 영업이익</figcaption>
           {loading ? (
             <Placeholder h={180} />
           ) : fin.length ? (
@@ -341,11 +395,13 @@ export function Finance() {
               <SourceLine word="confirmed" label="금융위원회 요약재무제표 (공공 API)" detail={basis} />
             </>
           ) : (
-            <p className="rounded-md bg-wash px-4 py-3 font-medium">미확보: {r?.financialsReason ?? "금융위원회 재무 자료 없음"}</p>
+            <p className="border border-dashed border-edge px-4 py-3 font-medium">미확보: {r?.financialsReason ?? "금융위원회 재무 자료 없음"}</p>
           )}
+          {/* 웹 조사 매출(보도)은 공식 재무 자료와 같은 자리에 나란히 둔다. 공식 자료가 없을 때도 사유 바로 아래에서 구분해 읽힌다 */}
+          {webLine && <div className="mt-2">{webLine}</div>}
         </figure>
         <figure className={!loading && !fin.length ? "max-w-[360px]" : ""}>
-          <figcaption className="mb-2 text-sm font-semibold">국민연금 가입자 수 (직원 수와 다릅니다)</figcaption>
+          <figcaption className="subhead">국민연금 가입자 수 (직원 수와 다릅니다)</figcaption>
           {loading ? (
             <Placeholder h={170} />
           ) : nps ? (
@@ -354,11 +410,10 @@ export function Finance() {
               <SourceLine word="reference" label="국민연금공단 사업장 가입자 (공공 API)" detail={nps.summary?.period ?? `${nps.monthly[0]?.month ?? ""}~${nps.monthly.at(-1)?.month ?? ""}`} />
             </>
           ) : (
-            <p className="rounded-md bg-wash p-4 font-medium">미확보: {r?.npsReason ?? "국민연금 사업장을 찾지 못함"}</p>
+            <p className="border border-dashed border-edge p-4 font-medium">미확보: {r?.npsReason ?? "국민연금 사업장을 찾지 못함"}</p>
           )}
         </figure>
       </div>
-      {webLine && <div className="mt-3">{webLine}</div>}
       {!loading && (
         <div className="mt-4">
           {fin.length > 0 && (
@@ -485,7 +540,7 @@ export function Investment() {
         <Lines n={4} />
       ) : (
         <>
-          <p className="text-sm font-semibold">최근 라운드</p>
+          <p className="subhead">최근 라운드</p>
           <ul className="divide-y divide-rule border-y border-rule">
             {rounds.slice(0, 3).map((x) => (
               <li key={x.id}>
@@ -493,8 +548,8 @@ export function Investment() {
               </li>
             ))}
           </ul>
-          <div className="mt-5">
-            <p className="text-sm font-semibold">투자기관 {investors.length}곳</p>
+          <div className="mt-6">
+            <p className="subhead">투자기관 {investors.length}곳</p>
             <p className="font-medium">{investors.slice(0, 5).map((i) => i.name).join(", ")}</p>
             {pendingFacts && <p className="mt-1 text-sm text-sub">원문에서 투자자를 더 확인하고 있습니다 (보통 3분 안에 끝남)</p>}
           </div>

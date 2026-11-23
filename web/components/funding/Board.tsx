@@ -128,6 +128,15 @@ function Deadline({ p, today }: { p: Program; today: string }) {
 /** 분류·지역·개수 꼬리표. 상태 낱말과 섞이지 않게 테두리 없는 보조 글(globals.css .meta) */
 const mark = "meta";
 
+/**
+ * 목록 줄 순서(2026-11-24 UX 점검 4절 "제목·마감·지원 유형·담기 순서"): 제목이 먼저 오고, 꼬리표(지원 유형·지역·표시)는 제목 아래로 내린다
+ * (제목 위 작은 꼬리표 줄은 머리 위 덧말처럼 읽혀 제목이 두 번째로 읽혔다). 공고·운용사 카드와 판로 입찰공고 줄이 같은 순서다.
+ * globals.css .lrow 의 칸(meta·main·end)은 그대로 쓰고 칸 배치만 덮는다: 넓은 곳(640 이상) 왼쪽 제목 → 꼬리표 → 내용, 오른쪽 끝 기한·표시.
+ * 좁은 곳은 제목이 한 줄 전체를 쓰고(전처럼 제목 폭을 줄이지 않게), 그 아래 줄 왼쪽 꼬리표·오른쪽 기한, 그다음 내용
+ */
+export const ROW_AREAS = "[grid-template-areas:'title_title'_'meta_end'_'main_main'] sm:[grid-template-areas:'title_end'_'meta_end'_'main_end']";
+export const ROW_TITLE = "[grid-area:title]";
+
 /** toggle 이 Promise<false> 를 돌려주면(브라우저 저장소에서 빼지 못함) 카드가 다시 누르라고 알린다 */
 export type SaveSpec = { on: boolean; toggle: () => unknown; onText: string; offText: string; sr: string };
 
@@ -178,18 +187,18 @@ export function ProgramCard({ m, today, related, save, foot }: { m: ProgramMatch
   const region = m.local && p.regions.includes("전국") ? p.agencyRegion ?? "전국" : p.regions.join(", ");
   return (
     <article className={`card p-4 ${save.on ? "border-ledger" : ""}`} data-program={p.id}>
-      {/* 목록 줄: 왼쪽 분류·제목·지원 내용·기관, 오른쪽 끝 기한(좁은 화면은 분류 줄 끝) */}
-      <div className="lrow">
-        <div className="lrow-meta flex flex-wrap items-center gap-x-3 gap-y-1">
+      {/* 목록 줄: 제목 → 기한(오른쪽 끝) → 지원 유형·지역·표시 → 지원 내용·기관 → 바닥 담기(ROW_AREAS) */}
+      <div className={`lrow ${ROW_AREAS}`}>
+        <h3 className={`clamp-2 text-lg font-semibold leading-snug ${ROW_TITLE}`}>{p.title}</h3>
+        <Deadline p={p} today={today} />
+        <div className="lrow-meta mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className={mark}>{p.sub || p.category}</span>
           {/* 지역이 여럿인 공고(예: 10개 시·도)는 글이 길어 칸 안에서 줄을 바꾼다. 안 그러면 좁은 화면에서 오른쪽 기한 칸을 덮는다 */}
           <span className={`${mark} whitespace-normal`}>{region}</span>
           {related && <span className="tag">회사 사업과 관련</span>}
           {!m.ok && <span className="tag">{m.excluded === "지역" ? "지금 조건과 다른 지역" : "지금 조건과 다른 대상"}</span>}
         </div>
-        <Deadline p={p} today={today} />
         <div className="lrow-main">
-          <h3 className="clamp-2 mt-1 text-lg font-semibold leading-snug">{p.title}</h3>
           {benefit && <p className="clamp-2 mt-1 text-sm">{benefit}</p>}
           <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-sub">
             <span>{p.agency}</span>
@@ -272,19 +281,19 @@ export function GpCard({ g, existing, rivals, save, showBadges = true }: { g: Gp
   const first = g.funds[0];
   return (
     <article className={`card p-4 ${save.on ? "border-ledger" : ""}`} data-gp={g.gp}>
-      {/* 목록 줄: 왼쪽 펀드 수·운용사 이름·대표 펀드, 오른쪽 끝 표시(이미 투자함·경쟁사에 투자)와 최근 결성 연도 */}
-      <div className="lrow">
-        <div className="lrow-meta flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className={mark}>펀드 {g.funds.length}개</span>
-        </div>
+      {/* 목록 줄: 운용사 이름 → 표시(이미 투자함·경쟁사에 투자)와 최근 결성 연도(오른쪽 끝) → 펀드 수 → 대표 펀드(ROW_AREAS, 공고 카드와 같은 순서) */}
+      <div className={`lrow ${ROW_AREAS}`}>
+        <h3 className={`text-lg font-semibold leading-snug ${ROW_TITLE}`}>{g.gp}</h3>
         <span className="lrow-end">
           {showBadges && existing && <span className="tag">이미 투자함</span>}
           {showBadges && rivals.length > 0 && <span className="tag">경쟁사에 투자</span>}
           <span className="num whitespace-nowrap text-sm">최근 결성 {g.latestYear}년</span>
         </span>
+        <div className="lrow-meta mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className={mark}>펀드 {g.funds.length}개</span>
+        </div>
         <div className="lrow-main">
-          <h3 className="mt-1 text-lg font-semibold leading-snug">{g.gp}</h3>
-          {rivals.length > 0 && <p className="text-sm">{rivals.join(", ")}에 투자한 곳입니다.</p>}
+          {rivals.length > 0 && <p className="mt-1 text-sm">{rivals.join(", ")}에 투자한 곳입니다.</p>}
           <p className="clamp-2 mt-1 text-sm">{first.name}</p>
           <p className="num text-xs text-sub">
             출자 분야 {first.field}, 만기 {first.maturity}
@@ -394,7 +403,7 @@ export function LaneTabs({ lane, setLane, debt, equity, withSales = true }: { la
   );
 }
 
-/** 빠른 거르기 3개 */
+/** 빠른 필터 3개(2026-11-24 UX 점검 주석15: "거르기" → "필터"로 낱말을 맞춤) */
 export function QuickFilters({ only, setOnly, counts, region }: { only: Only; setOnly: (o: Only) => void; counts: BoardResult["counts"]; region: string }) {
   const quick: { id: Only; label: string; n: number }[] = [
     { id: "all", label: "전체", n: counts.all },
@@ -402,7 +411,7 @@ export function QuickFilters({ only, setOnly, counts, region }: { only: Only; se
     { id: "local", label: `${region} 공고`, n: counts.local },
   ];
   return (
-    <div role="group" aria-label="빠른 거르기" className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1">
+    <div role="group" aria-label="빠른 필터" className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1">
       {quick.map((c) => (
         <button key={c.id} type="button" className="chip" aria-pressed={only === c.id} onClick={() => setOnly(c.id)}>
           {c.label} <span className="num">{c.n}</span>
@@ -414,10 +423,10 @@ export function QuickFilters({ only, setOnly, counts, region }: { only: Only; se
 
 const SORT_TEXT: Record<SortMode, string> = { rec: "우리 지역·마감순", deadline: "마감 임박순", new: "최신 등록순" };
 
-/** 2층 "거르기와 정렬". 걸린 거르기가 있으면 접힌 줄에 요약 */
+/** 2층 "필터 및 정렬"(2026-11-24 UX 점검 주석15, 전 "거르기와 정렬"). 걸린 필터가 있으면 접힌 줄에 요약 */
 export function FilterPanel({ need, q, setQ, sort, setSort, memoryKey }: { need: Profile["need"]; q: string; setQ: (v: string) => void; sort: SortMode; setSort: (s: SortMode) => void; memoryKey: string }) {
   const parts = [q.trim() ? `낱말: ${q.trim()}` : "", sort !== "rec" ? SORT_TEXT[sort] : ""].filter(Boolean);
-  const text = parts.length ? `거르기와 정렬 (${parts.join(", ")})` : "거르기와 정렬";
+  const text = parts.length ? `필터 및 정렬 (${parts.join(", ")})` : "필터 및 정렬";
   return (
     <Disclosure text={text} openText={text} memoryKey={memoryKey}>
       <div className="space-y-3 py-2">
@@ -449,43 +458,75 @@ export function FilterPanel({ need, q, setQ, sort, setSort, memoryKey }: { need:
   );
 }
 
-/** 바닥: 기준일·출처, 용어 풀이, 이 목록이 판단하는 것과 하지 않는 것 */
-export function BoardFoot({ meta, memoryKey }: { meta: Meta; memoryKey: string }) {
+/**
+ * 용어와 설명의 짝(정의 목록). 도움말 펼친 안에서 같은 모양: 넓은 곳은 왼쪽 용어 열(10em)과 오른쪽 설명, 좁은 곳은 용어 아래 설명.
+ * 짝 사이는 12px, 용어와 설명 사이는 2px 이라 한 짝씩 읽힌다
+ */
+export function TermList({ items }: { items: readonly { term: ReactNode; desc: ReactNode; key: string }[] }) {
   return (
-    <div className="mt-8 space-y-1">
-      <div className="source">
-        <p className="num">
-          데이터 기준일 {meta.asOf}. 출처 기업마당 지원사업정보(접수 가능 {meta.programs.total.toLocaleString()}건), 한국벤처투자 펀드현황(만기 전 모태 자펀드 {meta.funds.listed.toLocaleString()}개,{" "}
-          {meta.funds.latestYear}년 결성분까지)
-        </p>
-      </div>
-      <Disclosure text="용어 풀이" memoryKey={`${memoryKey}:glossary`}>
-        <dl className="space-y-2 py-2 text-sm">
-          {glossary.map((g) => (
-            <div key={g.term}>
-              <dt className="inline font-semibold">{g.term}</dt> <dd className="inline">{g.desc}</dd>
-            </div>
-          ))}
-        </dl>
-      </Disclosure>
-      <Disclosure text="이 목록이 판단하는 것과 하지 않는 것" memoryKey={`${memoryKey}:scope`}>
-        <ul className="list-disc space-y-1 py-2 pl-5 text-sm">
-          <li>공고는 기업마당이 분류한 지역·지원대상·지원분야로만 걸렀습니다. 업력, 업종, 매출 같은 세부 자격은 공고문에 있고 여기서는 대조하지 않습니다.</li>
-          <li>펀드는 한국모태펀드가 출자한 자펀드만 있습니다. 출자 분야 이름으로 분류했으며 투자 대상의 정확한 정의는 운용사와 출자 공고에서 확인해야 합니다.</li>
-        </ul>
-      </Disclosure>
-    </div>
+    <dl className="space-y-3 py-2 text-sm">
+      {items.map((g) => (
+        <div key={g.key} className="sm:grid sm:grid-cols-[10em_minmax(0,1fr)] sm:gap-x-4" data-term={g.key}>
+          {/* 표시 모양(.tag, 22px 줄) 용어는 설명 첫 줄(24px)과 위를 맞춘다 */}
+          <dt className="font-semibold [&_.tag]:align-top">{g.term}</dt>
+          <dd className="mt-0.5 sm:mt-0">{g.desc}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
-/** 담은 항목 막대(screens 1.9) */
-export function SavedBar({ n, href, label = "심사 준비로 가기" }: { n: number; href: string; label?: string }) {
+/**
+ * 바닥 도움말(2026-11-24 UX 점검 주석18·4절): 매칭에 쓴 조건과 용어 설명을 "도움말" 한 구역에 모은다.
+ * 펼치기 줄은 같은 들여쓰기·간격(앞에 화면마다 다른 줄 children, 그다음 용어 풀이·판단 범위)이고, 같은 층의 나열은 글머리표, 용어 짝은 정의 목록이다.
+ * 데이터 기준일·출처는 펼치기 줄 사이에 끼우지 않고 맨 아래 따로 보조 문단으로 둔다
+ */
+export function BoardFoot({ meta, memoryKey, children }: { meta: Meta; memoryKey: string; children?: ReactNode }) {
+  const id = `${memoryKey.replace(/[^a-zA-Z0-9-]/g, "-")}-help`;
+  return (
+    <section aria-labelledby={id} className="mt-8" data-help>
+      <h2 id={id} className="text-lg font-bold">
+        도움말
+      </h2>
+      <div className="mt-2">
+        {children}
+        <Disclosure text="용어 풀이" memoryKey={`${memoryKey}:glossary`}>
+          <TermList items={glossary.map((g) => ({ key: g.term, term: g.term, desc: g.desc }))} />
+        </Disclosure>
+        <Disclosure text="이 목록이 판단하는 것과 하지 않는 것" memoryKey={`${memoryKey}:scope`}>
+          <ul className="list-disc space-y-1 py-2 pl-5 text-sm">
+            <li>공고는 기업마당이 분류한 지역·지원대상·지원분야로만 걸렀습니다. 업력, 업종, 매출 같은 세부 자격은 공고문에 있고 여기서는 대조하지 않습니다.</li>
+            <li>펀드는 한국모태펀드가 출자한 자펀드만 있습니다. 출자 분야 이름으로 분류했으며 투자 대상의 정확한 정의는 운용사와 출자 공고에서 확인해야 합니다.</li>
+          </ul>
+        </Disclosure>
+      </div>
+      <p className="num mt-4 text-xs text-sub" data-help-source>
+        데이터 기준일 {meta.asOf}. 출처 기업마당 지원사업정보(접수 가능 {meta.programs.total.toLocaleString()}건), 한국벤처투자 펀드현황(만기 전 모태 자펀드 {meta.funds.listed.toLocaleString()}개,{" "}
+        {meta.funds.latestYear}년 결성분까지)
+      </p>
+    </section>
+  );
+}
+
+/**
+ * 담은 항목 막대(screens 1.9, 2026-11-24 UX 점검 주석19): 담은 항목과 다음 행동을 함께 보인다.
+ * 왼쪽 담은 개수와 내역(detail, 좁은 화면은 개수 내역만), 오른쪽 다음 단계 주 단추(다른 단계 끝의 "경쟁사 분석 보기"·"자금·판로 보기"와 같은 btn btn-primary)
+ */
+export function SavedBar({ n, href, label = "심사 준비로 가기", detail, next }: { n: number; href: string; label?: string; detail?: string; next?: string }) {
   if (n <= 0) return null;
   return (
-    <div className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-ledger bg-ledger-soft">
+    <div className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-ledger bg-ledger-soft" data-saved-bar>
       <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-3 px-4 py-2 sm:px-6">
-        <p className="num font-semibold text-ledger">담은 항목 {n}개</p>
-        <Link href={href} className="btn btn-primary">
+        <div className="min-w-0">
+          <p className="num font-semibold text-ledger">담은 항목 {n}개</p>
+          {(detail || next) && (
+            <p className="num text-sm text-ink">
+              {detail}
+              {next && <span className="hidden sm:inline">{detail ? ". " : ""}{next}</span>}
+            </p>
+          )}
+        </div>
+        <Link href={href} className="btn btn-primary shrink-0">
           {label}
         </Link>
       </div>

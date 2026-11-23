@@ -13,7 +13,7 @@ import { phaseOf } from "@/lib/view";
 import { BIZ_LABEL } from "@/lib/company-values";
 import { DetailRow, Disclosure, ExtLink, MoreButton, Placeholder, SourceLine, StatusWord, useMore } from "@/components/kit";
 import { useCompany, useTicker } from "@/components/company/context";
-import { CardList, DueText, LoadError, ProgramCard, noticeSave, usePublicData, useToday } from "@/components/funding/Board";
+import { CardList, DueText, LoadError, ProgramCard, ROW_AREAS, ROW_TITLE, noticeSave, usePublicData, useToday } from "@/components/funding/Board";
 
 /** 같은 방문에서 같은 검색어로 다시 열면 다시 묻지 않는다(P-01) */
 const posted = new Set<string>();
@@ -86,17 +86,19 @@ export function SalesLane({ region, biz, filtersAbove, className = "" }: { regio
   return (
     // 넓은 화면에서도 판로 단은 글 폭 760(나란히 견주는 곳이 아니다. 머리 윗선·목록·지원사업 카드 모두 760, visual-plan 7절)
     <section ref={ref} id="lane-sales" aria-label="판로" className={`scroll-mt-16 lg:max-w-[760px] ${className}`} data-lane="sales">
-      {/* 갈래 머리: 넓은 화면은 제목과 판로 색 3px 윗선, 좁은 화면은 "판로" 탭이 제목을 대신한다(빌리는 돈·투자받는 돈과 같은 규칙) */}
-      <div className="lane-sales pt-3">
+      {/* 갈래 머리: 넓은 화면은 제목, 좁은 화면은 "판로" 탭이 제목을 대신한다(빌리는 돈·투자받는 돈과 같은 제목 크기 18px 굵게).
+          판로 색 3px 윗선은 걷어냈다(2026-11-24 UX 점검 주석14): 판로는 두 갈래 아래 따로 놓인 단이라 굵은 색 선이 큰 칸막이로 읽혔다. 앞 구역과는 여백(40px)으로 나눈다 */}
+      <div data-lane-head>
         <h2 className="sr-only text-lg font-bold lg:not-sr-only">판로</h2>
-        {/* 둘째 문장은 넓은 화면에서 빠른 거르기 줄이 실제로 위에 있을 때만(좁은 화면은 판로 탭에서 빠른 거르기를 숨긴다, 기업 유형을 고르기 전에는 줄이 없다) */}
+        {/* 둘째 문장은 넓은 화면에서 빠른 필터 줄이 실제로 위에 있을 때만(좁은 화면은 판로 탭에서 빠른 필터를 숨긴다, 기업 유형을 고르기 전에는 줄이 없다) */}
         <p className="text-sm">
-          회사 기술 낱말과 회사 값{region && biz ? `(${region}, ${BIZ_LABEL[biz]})` : ""}으로 찾은 판로 기회입니다.
-          {filtersAbove && <span className="hidden lg:inline"> 위 빠른 거르기는 걸리지 않습니다.</span>}
+          회사 분석 결과의 기술 낱말과 조건{region && biz ? `(${region}, ${BIZ_LABEL[biz]})` : ""}으로 찾은 판로 기회입니다.
+          {filtersAbove && <span className="hidden lg:inline"> 위 필터와 정렬은 판로에 적용되지 않습니다.</span>}
         </p>
       </div>
       <section aria-labelledby="bid-h" className="mt-6 max-w-[760px]">
-        <h3 id="bid-h" className="flex flex-wrap items-center gap-2 text-xl font-semibold">
+        {/* 갈래 안 작은 덩어리 제목은 투자받는 돈의 "새로 찾아볼 운용사"처럼 16px 굵게(갈래 제목 18px 보다 크지 않게) */}
+        <h3 id="bid-h" className="flex flex-wrap items-center gap-2 text-base font-bold">
           공공 조달 입찰공고
           {env?.status === "unavailable" && <StatusWord w="unavailable" />}
         </h3>
@@ -233,12 +235,12 @@ function BidRow({ b, today }: { b: Bid; today: string }) {
   return (
     <DetailRow
       head={
-        // 목록 줄: 왼쪽 공고명·수요기관·금액, 오른쪽 끝 기한(screens 1.12). 좁은 화면은 기한이 첫 줄 끝으로 간다
-        <span className="lrow">
-          <span className="lrow-meta flex min-h-[22px] flex-wrap items-center gap-2">{b.relevance === "high" && <span className="tag">핵심 낱말 일치</span>}</span>
+        // 목록 줄: 공고명 → 기한(오른쪽 끝, screens 1.12) → 표시 → 수요기관·금액. 공고·운용사 카드와 같은 순서(Board ROW_AREAS)
+        <span className={`lrow ${ROW_AREAS}`}>
+          <span className={`clamp-2 font-medium ${ROW_TITLE}`}>{b.title}</span>
           {today ? <DueText text={bidDeadline(b, today)} /> : <span className="lrow-end" />}
+          <span className="lrow-meta flex flex-wrap items-center gap-2">{b.relevance === "high" && <span className="tag">핵심 낱말 일치</span>}</span>
           <span className="lrow-main">
-            <span className="clamp-2 font-medium">{b.title}</span>
             <span className="mt-0.5 flex flex-wrap gap-x-3 text-sm">
               <span className="text-sub">{b.agency}</span>
               <span className="num">{b.amount || "공고문 확인"}</span>
@@ -293,7 +295,7 @@ function SalesPrograms({ region, biz }: { region: string | null; biz: BizTypeId 
 
   return (
     <section aria-labelledby="sp-h" className="mt-10 border-t border-rule pt-6">
-      <h3 id="sp-h" className="text-xl font-semibold">
+      <h3 id="sp-h" className="text-base font-bold">
         판로 지원사업
       </h3>
       {error && <LoadError />}

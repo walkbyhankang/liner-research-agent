@@ -4,16 +4,129 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { fmtMD, fmtTime, isStale } from "@/lib/format";
-import { replaceLocal, saveMemo, type SavedItem } from "@/lib/local";
-import { exportFile, exportName, linerTotal, NOT_EXPORT_FILE, noteRows, noteText, parseImport, WORD_LEGEND, type ExportFile } from "@/lib/note";
-import { noticeEnd, openValues, verdictCounts } from "@/lib/review";
+import { noticeCompany } from "@/lib/company-values";
+import { replaceLocal, saveMemo, savedNotices, type SavedItem } from "@/lib/local";
+import {
+  capConditions, exportFile, exportName, linerTotal, NOT_CHECKED_TEXT, NOT_EXPORT_FILE, noteNotice, noteRows, noteText, noticeCountsText, noticeDue, noticeGroups, numberGroups, parseImport, WORD_LEGEND,
+  type ExportFile, type NoteNotice, type NoteRow,
+} from "@/lib/note";
+import { noticeEnd, openValues } from "@/lib/review";
 import { QUESTIONS } from "@/lib/prep";
 import { onStorageChange, storageState } from "@/lib/store";
-import { Dialog, StatusWord, toast } from "@/components/kit";
+import { Dialog, StatusWord, VerdictMark, toast } from "@/components/kit";
 import { useCompany } from "@/components/company/context";
 import { usePublicData } from "@/components/funding/Board";
 
 type Item = { key: string; node: ReactNode; text: string };
+
+/**
+ * 회사 정보(QA 주석21·22): 이름표 열과 값 열을 고정하고, 출처·기준일은 값 바로 아래 같은 왼쪽 끝에 둔다.
+ * 엇갈림은 이름표 옆에 "엇갈림" 한 번 + 두 값(둘째는 "다른 자료"), 공식 자료와 웹 조사 칸은 값 앞 이름으로 가른다.
+ * 미확보는 "미확보" + 사유. 화면과 인쇄가 같은 마크업이라 순서가 같다(휴대폰에서만 이름표를 값 위에 쌓는다).
+ */
+function CompanyInfo({ rows }: { rows: NoteRow[] }) {
+  return (
+    <dl className="mt-3 border-t border-rule text-sm">
+      {rows.map((r) => (
+        <div key={r.label} data-row className="grid break-inside-avoid items-start gap-x-5 gap-y-1 border-b border-rule py-2.5 sm:grid-cols-[10.5em_minmax(0,1fr)] print:grid-cols-[10.5em_minmax(0,1fr)] print:py-1">
+          <dt className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sub">
+            {r.label}
+            {r.conflict && <StatusWord w="conflicting" />}
+          </dt>
+          <dd className="min-w-0 space-y-1.5 print:space-y-0.5">
+            {r.pending && <p className="text-sub">확인 중</p>}
+            {r.values.map((v, i) => (
+              <div key={i}>
+                <p className="flex flex-wrap items-baseline gap-x-2">
+                  {v.tag && <span className="meta min-w-[4.6em] font-semibold text-ink">{v.tag}</span>}
+                  {v.word === "unavailable" ? (
+                    <>
+                      <StatusWord w="unavailable" /> <span>{v.text}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="num font-medium">{v.text}</span> {/* "엇갈림"은 항목 이름 옆에 한 번만. 같은 줄의 따로 확인된 값(예: 공식 자료 업종)은 제 상태를 그대로 보인다 */}
+                      {!(r.conflict && v.word === "conflicting") && <StatusWord w={v.word} />}
+                    </>
+                  )}
+                </p>
+                {v.source && (
+                  <p data-src className="text-xs text-sub">
+                    {v.source}
+                  </p>
+                )}
+              </div>
+            ))}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** 공고 하나(QA 주석23·4절): 제목·마감 → 판정 요약 → (들여 써서) 미충족·확인 필요 조건 → 근거 줄. 조건은 처음 5개, 넘으면 "외 n건" */
+function NoticeBlock({ x }: { x: NoteNotice }) {
+  const { shown, more } = capConditions(x.conditions, 5);
+  return (
+    <article data-note-notice={x.key} className="break-inside-avoid">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+        <h4 className="min-w-0 font-semibold">{x.title}</h4>
+        <span className="num text-sm text-sub">{x.agency ? `${x.agency}, ` : ""}<span className="whitespace-nowrap">{noticeDue(x.end)}</span></span>
+      </div>
+      <p className="text-sm">{x.counts ? `${noticeCountsText(x.counts)}.${x.reason ? ` ${x.reason}` : ""}` : NOT_CHECKED_TEXT}</p>
+      {shown.length > 0 && (
+        <div className="mt-2 space-y-1.5 pl-5 print:mt-1 print:space-y-0.5 print:pl-4" data-conditions>
+          {shown.map((g) => (
+            <div key={g.verdict}>
+              <h5 className="leading-snug">
+                <VerdictMark v={g.verdict} count={g.total} />
+              </h5>
+              <ul className="list-disc pl-5 text-sm">
+                {g.items.map((t, i) => (
+                  <li key={i}>{t}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          {more > 0 && <p className="text-sm text-sub">외 {more}건</p>}
+        </div>
+      )}
+      {x.basis && <p className="mt-1.5 text-xs text-sub">{x.basis}</p>}
+    </article>
+  );
+}
+
+/** 담은 자금 후보: 공고 전체 상태로 묶는다. 화면은 처음 5건 + "{n}개 더 보기", 인쇄는 10건까지 + "외 {n}개"(PR-02). 화면과 인쇄가 같은 마크업 */
+function NoticeGroups({ notices }: { notices: NoteNotice[] }) {
+  const [all, setAll] = useState(false);
+  if (!notices.length) return <p className="text-sub">없음</p>;
+  const placed = numberGroups(noticeGroups(notices));
+  const vis = (i: number) => `${!all && i >= 5 ? "hidden print:block" : ""} ${i >= 10 ? "print:hidden" : ""}`;
+  return (
+    <>
+      {placed.map((g) => (
+        <div key={g.state} data-notice-group={g.state} className={`mt-4 border-t border-rule pt-3 print:mt-2 print:pt-1.5 ${vis(g.items[0].i)}`}>
+          <h3 className="break-after-avoid text-lg font-semibold">
+            {g.state} <span className="num font-normal text-sub">{g.items.length}건</span>
+          </h3>
+          <ul className="mt-2 space-y-4 print:mt-1 print:space-y-2">
+            {g.items.map(({ x, i }) => (
+              <li key={x.key} className={vis(i)}>
+                <NoticeBlock x={x} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {!all && notices.length > 5 && (
+        <button type="button" className="btn no-print mt-3" onClick={() => setAll(true)}>
+          {notices.length - 5}개 더 보기
+        </button>
+      )}
+      {notices.length > 10 && <p className="print-only mt-1">외 {notices.length - 10}개</p>}
+    </>
+  );
+}
 
 /** 목록마다 처음 5개 + "{n}개 더 보기". 인쇄에서는 10개까지와 "외 {n}개"(PR-02) */
 function NoteList({ items, empty }: { items: Item[]; empty?: string }) {
@@ -89,39 +202,16 @@ export function NoteScreen() {
   const stale = Boolean(job.analyzedAt && isStale(job.analyzedAt));
   const rows = noteRows(job, c.local.edits, today);
   const saved = c.local.saved;
-  const progs = saved.filter((s) => s.kind === "program");
+  // 자격 대조 대상 공고: 자금 공고(program)와 판로 갈래에서 담은 지원사업(salesProgram)을 공고 id 하나로(savedNotices, 심사 준비와 같은 셈).
+  // 판로 탭에서 담아 대조한 지원사업도 판정·조건·근거가 노트에 나온다. 그래서 판로 후보에는 입찰공고만 남겨 같은 공고가 두 번 나오지 않게 한다
+  const progs = savedNotices(saved);
   const gps = saved.filter((s) => s.kind === "gp");
-  const sales = saved.filter((s) => s.kind === "bid" || s.kind === "salesProgram");
-  // 마감일은 회사 분석 "지금 확인할 것"·심사 준비와 같은 기준(지금 공고 자료 먼저, 없으면 담을 때 저장값)
+  const sales = saved.filter((s) => s.kind === "bid");
+  // 마감일은 회사 분석 "확인이 필요한 정보"·심사 준비와 같은 기준(지금 공고 자료 먼저, 없으면 담을 때 저장값)
   const endOf = (s: SavedItem) => noticeEnd(s, data?.programs);
-
-  const progItems: Item[] = progs.map((s) => {
-    const rec = c.local.checks[s.itemId];
-    const end = endOf(s);
-    const r = rec?.result;
-    const vc = r ? verdictCounts(r) : null;
-    const gapsList = r ? r.match.rows.filter((x) => x.verdict === "미충족" || x.verdict === "확인 필요").slice(0, 5) : [];
-    const text = `${s.title} (${end ? `${fmtMD(end)} 마감` : "신청기간 미기재"}) ${r && vc ? `${r.match.overall}, 충족 ${vc.met}, 미충족 ${vc.unmet}, 확인 필요 ${vc.check}` : "대조 전"}${gapsList.length ? `. 조건: ${gapsList.map((g) => `${g.verdict} ${g.requirement}`).join("; ")}` : ""}`;
-    return {
-      key: s.itemId,
-      text,
-      node: (
-        <span>
-          <span className="font-medium">{s.title}</span> <span className="num text-sm text-sub">{end ? `${fmtMD(end)} 마감` : "신청기간 미기재"}</span>
-          <span className="block text-sm">{r && vc ? `${r.match.overall}. 충족 ${vc.met}, 미충족 ${vc.unmet}, 확인 필요 ${vc.check}` : "대조 전"}</span>
-          {gapsList.length > 0 && (
-            <span className="block text-sm text-sub">
-              {gapsList.map((g, i) => (
-                <span key={i} className="block">
-                  {g.verdict}: {g.requirement}
-                </span>
-              ))}
-            </span>
-          )}
-        </span>
-      ),
-    };
-  });
+  // 대조한 뒤 회사 값이 바뀌었는지 보려고 지금 회사 값을 만든다(심사 준비 카드의 "이전 회사 값으로 한 대조"와 같은 견줌)
+  const current = noticeCompany(job, c.local.edits);
+  const notices: NoteNotice[] = progs.map((s) => noteNotice(s, c.local.checks[s.itemId], endOf(s), current));
   const gpItems: Item[] = gps.map((s) => {
     const b = c.local.briefs[s.itemId]?.result;
     const field = b?.facts.find((f) => f.kind === "투자 분야")?.text;
@@ -163,7 +253,7 @@ export function NoteScreen() {
 
   const textModel = {
     name: job.company.name, analyzedAt: job.analyzedAt, stale, today, rows,
-    programs: progItems.map((i) => i.text), gps: gpItems.map((i) => i.text), sales: salesItems.map((i) => i.text),
+    notices, gps: gpItems.map((i) => i.text), sales: salesItems.map((i) => i.text),
     todo: [
       { title: "기관에 물을 질문", items: askAgency.map((i) => i.text) },
       { title: "운용사에 물을 것", items: askGp.map((i) => i.text) },
@@ -216,7 +306,15 @@ export function NoteScreen() {
 
   return (
     <main className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-6 sm:px-6">
-      <style>{`@media print { @page { @bottom-center { content: "${footer}, " counter(page) "/" counter(pages); font-size: 9pt; color: #586377; } } }`}</style>
+      {/* 쪽 아래 글과, 이 문서의 인쇄 제목 단계(globals.css 노트 인쇄 규칙 위에 덧씀: 구역 14 > 상태 묶음 13 > 공고 12 > 본문 11.5).
+          제목은 내용과 떨어지지 않게(break-after), 공고 하나·회사 정보 한 줄은 쪽에서 쪼개지지 않게(break-inside) 둔다 */}
+      <style>{`@media print { @page { @bottom-center { content: "${footer}, " counter(page) "/" counter(pages); font-size: 9pt; color: #586377; } }
+  [data-note] [data-part] > h2 { font-size: 14px !important; line-height: 1.3 !important; }
+  [data-note] h3 { font-size: 13px !important; line-height: 1.35 !important; }
+  [data-note] h4 { font-size: 12px !important; line-height: 1.4 !important; }
+  [data-note] h5 > span { font-size: 11.5px !important; }
+  [data-note] :is(h2, h3, h4, h5) { break-after: avoid; }
+  [data-note] [data-note-notice], [data-note] [data-row] { break-inside: avoid; } }`}</style>
       {/* 제목과 단추 줄은 문서 폭에 맞춰, 단추가 문서 오른쪽 끝에 붙어 보이게 한다 */}
       <div className="no-print flex max-w-[760px] flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">노트</h1>
@@ -287,49 +385,22 @@ export function NoteScreen() {
       )}
 
       <article className="mt-6 max-w-[760px] rounded-sm border border-rule px-5 py-6 sm:px-10 sm:py-10 print:border-0 print:p-0" data-note>
-        <header className="border-b-2 border-ink pb-3" data-part="head">
+        {/* 위계(QA 주석22): 문서 제목·기준일 → 회사 정보 → 담은 자금 후보. 큰 구역 사이는 여백 40, 제목과 내용은 8~12 */}
+        <header className="border-b-2 border-ink pb-4" data-part="head">
           <p className="text-2xl font-semibold">{job.company.name} 성장노트</p>
-          <p className="num text-sm text-sub">
-            {today} 작성, 회사 분석 {job.analyzedAt ? fmtTime(job.analyzedAt) : "진행 중"}
+          <p className="num mt-1 text-sm text-sub">
+            {today} 작성, 회사 분석 {job.analyzedAt ? `${fmtTime(job.analyzedAt)} 기준` : "진행 중"}
             {stale ? ", 오래된 분석" : ""}
           </p>
         </header>
 
-        <section className="mt-6" data-part="values">
-          <h2 className="text-base font-bold">회사 핵심 값</h2>
-          <table className="mt-2 w-full text-sm">
-            <tbody>
-              {rows.map((r) => (
-                // 휴대폰에서는 이름표를 값 위에 쌓아 값 열이 좁아지지 않게 한다(인쇄는 표 그대로)
-                <tr key={r.label} className="border-b border-rule align-top max-sm:block max-sm:py-2 print:table-row">
-                  <th scope="row" className="w-[8.5em] py-2 pr-3 text-left font-normal text-sub max-sm:block max-sm:w-auto max-sm:py-0 print:table-cell">
-                    {r.label}
-                  </th>
-                  <td className="py-2 max-sm:block max-sm:py-0 print:table-cell">
-                    {r.pending && <span className="text-sub">확인 중</span>}
-                    {r.values.map((v, i) => (
-                      <span key={i} className="block">
-                        {v.word === "unavailable" ? (
-                          <>
-                            <StatusWord w="unavailable" /> <span className="font-medium">{v.text}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="num font-medium">{v.text}</span> <StatusWord w={v.word} />
-                          </>
-                        )}
-                        {v.source && <span className="block text-xs text-sub">{v.source}</span>}
-                      </span>
-                    ))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <section className="mt-8" data-part="values">
+          <h2 className="break-after-avoid text-xl font-semibold">회사 정보</h2>
+          <CompanyInfo rows={rows} />
         </section>
 
         {empty ? (
-          <section className="mt-6" data-part="empty">
+          <section className="mt-10" data-part="empty">
             <p>담은 항목이 없습니다. 자금·판로에서 공고, 운용사, 판로 기회를 담으면 노트에 모입니다.</p>
             <Link href={`/c/${c.cid}/funding`} className="link no-print">
               자금·판로로 가기
@@ -337,39 +408,45 @@ export function NoteScreen() {
           </section>
         ) : (
           <>
-            <section className="mt-6" data-part="programs">
-              <h2 className="text-base font-bold">담은 자금 후보</h2>
-              <NoteList items={progItems} />
+            <section className="mt-10" data-part="programs">
+              <h2 className="break-after-avoid text-xl font-semibold">
+                담은 자금 후보 <span className="num font-normal text-sub">{notices.length}건</span>
+              </h2>
+              <NoticeGroups notices={notices} />
             </section>
-            <section className="mt-6" data-part="gps">
-              <h2 className="text-base font-bold">운용사</h2>
-              <NoteList items={gpItems} />
+            <section className="mt-10" data-part="gps">
+              <h2 className="break-after-avoid text-xl font-semibold">운용사</h2>
+              <div className="mt-2">
+                <NoteList items={gpItems} />
+              </div>
             </section>
-            <section className="mt-6" data-part="sales">
-              <h2 className="text-base font-bold">판로 후보</h2>
-              <NoteList items={salesItems} />
+            <section className="mt-10" data-part="sales">
+              <h2 className="break-after-avoid text-xl font-semibold">판로 후보</h2>
+              <div className="mt-2">
+                <NoteList items={salesItems} />
+              </div>
             </section>
           </>
         )}
 
-        <section className="mt-6" data-part="todo">
-          <h2 className="text-base font-bold">다음 할 일</h2>
-          <p className="mt-2 text-sm font-semibold">기관에 물을 질문</p>
+        <section className="mt-10" data-part="todo">
+          <h2 className="break-after-avoid text-xl font-semibold">다음 할 일</h2>
+          <p className="mt-3 break-after-avoid font-semibold">기관에 물을 질문</p>
           <NoteList items={askAgency} />
-          <p className="mt-3 text-sm font-semibold">운용사에 물을 것</p>
+          <p className="mt-4 break-after-avoid font-semibold">운용사에 물을 것</p>
           <NoteList items={askGp} />
-          <p className="mt-3 text-sm font-semibold">준비할 자료</p>
+          <p className="mt-4 break-after-avoid font-semibold">준비할 자료</p>
           <NoteList items={docs} />
           {askMemo.length > 0 && (
             <>
-              <p className="mt-3 text-sm font-semibold">투자 미팅 예상 질문 메모</p>
+              <p className="mt-4 break-after-avoid font-semibold">투자 미팅 예상 질문 메모</p>
               <NoteList items={askMemo} />
             </>
           )}
         </section>
 
-        <section className="mt-6" data-part="memo">
-          <h2 className="text-base font-bold">
+        <section className="mt-10" data-part="memo">
+          <h2 className="text-xl font-semibold">
             <label htmlFor="note-memo">메모</label>
           </h2>
           <textarea

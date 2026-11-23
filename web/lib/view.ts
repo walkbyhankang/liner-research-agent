@@ -22,6 +22,18 @@ export const SCREEN_SECTIONS: readonly ScreenSection[] = [
   { key: "news", label: "최근 동향", primary: "news" },
   { key: "tech", label: "기술", primary: "patents" },
 ];
+/**
+ * 국민연금 가입자 변화 글. 서버 summary.change 는 가입자 수가 있는 마지막 달 − 첫 달이고(growth/public_data.py vals),
+ * 받은 달이 12개월이 아닐 수 있다. 그래서 "12개월 전보다"가 아니라 기준 달을 밝힌다: "2025-10보다 +81명".
+ * 기준 달은 월별 자료에서 가입자 수가 있는 첫 달이다(summary.period 의 첫 달은 가입자 수가 빈 달일 수 있다). 변화가 없으면 null
+ */
+export function npsChangeSince(nps: { summary?: { change?: number | null; period?: string | null } | null; monthly?: readonly { month: string; members: number | null }[] | null } | null | undefined): string | null {
+  const sum = nps?.summary;
+  if (!sum || typeof sum.change !== "number") return null;
+  const from = nps?.monthly?.find((m) => typeof m.members === "number")?.month ?? (sum.period ?? "").split("~")[0]?.trim();
+  return from ? `${from}보다 ${signed(sum.change)}명` : `받은 기간 동안 ${signed(sum.change)}명`;
+}
+
 export const screenLabel = (k: ScreenKey) => SCREEN_SECTIONS.find((s) => s.key === k)!.label;
 
 export type Phase = "loading" | "done" | "partial" | "unavailable" | "idle";
@@ -101,7 +113,7 @@ export const firmStatus = (v: Value | null | undefined) => Boolean(v && (v.statu
  * 특허 값의 이름(2026-11-23 사용자 지시): 회사가 가진 전체 특허 수가 아니라 Liner 웹 검색으로 찾은 Google Patents 공개 문서 가운데
  * 출원인이 원문에서 그 회사로 확인된 건수다(growth/patents.py). "국내 특허 11건"이 전체 보유 수로 읽혀 이름에 뜻을 담는다.
  * 이 값(merged.patentCount, patents 단락 건수)을 가리키는 모든 화면 글이 이 이름을 쓴다: 핵심 값 칸, 기술 단락 요약, 경쟁사 분석 비교 표 줄(compare.ts),
- * "지금 확인할 것"·미팅 전에 정리할 값(review.ts openValues), 미팅 근거 묶음 특허 줄, 투자 미팅 예상 질문·실사 자료(prep.ts), 노트(note.ts),
+ * "확인이 필요한 정보"·미팅 전에 정리할 값(review.ts openValues), 미팅 근거 묶음 특허 줄, 투자 미팅 예상 질문·실사 자료(prep.ts), 노트(note.ts),
  * 자격 대조에 함께 보내는 값(Grants.tsx, 회사 정보 수정 창, company-values.ts 자동 메모). 문장 안에서는 "검색으로 확인한 특허 {n}건"
  */
 export const PATENT_LABEL = "검색으로 확인한 특허";
@@ -155,11 +167,10 @@ export function keyTiles(job: AnalysisJob): Tile[] {
   if (!nps) tiles.push(blank("nps", "국민연금 가입자", "finance", true));
   else if (nps.status === "unavailable") tiles.push({ ...blank("nps", "국민연금 가입자", "finance", false), missing: `미확보: ${nps.reason ?? "국민연금 사업장을 찾지 못함"}` });
   else {
-    const change = s.official.result?.nps?.summary?.change;
     const month = nps.source?.asOf ?? "";
     tiles.push({
       key: "nps", label: "국민연금 가입자", anchor: "finance", loading: false, big: [nps.display ?? ""],
-      basis: [typeof change === "number" ? `${month}, 12개월 전보다 ${signed(change)}명` : month], word: nps.status, missing: null, extra: null,
+      basis: [npsChangeSince(s.official.result?.nps) ? `${month}, ${npsChangeSince(s.official.result?.nps)}` : month], word: nps.status, missing: null, extra: null,
     });
   }
 
@@ -211,8 +222,7 @@ export function summaryLine(job: AnalysisJob, key: ScreenKey): string | null {
       const off = m.revenue.official;
       if (off && off.status !== "unavailable") parts.push(`매출 ${off.source?.asOf ?? ""} ${off.display}${off.source?.basis ? `(${off.source.basis})` : ""}`.replace(/\s+/g, " "));
       const nps = m.npsLatest;
-      const change = s.official.result?.nps?.summary?.change;
-      if (nps && nps.status !== "unavailable") parts.push(`국민연금 가입자 ${nps.source?.asOf ?? ""} ${nps.display}${typeof change === "number" ? `(12개월 ${signed(change)}명)` : ""}`);
+      if (nps && nps.status !== "unavailable") parts.push(`국민연금 가입자 ${nps.source?.asOf ?? ""} ${nps.display}${npsChangeSince(s.official.result?.nps) ? `(${npsChangeSince(s.official.result?.nps)})` : ""}`);
       return parts.length ? parts.join(", ") : null;
     }
     case "investment": {

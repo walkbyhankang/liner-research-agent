@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { SCREEN_SECTIONS, TOC_TEXT, announcements, errorSentence, isSlow, keyTiles, overlay, phaseOf, retryState, rivalsCost, stillChecking, summaryLine, unavailableScreens, visibleRivals } from "./view.ts";
+import { SCREEN_SECTIONS, TOC_TEXT, announcements, npsChangeSince, errorSentence, isSlow, keyTiles, overlay, phaseOf, retryState, rivalsCost, stillChecking, summaryLine, unavailableScreens, visibleRivals } from "./view.ts";
 import { DEFAULT_ESTIMATES } from "./contract.ts";
 import { noticeCompany } from "./company-values.ts";
 
@@ -23,7 +23,7 @@ test("핵심 값은 네 칸이고 기준이 숫자에 붙는다(A-14, D-03)", ()
   assert.equal(t[0].basis[0], "2024 사업연도, 별도");
   assert.equal(t[0].extra, "웹 조사: 약 100억원 (2025, 별도)");
   assert.equal(t[0].extraWord, "reported");
-  assert.equal(t[1].basis[0], "2026-10, 12개월 전보다 +28명");
+  assert.equal(t[1].basis[0], "2026-10, 2025-11보다 +28명");
   assert.equal(t[1].word, "reference");
   assert.deepEqual(t[2].big, ["$250.0M"]);
   assert.equal(t[3].basis[0], "출원인 확인, 등록 8건");
@@ -80,7 +80,7 @@ test("진행 줄의 '아직 확인 중'은 끝나지 않은 단락과 facts 가 
 
 test("한 줄 요약은 빈 값이 있으면 그 부분만 뺀다", () => {
   const j = job("F-FULL");
-  assert.equal(summaryLine(j, "finance"), "매출 2024 사업연도 56.7억원(별도), 국민연금 가입자 2026-10 132명(12개월 +28명)");
+  assert.equal(summaryLine(j, "finance"), "매출 2024 사업연도 56.7억원(별도), 국민연금 가입자 2026-10 132명(2025-11보다 +28명)");
   assert.equal(summaryLine(j, "news"), "최근 12개월 중요 사건 14개, 기사 693건");
   assert.equal(summaryLine(j, "tech"), "검색으로 확인한 특허 11건 (출원인 확인, 등록 8건)");
   assert.equal(summaryLine(job("F-EMPTY"), "investment"), null);
@@ -205,4 +205,13 @@ test("처음 고르기: 아무것도 고르지 않았고 비교 자료가 있으
   // 직접 넣은 회사는 후보 다음, 넣은 순서
   const added = { choices: { "rival:마바사": "yes", "user:가나": "yes" }, added: [{ key: "user:가나", name: "가나" }] };
   assert.deepEqual(pickedRivals(j, added).map((r) => r.name), ["마바사", "가나"]);
+});
+
+test("국민연금 변화 글은 가입자 수가 있는 첫 달을 기준 달로 밝힌다(12개월이라고 하지 않음, 첫 달이 비면 다음 달)", () => {
+  const monthly = [{ month: "2025-11", members: null }, { month: "2025-12", members: 100 }, { month: "2026-01", members: 105 }];
+  assert.equal(npsChangeSince({ summary: { change: 5, period: "2025-11 ~ 2026-01" }, monthly }), "2025-12보다 +5명");
+  // 월별 자료가 없으면 기간의 첫 달로 대신한다
+  assert.equal(npsChangeSince({ summary: { change: -3, period: "2025-11 ~ 2026-01" }, monthly: [] }), "2025-11보다 −3명");
+  assert.equal(npsChangeSince({ summary: { period: "2025-11 ~ 2026-01" }, monthly }), null);
+  assert.equal(npsChangeSince(null), null);
 });

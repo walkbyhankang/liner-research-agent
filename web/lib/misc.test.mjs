@@ -126,7 +126,7 @@ test("대조 결과: 미충족·확인 필요·충족 순, 개수, 부족한 요
   assert.equal(g.groups[0].items.length, 2);
 });
 
-test("지금 확인할 것: 새로 분석이 진행 중이면 값 개수를 세지 않고, 두 화면에서 담은 같은 공고는 한 번만 센다", () => {
+test("확인이 필요한 정보: 새로 분석이 진행 중이면 값 개수를 세지 않고, 두 화면에서 담은 같은 공고는 한 번만 센다", () => {
   const saved = job("F-CONFLICT"); // 설립이 엇갈린 저장된 분석(done)
   assert.equal(saved.status, "done");
   assert.equal(checkNowCounts(saved, null, [], {}, "2026-11-22").conflicts.length, 1);
@@ -157,7 +157,7 @@ test("지금 확인할 것: 새로 분석이 진행 중이면 값 개수를 세�
   }
 });
 
-test("담은 공고 마감일은 지금 공고 자료 먼저, 없으면 담을 때 저장값: 지금 확인할 것·심사 준비·노트가 같은 기준(D-08, A-27)", () => {
+test("담은 공고 마감일은 지금 공고 자료 먼저, 없으면 담을 때 저장값: 확인이 필요한 정보·심사 준비·노트가 같은 기준(D-08, A-27)", () => {
   const saved = job("F-FULL"); // 엇갈림·미확보 0
   const prog = (id, end) => ({ id, period: { raw: "", start: null, end, status: end ? "접수 중" : "수시" } });
   const item = (id, end, kind = "program") => ({ kind, itemId: id, title: id, meta: end === undefined ? {} : { end }, savedAt: "2026-11-22T10:00:00+09:00" });
@@ -255,4 +255,30 @@ test("특허 수는 미팅 근거 묶음·미팅 전에 정리할 값에서도 '
   const labels = openValues(job("F-EMPTY")).map((o) => o.label);
   assert.ok(labels.includes("검색으로 확인한 특허"), labels.join());
   assert.ok(!labels.includes("국내 특허"));
+});
+
+test("화면 서버가 분석 서버에 닿지 못한 실패(머리글 x-growth-relay-error)는 relay 로, 분석 서버가 준 바깥 자료 실패는 relay 아님(리뷰 P2)", async () => {
+  const { api, ApiFail, isUpstreamFailure } = await import("./api.ts");
+  const real = globalThis.fetch;
+  const reply = (status, headers) => async () => new Response(JSON.stringify({ detail: "x", code: "upstream_error", retryAt: null }), { status, headers });
+  try {
+    globalThis.fetch = reply(502, { "x-growth-relay-error": "1" });
+    await assert.rejects(api("corp/search?name=a"), (e) => e instanceof ApiFail && e.relay === true && e.code === "upstream_error");
+    globalThis.fetch = reply(502, {});
+    await assert.rejects(api("corp/search?name=a"), (e) => e instanceof ApiFail && e.relay === false && e.code === "upstream_error");
+    globalThis.fetch = async () => { throw new TypeError("network"); };
+    await assert.rejects(api("corp/search?name=a"), (e) => e instanceof ApiFail && e.relay === true && e.status === 0);
+    // 금융위원회 실패로 보는 것은 분석 서버가 upstream_error 코드로 밝힌 것뿐: 중계 실패·코드 없는 게이트웨이 502 는 아니다
+    const catchIt = async (p) => { try { await p; } catch (e) { return e; } };
+    globalThis.fetch = reply(502, {});
+    assert.equal(isUpstreamFailure(await catchIt(api("corp/search?name=a"))), true);
+    globalThis.fetch = reply(502, { "x-growth-relay-error": "1" });
+    assert.equal(isUpstreamFailure(await catchIt(api("corp/search?name=a"))), false);
+    globalThis.fetch = async () => new Response("<html>Bad Gateway</html>", { status: 502 });
+    assert.equal(isUpstreamFailure(await catchIt(api("corp/search?name=a"))), false);
+    globalThis.fetch = async () => new Response("", { status: 504 });
+    assert.equal(isUpstreamFailure(await catchIt(api("corp/search?name=a"))), false);
+  } finally {
+    globalThis.fetch = real;
+  }
 });

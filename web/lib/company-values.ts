@@ -127,3 +127,41 @@ export function rivalNoticeCompany(rivalKey: string, job: JobLike & { sections: 
   );
   return c as NoticeCompany;
 }
+
+// ---------------------------------------------------------------- 심사 준비 조건의 "관련 있을 수 있는 회사 정보"
+
+/** 조건 분야 → 관련 있을 수 있는 회사 정보 칸. 제외 대상(체납·휴폐업 등)은 회사 정보 칸에 없는 사실이라 칸을 잇지 않는다("대상"이 들어 있어도 기업 유형이 아니다) */
+export function conditionField(field: string): keyof NoticeCompany | null {
+  if (/제외/.test(field)) return null;
+  if (/지역|소재/.test(field)) return "region";
+  if (/업력|설립/.test(field)) return "founded";
+  if (/업종|업태/.test(field)) return "industry";
+  if (/규모|직원|인원|근로자/.test(field)) return "employees";
+  if (/매출|실적/.test(field)) return "revenue";
+  if (/자금|용도/.test(field)) return "need";
+  if (/유형|대상/.test(field)) return "biz";
+  return null;
+}
+export const COMPANY_FIELD_LABEL: Record<keyof NoticeCompany, string> = {
+  name: "회사 이름", region: EDIT_LABEL.region, biz: EDIT_LABEL.bizType, founded: EDIT_LABEL.founded, industry: EDIT_LABEL.industry, employees: EDIT_LABEL.employees,
+  revenue: EDIT_LABEL.revenue, need: EDIT_LABEL.need, notes: EDIT_LABEL.notes,
+};
+
+/** 회사 정보 칸 값을 사람이 읽는 글로(기업 유형은 id 대신 이름, 빈 칸은 "비어 있음") */
+export function companyFieldText(k: keyof NoticeCompany, company: NoticeCompany): string {
+  const v = company[k];
+  if (!v) return "비어 있음";
+  return k === "biz" && isBizType(v) ? BIZ_LABEL[v] : v;
+}
+
+/**
+ * 펼친 조건의 "관련 있을 수 있는 회사 정보" 한 줄. 조건 분야에 맞는 회사 정보 칸이 있으면 그 칸과 값(그 값을 판단에 썼다고 단정하지 않는다. 응답은 조건마다 쓴 입력을 알려 주지 않는다, 리뷰 P2).
+ * 제외 대상(체납·휴폐업 등)은 맞는 칸이 없다. 대조에는 "그 밖의 사항"(사용자 글 + 자동 메모: 특허·국민연금 수치 등)도 함께 넘기지만,
+ * 서버 응답은 어느 입력이 판정을 뒷받침했는지 알려 주지 않으므로 그 내용을 판단 근거처럼 보이지 않고 중립 문장만 쓴다(리뷰 P2)
+ */
+export function conditionCompanyLine(field: string, company: NoticeCompany): string {
+  const k = conditionField(field);
+  if (k) return `${COMPANY_FIELD_LABEL[k]} ${companyFieldText(k, company)}`;
+  // 제외 대상·그 밖의 조건은 어느 칸과 맞닿는지 정하지 않는다(예: 금융업 제외는 업종으로 판단될 수 있다). 무엇을 넘겼는지만 중립으로 쓴다
+  return `이 조건에 맞는 회사 정보 칸을 따로 정하지 않았습니다. 대조에는 회사 정보 전체와 '${COMPANY_FIELD_LABEL.notes}'을 함께 넘겼습니다.`;
+}

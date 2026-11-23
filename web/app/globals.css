@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* 성장노트 시각 토큰(docs/ux/visual-plan.md 3절, 가독성 조정은 5절). 바탕은 흰색 하나.
-   칠은 엇갈림·미확보·담은 항목 막대, 그리고 층(펼친 내용·표 머리·"지금 확인할 것")을 가르는 옅은 회색(wash)에만 쓴다 */
+   칠은 엇갈림·미확보·담은 항목 막대, 그리고 층(펼친 항목·표 머리·단락 안 하위 항목 제목·"확인이 필요한 정보")을 가르는 옅은 회색(wash)에만 쓴다 */
 @theme {
   --color-paper: #ffffff;
   --color-ink: #1e2a3f;
@@ -322,6 +322,18 @@ button:disabled {
     font-weight: 600;
   }
 
+  /*
+   * 펼침 공통 모양(qa-report 4절 "경계와 펼침", 2026-11-24): 접힌 줄은 기본 행, 펼친 항목은 제목 행부터 본문 끝까지 한 덩어리.
+   * 덩어리(.disc = 펼치기 줄, .xrow = 줄 자세히)가 data-open 일 때 옅은 회색 바탕과 왼쪽 녹색 2px 선을 덩어리 전체에 그린다.
+   * 전에는 줄과 본문이 따로 칠해 줄 자세히는 선이 본문에서만 시작했고(회색 선), 펼치기 줄은 제목 행과 본문 사이 선이 끊겨 보였다.
+   * 각진 덩어리라 선이 둥근 모서리에서 휘지 않는다. 근거 인용(Quote)의 선은 회색 1px 로 이보다 가볍다
+   */
+  .disc[data-open],
+  .xrow[data-open] {
+    background: var(--color-wash);
+    box-shadow: inset 2px 0 0 var(--color-ledger);
+  }
+
   /* 펼치기 줄 */
   .disclosure {
     display: flex;
@@ -337,7 +349,6 @@ button:disabled {
     color: var(--color-ink);
   }
   .disclosure[aria-expanded="true"] {
-    box-shadow: inset 2px 0 0 var(--color-ledger);
     padding-left: 14px;
     padding-right: 10px;
   }
@@ -349,19 +360,14 @@ button:disabled {
   .disclosure[aria-expanded="true"] .chev {
     transform: rotate(180deg);
   }
-  /* 펼친 내용(2층)은 옅은 회색 바탕으로 한 층 아래임을 보인다. 왼쪽 녹색 선은 펼친 줄에서 이어진다 */
-  .disclosure[aria-expanded="true"] {
-    background: var(--color-wash);
-  }
+  /* 펼친 내용(2층). 바탕과 왼쪽 선은 덩어리(.disc)가 그린다 */
   .panel {
-    box-shadow: inset 2px 0 0 var(--color-ledger);
-    background: var(--color-wash);
     padding: 4px 14px 14px 14px;
   }
   /* 회색 층 안에서는 3층(열린 줄·자세히)과 자리 표시, 미확보 칠을 흰색으로 뒤집어 층이 겹쳐도 구분되게 한다 */
   .panel .row-btn:hover,
-  .panel .row-btn[aria-expanded="true"],
-  .panel .row-body,
+  .panel .xrow[data-open],
+  .panel .disc[data-open],
   .panel .ph,
   .panel .word-unavailable,
   .panel table {
@@ -382,34 +388,38 @@ button:disabled {
   .row-btn:hover {
     background: var(--color-wash);
   }
-  /* 열린 줄과 그 아래 내용은 각진 한 덩어리(왼쪽 2px 선이 둥근 모서리에서 휘지 않게) */
+  /* 열린 줄은 덩어리 바탕을 그대로 쓴다(각지게) */
   .row-btn[aria-expanded="true"] {
-    background: var(--color-wash);
+    background: transparent;
     border-radius: 0;
   }
+  /* 본문은 제목 행 글과 같은 왼쪽 선(8px)에서 시작한다 */
   .row-body {
-    margin: 0 0 8px;
-    padding: 8px 12px 12px;
-    background: var(--color-wash);
-    border-radius: 0;
-    box-shadow: inset 2px 0 0 var(--color-sub);
+    padding: 0 8px 12px;
     font-size: 15px;
   }
 
-  /* 출처 줄: 각주선 하나 아래 두 부분 */
+  /* 출처 줄: 위 여백과 작은 보조 글로 본문과 나눈다(2026-11-24 위의 짧은 장식선을 없앰, qa-report 3절 주석 4·5·8) */
   .source {
-    margin-top: 12px;
+    margin-top: 10px;
     font-size: 13px;
-    line-height: 1.6;
+    line-height: 1.5;
     color: var(--color-sub);
   }
-  .source::before {
-    content: "";
+
+  /*
+   * 단락 안 하위 항목 제목(재무·고용의 "매출과 영업이익"·"국민연금 가입자 수", 투자의 "최근 라운드" 등, qa-report 3절 주석 7·9):
+   * 단락 제목(24px)과 크기가 아니라 옅은 바탕과 굵은 글로 구분한다. 진한 바탕·흰 글은 쓰지 않는다
+   */
+  .subhead {
     display: block;
-    width: 24px;
-    height: 1px;
-    background: var(--color-sub);
-    margin-bottom: 6px;
+    margin-bottom: 8px;
+    padding: 4px 10px;
+    background: var(--color-wash);
+    font-size: 15px;
+    line-height: 1.6;
+    font-weight: 700;
+    color: var(--color-ink);
   }
 
   /* 문장 속 고르기(/funding): 누를 수 있다는 것을 꺾쇠로 보인다(브라우저 기본 화살표는 지웠다) */
@@ -494,9 +504,6 @@ button:disabled {
     .lane-equity {
       box-shadow: inset 0 3px 0 var(--color-equity);
     }
-    .lane-sales {
-      box-shadow: inset 0 3px 0 var(--color-sales);
-    }
   }
 
   /*
@@ -522,7 +529,7 @@ button:disabled {
     border-left: 1px solid var(--color-rule);
   }
 
-  /* 한 줄로 옆으로 미는 줄("지금 확인할 것" 항목): 스크롤 막대를 숨긴다. 일반 스크롤 막대(Windows 등)는 넘칠 때만 생겨 높이를 차지하므로,
+  /* 한 줄로 옆으로 미는 줄("확인이 필요한 정보" 항목): 스크롤 막대를 숨긴다. 일반 스크롤 막대(Windows 등)는 넘칠 때만 생겨 높이를 차지하므로,
      넘침이 생기고 사라지는 순간 아래가 밀린다. 옆으로는 손가락·트랙패드·Tab 키로 넘긴다 */
   .scroll-row {
     scrollbar-width: none;
@@ -672,9 +679,6 @@ button:disabled {
   }
   body[data-print="evidence"] .evidence-print .source {
     margin-top: 4px;
-  }
-  body[data-print="evidence"] .evidence-print .source::before {
-    margin-bottom: 2px;
   }
   body[data-print="evidence"] .evidence-print .print-only > div {
     margin-top: 8px;

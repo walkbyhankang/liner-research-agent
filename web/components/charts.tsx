@@ -117,14 +117,18 @@ export function NpsLine({ points, small = false }: { points: NpsPoint[]; small?:
       {pts.length > 0 && (
         <>
           <path d={d} fill="none" stroke={INK} strokeWidth="2" strokeLinejoin="round" />
-          {pts.map((p) => (
-            <circle key={p.month} cx={x(idx(p.month))} cy={y(p.members)} r="2.4" fill={INK} />
+          {/* 중간 점은 작고 옅게, 시작·끝 점은 짙고 크게(qa-report 3절 주석 6). 값은 시작·끝에만 쓴다 */}
+          {pts.map((p, i) =>
+            i === 0 || i === pts.length - 1 ? null : <circle key={p.month} cx={x(idx(p.month))} cy={y(p.members)} r="1.8" fill={SUB} />,
+          )}
+          {[first, last].map((p, i) => (
+            <circle key={`end-${i}`} cx={x(idx(p.month))} cy={y(p.members)} r="4" fill={INK} stroke="#fff" strokeWidth="1.5" data-end />
           ))}
           {/* 값 이름이 선과 겹쳐도 읽히게 흰 테두리를 두른다 */}
-          <text x={x(idx(first.month))} y={y(first.members) - 8} fontSize="12" fill={INK} stroke="#fff" strokeWidth="4" paintOrder="stroke" strokeLinejoin="round" className="num">
+          <text x={x(idx(first.month))} y={y(first.members) - 9} fontSize="12" fill={INK} stroke="#fff" strokeWidth="4" paintOrder="stroke" strokeLinejoin="round" fontWeight="700" className="num">
             {num(first.members)}명
           </text>
-          <text x={x(idx(last.month))} y={y(last.members) - 8} fontSize="12" fill={INK} stroke="#fff" strokeWidth="4" paintOrder="stroke" strokeLinejoin="round" textAnchor="end" fontWeight="600" className="num">
+          <text x={x(idx(last.month))} y={y(last.members) - 9} fontSize="12" fill={INK} stroke="#fff" strokeWidth="4" paintOrder="stroke" strokeLinejoin="round" textAnchor="end" fontWeight="700" className="num">
             {num(last.members)}명
           </text>
           <text x={x(0)} y={bottom + 16} fontSize="12" fill={SUB}>{points[0].month}</text>

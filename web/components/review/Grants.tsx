@@ -1,12 +1,12 @@
 "use client";
 
-// 심사 준비 > 정책자금·지원사업(screens 6.1): 부족한 요건, 대조에 쓰는 회사 값, 담은 공고 카드(공고문 자격 대조).
+// 심사 준비 > 정책자금·지원사업(screens 6.1): 부족한 요건(개수 먼저), 판단에 사용하는 회사 정보, 공고별 판정(카드: 판정 요약 → 펼치면 조건별 판단).
 // 대조는 유료라 단추를 눌렀을 때만 한다. 결과는 브라우저에 저장하고 회사 값이 바뀌어도 지우지 않는다(R-12).
 import Link from "next/link";
 import { useState } from "react";
 import type { NoticeAnalysis, NoticeCompany, Verdict } from "@/lib/contract";
 import { ApiFail, api } from "@/lib/api";
-import { EDIT_LABEL, filledCount, noticeCompany, rivalNoticeCompany } from "@/lib/company-values";
+import { COMPANY_FIELD_LABEL, companyFieldText, conditionCompanyLine, filledCount, noticeCompany, rivalNoticeCompany } from "@/lib/company-values";
 import { dday, shortDate, type Program } from "@/lib/finder";
 import { putCheck, putRivalCheck, removeNotice, rivalCheckOf, savedNotices, type CheckRecord, type SavedItem } from "@/lib/local";
 import { gaps, noticeEnd, sortRows, verdictCounts } from "@/lib/review";
@@ -22,34 +22,52 @@ import { DueText, usePublicData, useToday } from "@/components/funding/Board";
 
 const LIMIT_TEXT = "오늘 호출 상한에 닿아 대조하지 못했습니다. 내일 0시 이후에 다시 대조할 수 있습니다.";
 
-/** 조건 분야 → 대조에 쓴 회사 값 칸 */
-function fieldKey(field: string): keyof NoticeCompany | null {
-  if (/지역|소재/.test(field)) return "region";
-  if (/업력|설립/.test(field)) return "founded";
-  if (/업종|업태/.test(field)) return "industry";
-  if (/규모|직원|인원|근로자/.test(field)) return "employees";
-  if (/매출|실적/.test(field)) return "revenue";
-  if (/자금|용도/.test(field)) return "need";
-  if (/유형|대상/.test(field)) return "biz";
-  return null;
-}
-const companyLabel: Record<keyof NoticeCompany, string> = {
-  name: "회사 이름", region: EDIT_LABEL.region, biz: EDIT_LABEL.bizType, founded: EDIT_LABEL.founded, industry: EDIT_LABEL.industry, employees: EDIT_LABEL.employees,
-  revenue: EDIT_LABEL.revenue, need: EDIT_LABEL.need, notes: EDIT_LABEL.notes,
-};
-
-function UsedValue({ field, company }: { field: string; company: NoticeCompany }) {
-  const k = fieldKey(field);
-  if (!k) return <p className="text-sm">대조에 쓴 회사 값: 이 조건에 맞는 회사 값 칸이 없습니다.</p>;
+/**
+ * 펼친 조건(QA 주석20, 4절): 머리 줄(판정 낱말·조건)에 이어 근거 → 판단 이유 → 관련 있을 수 있는 회사 정보 순서(응답이 조건마다 쓴 입력을 알려 주지 않으므로 '사용한'이라 단정하지 않는다).
+ * 칸마다 작은 이름을 위에 둔다. 근거 인용의 가는 선은 바깥 왼쪽 강조선(줄 자세히 부품)과 헷갈리지 않게 이름 아래로 내리고 한 번 더 들인다.
+ */
+function ConditionBody({ quote, reason, field, company }: { quote: string; reason: string; field: string; company: NoticeCompany | null }) {
   return (
-    <p className="text-sm">
-      <span className="text-sub">대조에 쓴 회사 값: </span>
-      {companyLabel[k]} {company[k] ? company[k] : "비어 있음"}
-    </p>
+    <div className="space-y-3 py-1" data-cond-body>
+      <div data-cond-part="quote">
+        <p className="text-xs font-semibold text-sub">공고문 근거</p>
+        <div className="mt-1 pl-1">
+          <Quote text={quote} />
+        </div>
+      </div>
+      {reason && (
+        <div data-cond-part="reason">
+          <p className="text-xs font-semibold text-sub">판단 이유</p>
+          <p className="text-sm">{reason}</p>
+        </div>
+      )}
+      {company && (
+        <div data-cond-part="company">
+          <p className="text-xs font-semibold text-sub">관련 있을 수 있는 회사 정보</p>
+          <p className="text-sm">{conditionCompanyLine(field, company)}</p>
+        </div>
+      )}
+    </div>
   );
 }
 
-/** end: 화면에 쓰는 마감일(noticeEnd: 지금 공고 자료 먼저, 없으면 담을 때 저장값). 회사 분석 "지금 확인할 것"·노트와 같은 기준 */
+/** 펼친 조건 줄은 머리의 조건 글을 두 줄로 자르지 않고 다 보인다(조건 → 근거 → 판단 이유를 끊김 없이 읽게) */
+const OPEN_FULL = "[&_.row-btn[aria-expanded=true]_.clamp-2]:[-webkit-line-clamp:unset]";
+
+/** 판정 낱말 + 개수(부족한 요건 머리). 낱말은 색과 함께 글로 보인다(screens 6.4) */
+function CountMark({ v, n }: { v: "미충족" | "확인 필요"; n: number }) {
+  return (
+    <span className="inline-flex items-baseline gap-2" data-gap-count={v}>
+      <VerdictMark v={v} />
+      <span>
+        <span className="num text-xl font-semibold">{n}</span>
+        <span className="text-sm">개</span>
+      </span>
+    </span>
+  );
+}
+
+/** end: 화면에 쓰는 마감일(noticeEnd: 지금 공고 자료 먼저, 없으면 담을 때 저장값). 회사 분석 "확인이 필요한 정보"·노트와 같은 기준 */
 export type SavedProgram = { item: SavedItem; program: Program | null; end: string | null };
 
 export function Grants() {
@@ -65,20 +83,25 @@ export function Grants() {
   const filled = job ? filledCount(job, c.local.edits) : 0;
   const company = job ? noticeCompany(job, c.local.edits) : null;
 
-  return (
-    <div className="space-y-6">
-      <p className="text-lg">
-        담은 공고 {items.length}건, 자격 대조 {done.length}건 완료.
-      </p>
+  const status = `담은 공고 ${items.length}건, 자격 대조 ${done.length}건 완료.`;
 
-      {done.length > 0 && (
-        <div>
-          <h2 className="text-base font-bold">부족한 요건</h2>
-          <p>
-            미충족 {g.unmet}개, 확인 필요 {g.check}개 (대조한 공고 {g.checked}건)
+  return (
+    <div className="space-y-8">
+      {/* 위에 먼저: 대조한 모든 공고의 미충족·확인 필요 개수(QA 4절). 대조 전이면 담은 공고와 대조 수만 */}
+      {done.length > 0 ? (
+        <section aria-labelledby="gaps-h" data-gaps>
+          <h2 id="gaps-h" className="text-lg font-semibold">
+            부족한 요건
+          </h2>
+          <p className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <CountMark v="미충족" n={g.unmet} />
+            <CountMark v="확인 필요" n={g.check} />
+          </p>
+          <p className="mt-1 text-sm text-sub">
+            {status} 대조한 공고 {g.checked}건의 조건에서 모았습니다.
           </p>
           {g.unmet + g.check > 0 && (
-            <Disclosure text={`부족한 요건 ${g.unmet + g.check}개 보기`} memoryKey={`${c.cid}:rv:gaps`} className="mt-2">
+            <Disclosure text={`부족한 요건 ${g.unmet + g.check}개 보기`} memoryKey={`${c.cid}:rv:gaps`} className="mt-3">
               <div className="space-y-4 py-2">
                 {g.groups.map((grp) => (
                   <div key={grp.field} data-gap-group={grp.field}>
@@ -87,6 +110,7 @@ export function Grants() {
                       {grp.items.map((it, i) => (
                         <li key={i}>
                           <DetailRow
+                            className={OPEN_FULL}
                             head={
                               <span className="block">
                                 <span className="flex flex-wrap items-center gap-2">
@@ -97,9 +121,7 @@ export function Grants() {
                               </span>
                             }
                           >
-                            <Quote text={it.quote} />
-                            {it.reason && <p className="mt-1 text-sm">판단 이유: {it.reason}</p>}
-                            {c.local.checks[it.programId] && <UsedValue field={grp.field} company={c.local.checks[it.programId].company} />}
+                            <ConditionBody quote={it.quote} reason={it.reason} field={grp.field} company={c.local.checks[it.programId]?.company ?? null} />
                           </DetailRow>
                         </li>
                       ))}
@@ -109,27 +131,29 @@ export function Grants() {
               </div>
             </Disclosure>
           )}
-        </div>
+        </section>
+      ) : (
+        <p className="text-lg">{status}</p>
       )}
 
       {job && company && (
-        <div>
+        <section aria-label="판단에 사용하는 회사 정보">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p>
-              대조에 쓰는 회사 값 <span className="num">{filled}/8</span>개 채움
+              판단에 사용하는 회사 정보 <span className="num">{filled}/8</span>개 채움
             </p>
             <button type="button" className="btn" onClick={(e) => openEdit(e.currentTarget)}>
               회사 정보 수정
             </button>
           </div>
-          {filled < 3 && <p className="text-sm text-amber">회사 값이 비어 있으면 대부분 &lsquo;확인 필요&rsquo;로 나옵니다.</p>}
+          {filled < 3 && <p className="text-sm text-amber">회사 정보가 비어 있으면 대부분 &lsquo;확인 필요&rsquo;로 나옵니다.</p>}
           {job.status === "running" && <p className="text-sm text-sub">회사 분석이 끝나지 않아 일부 값이 비어 있습니다</p>}
-          <Disclosure text="회사 값 보기" memoryKey={`${c.cid}:rv:values`} className="mt-2">
+          <Disclosure text="회사 정보 보기" memoryKey={`${c.cid}:rv:values`} className="mt-2">
             <dl className="divide-y divide-rule text-sm">
               {(["region", "biz", "founded", "industry", "employees", "revenue", "need"] as const).map((k) => (
                 <div key={k} className="grid grid-cols-[7em_1fr] gap-3 py-2">
-                  <dt className="text-sub">{companyLabel[k]}</dt>
-                  <dd>{company[k] || "비어 있음"}</dd>
+                  <dt className="text-sub">{COMPANY_FIELD_LABEL[k]}</dt>
+                  <dd>{companyFieldText(k, company)}</dd>
                 </div>
               ))}
               <div className="grid grid-cols-[7em_1fr] gap-3 py-2">
@@ -151,7 +175,7 @@ export function Grants() {
               )}
             </ul>
           </Disclosure>
-        </div>
+        </section>
       )}
 
       {items.length === 0 ? (
@@ -162,13 +186,19 @@ export function Grants() {
           </Link>
         </div>
       ) : (
-        <ul className="space-y-3" aria-label="담은 공고">
-          {items.map((x) => (
-            <li key={x.item.itemId}>
-              <NoticeCard x={x} company={company} />
-            </li>
-          ))}
-        </ul>
+        // 공고별 판정 요약(카드 머리)과 조건별 상세(카드를 펼친 안)를 나눈다(QA 4절)
+        <section aria-labelledby="notices-h">
+          <h2 id="notices-h" className="text-lg font-semibold">
+            공고별 판정 <span className="num font-normal text-sub">{items.length}건</span>
+          </h2>
+          <ul className="mt-3 space-y-3" aria-label="담은 공고">
+            {items.map((x) => (
+              <li key={x.item.itemId}>
+                <NoticeCard x={x} company={company} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );
@@ -231,13 +261,15 @@ function NoticeCard({ x, company }: { x: SavedProgram; company: NoticeCompany | 
             공고문을 읽고 있습니다 <span className="num">({elapsedText(secs)})</span>
           </p>
         ) : result && counts ? (
-          <div className="space-y-2">
+          // 판정 요약: 종합 문구 → 세 개수 → 이유 한 문장. 조건별 상세는 카드를 펼친 안(NoticeDetail)
+          <div className="space-y-2" data-summary>
             <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <span className="font-semibold">{result.match.overall}</span>
               <VerdictMark v="충족" count={counts.met} />
               <VerdictMark v="미충족" count={counts.unmet} />
               <VerdictMark v="확인 필요" count={counts.check} />
             </p>
+            {result.match.overallReason && <p className="text-sm">{result.match.overallReason}</p>}
             {stale && (
               <p className="flex flex-wrap items-center gap-2 text-sm text-amber">
                 이전 회사 값으로 한 대조입니다
@@ -267,8 +299,8 @@ function NoticeCard({ x, company }: { x: SavedProgram; company: NoticeCompany | 
 
       <div className="no-print mt-3 flex flex-wrap items-center gap-2 border-t border-rule pt-3">
         {result && (
-          <button type="button" className="btn btn-quiet -ml-2.5" aria-expanded={open} onClick={() => setOpen(!open)}>
-            {open ? "접기" : "자세히"}
+          <button type="button" className="btn btn-quiet -ml-2.5" aria-expanded={open} aria-controls={`detail-${id}`} onClick={() => setOpen(!open)}>
+            {open ? "조건별 판단 접기" : "조건별 판단 보기"}
           </button>
         )}
         <span className="ml-auto flex gap-2">
@@ -279,7 +311,7 @@ function NoticeCard({ x, company }: { x: SavedProgram; company: NoticeCompany | 
       </div>
 
       {result && (
-        <div className={open ? "mt-3 space-y-4" : "hidden"}>
+        <div id={`detail-${id}`} className={open ? "mt-3 space-y-4" : "hidden"}>
           <NoticeDetail cid={c.cid} programId={id} result={result} rec={rec!} onRerun={run} url={url} onRemove={() => removeNotice(c.cid, id)} />
         </div>
       )}
@@ -298,28 +330,28 @@ function NoticeDetail({ cid, programId, result, rec, onRerun, url, onRemove }: {
   return (
     <>
       <div>
-        <p className="font-semibold">{result.match.overall}</p>
-        <p className="text-sm">{result.match.overallReason}</p>
+        <h4 className="font-semibold">
+          조건별 판단 <span className="num font-normal text-sub">{judged.length}건</span>
+        </h4>
+        <ul className="mt-2 divide-y divide-rule border-y border-rule" data-rows>
+          {judged.map((r, i) => (
+            <li key={i} className={r.verdict === "충족" ? "text-sub" : ""}>
+              <DetailRow
+                className={OPEN_FULL}
+                head={
+                  <span className="flex flex-wrap items-baseline gap-x-3">
+                    <VerdictMark v={r.verdict} />
+                    <span className="text-sm text-sub">{r.field}</span>
+                    <span className="clamp-2 min-w-0 basis-full sm:basis-auto">{r.requirement}</span>
+                  </span>
+                }
+              >
+                <ConditionBody quote={r.quote} reason={r.reason} field={r.field} company={rec.company} />
+              </DetailRow>
+            </li>
+          ))}
+        </ul>
       </div>
-      <ul className="divide-y divide-rule border-y border-rule" data-rows>
-        {judged.map((r, i) => (
-          <li key={i} className={r.verdict === "충족" ? "text-sub" : ""}>
-            <DetailRow
-              head={
-                <span className="flex flex-wrap items-baseline gap-x-3">
-                  <VerdictMark v={r.verdict} />
-                  <span className="text-sm text-sub">{r.field}</span>
-                  <span className="clamp-2 min-w-0 basis-full sm:basis-auto">{r.requirement}</span>
-                </span>
-              }
-            >
-              <Quote text={r.quote} />
-              {r.reason && <p className="mt-1 text-sm">판단 이유: {r.reason}</p>}
-              <UsedValue field={r.field} company={rec.company} />
-            </DetailRow>
-          </li>
-        ))}
-      </ul>
       {result.match.questions.length > 0 && (
         <div>
           <p className="font-semibold">기관에 물어볼 것</p>
