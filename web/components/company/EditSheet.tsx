@@ -1,6 +1,6 @@
 "use client";
 
-// 값 고치기 창(screens 1.8). 넓은·중간 화면은 오른쪽 패널, 좁은 화면은 화면 전체.
+// 회사 정보 수정 창(screens 1.8). 넓은·중간 화면은 오른쪽 패널, 좁은 화면은 화면 전체.
 // "저장"을 누르기 전에는 브라우저 저장소와 서버에 아무것도 쓰지 않는다(C-18). 분석 값과 같으면 고친 값으로 남기지 않는다.
 import { useEffect, useId, useRef, useState } from "react";
 import { regionOptions } from "@/lib/finder";
@@ -72,7 +72,7 @@ export function EditSheet({ open, onClose }: { open: boolean; onClose: () => voi
     saveEdits(cid, next);
     const after = noticeCompany(job, next);
     const stale = Object.values(local.checks).filter((c) => c.result && JSON.stringify(c.company) !== JSON.stringify(after)).length;
-    toast(stale ? `회사 값을 저장했습니다.\n자격 대조 ${stale}건은 이전 회사 값으로 한 결과입니다. 심사 준비에서 다시 대조할 수 있습니다.` : "회사 값을 저장했습니다.");
+    toast(stale ? `회사 정보를 저장했습니다.\n자격 대조 ${stale}건은 이전 회사 값으로 한 결과입니다. 심사 준비에서 다시 대조할 수 있습니다.` : "회사 정보를 저장했습니다.");
     onClose();
   };
 
@@ -87,7 +87,7 @@ export function EditSheet({ open, onClose }: { open: boolean; onClose: () => voi
     need: "분석 값 없음",
     notes: "분석 값 없음",
   };
-  const input = "mt-1 block min-h-11 w-full rounded-md border border-rule bg-paper px-3 text-base outline-none focus:border-ledger";
+  const input = "mt-1 block min-h-11 w-full rounded-md border border-edge bg-paper px-3 text-base outline-none focus:border-ledger";
 
   return (
     <dialog
@@ -109,8 +109,9 @@ export function EditSheet({ open, onClose }: { open: boolean; onClose: () => voi
         >
           <div className="border-b border-rule px-5 py-4">
             <h2 id={titleId} className="text-xl font-semibold">
-              회사 값 고치기
+              회사 정보 수정
             </h2>
+            <p className="mt-1 text-sm">자격 대조와 운용사 요약에 쓰는 정보입니다. 필요한 자금이나 인증처럼 공개 자료에 없는 정보도 넣을 수 있습니다.</p>
             <p className="mt-1 text-sm text-sub">고친 값은 이 브라우저에만 저장됩니다. 공고문 자격 대조나 운용사 요약을 실행할 때만 분석 서버로 보냅니다.</p>
           </div>
           <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
@@ -153,8 +154,8 @@ export function EditSheet({ open, onClose }: { open: boolean; onClose: () => voi
                       maxLength={f === "need" ? 120 : f === "industry" ? 80 : f === "revenue" ? 60 : 30}
                     />
                   )}
-                  <p className="mt-1 text-xs text-sub">{analysisText[f]}</p>
-                  {f === "employees" && npsCount !== null && <p className="text-xs text-sub">국민연금 가입자 수({npsCount}명)는 상시근로자 수와 다릅니다.</p>}
+                  <p className="mt-1 text-sm text-sub">{analysisText[f]}</p>
+                  {f === "employees" && npsCount !== null && <p className="text-sm text-sub">국민연금 가입자 수({npsCount}명)는 상시근로자 수와 다릅니다.</p>}
                   {isEdited(f) && base[f] && (
                     <button type="button" className="btn btn-quiet mt-1 text-sm" onClick={() => set(f, base[f])}>
                       분석 값으로 되돌리기
@@ -163,7 +164,7 @@ export function EditSheet({ open, onClose }: { open: boolean; onClose: () => voi
                 </div>
               );
             })}
-            <p className="text-sm text-sub">비워 둔 칸은 자격 대조에서 &lsquo;확인 필요&rsquo;로 나옵니다. 확인된 특허 수와 국민연금 가입자 수는 대조할 때 함께 보냅니다.</p>
+            <p className="text-sm">비워 둔 칸은 자격 대조에서 &lsquo;확인 필요&rsquo;로 나옵니다. 확인된 특허 수와 국민연금 가입자 수는 대조할 때 함께 보냅니다.</p>
             {editedCount > 0 &&
               (ask === "reset" ? (
                 <div className="rounded-md border border-rule p-3" role="alert">

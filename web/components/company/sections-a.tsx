@@ -89,20 +89,21 @@ export function Overview() {
       }
     >
       {/* 넓은 화면(820·1180)에서는 개요가 첫 화면 안이다. 개요·facts 가 오며 설명·기술 낱말·사실 표(직원 수, 설립 엇갈림)가 길어져도
-          아래 줄이 밀리지 않게 격자 높이를 진행 중·끝난 뒤 모두 같은 최소값으로 잡는다(실측 끝난 높이 291~327px, 2026-11-23) */}
-      <div className="grid gap-6 md:min-h-[336px] md:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+          아래 줄이 밀리지 않게 격자 높이를 진행 중·끝난 뒤 모두 같은 최소값으로 잡는다(실측 끝난 높이 291~327px, 2026-11-23.
+          글 크기 조정 뒤 기준 기업 333px이라 344px로 올림) */}
+      <div className="grid gap-6 md:min-h-[344px] md:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
         <div className="min-w-0 space-y-4">
           {business}
           <div>
-            <p className="text-sm text-sub">제품·서비스 {loading ? "" : `${products.length}개`}</p>
+            <p className="text-sm font-semibold">제품·서비스 {loading ? "" : `${products.length}개`}</p>
             {loading ? (
               <div className="flex h-[27px] items-center">
                 <Placeholder h={16} w="60%" />
               </div>
-            ) : products.length ? <p className="font-medium">{products.slice(0, 3).map((x) => x.name).join(", ")}</p> : <p className="text-sub">미확보: 제품 자료 없음</p>}
+            ) : products.length ? <p className="font-medium">{products.slice(0, 3).map((x) => x.name).join(", ")}</p> : <p className="font-medium">미확보: 제품 자료 없음</p>}
           </div>
           <div>
-            <p className="text-sm text-sub">핵심 기술</p>
+            <p className="text-sm font-semibold">핵심 기술</p>
             {loading ? (
               <div className="mt-1 flex h-[29px] items-center">
                 <Placeholder h={16} w="60%" />
@@ -116,7 +117,7 @@ export function Overview() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sub">미확보: 기술 자료 없음</p>
+              <p className="font-medium">미확보: 기술 자료 없음</p>
             )}
           </div>
         </div>
@@ -133,9 +134,18 @@ export function Overview() {
                 <Pair k="영문 이름" v={corp.nameEn} />
                 <Pair k="법인등록번호" v={corp.crno} />
                 <Pair k="사업자등록번호" v={corp.bzno} />
-                <div className="grid grid-cols-[8em_1fr] gap-3 py-2">
+                {/* 링크가 든 행도 다른 행과 같은 높이(.link-fit: 누르는 영역 44px, 배치 높이는 글 한 줄) */}
+                <div className="grid grid-cols-[8em_1fr] gap-3 py-2.5" data-pair="홈페이지">
                   <dt className="text-sub">홈페이지</dt>
-                  <dd>{corp.homepage ? <ExtLink href={/^https?:/.test(corp.homepage) ? corp.homepage : `https://${corp.homepage}`}>{corp.homepage}</ExtLink> : "미확보: 공공 자료에 없음"}</dd>
+                  <dd className="min-w-0">
+                    {corp.homepage ? (
+                      <ExtLink href={/^https?:/.test(corp.homepage) ? corp.homepage : `https://${corp.homepage}`} className="link link-fit">
+                        {corp.homepage}
+                      </ExtLink>
+                    ) : (
+                      "미확보: 공공 자료에 없음"
+                    )}
+                  </dd>
                 </div>
                 <Pair k="상장 구분" v={corp.market} />
               </>
@@ -169,7 +179,7 @@ export function Overview() {
               {products.map((x) => (
                 <li key={x.name}>
                   <span className="font-medium">{x.name}</span>
-                  {x.desc && <span className="block text-sm text-sub">{x.desc}</span>}
+                  {x.desc && <span className="block text-sm">{x.desc}</span>}
                 </li>
               ))}
             </ul>
@@ -229,7 +239,7 @@ function SourceDocs({ docs }: { docs: { title: string; url: string | null; date:
 
 function Pair({ k, v }: { k: string; v: string | null | undefined }) {
   return (
-    <div className="grid grid-cols-[8em_1fr] gap-3 py-2">
+    <div className="grid grid-cols-[8em_1fr] gap-3 py-2.5" data-pair={k}>
       <dt className="text-sub">{k}</dt>
       <dd className="num">{v || "미확보: 공공 자료에 없음"}</dd>
     </div>
@@ -247,8 +257,8 @@ const pct = (v: number | null) => (v === null ? "—" : `${v.toFixed(1)}%`);
 
 function FinanceTable({ rows }: { rows: FinancialRow[] }) {
   const lines: { label: string; cell: (r: FinancialRow) => ReactNode }[] = [
-    { label: "매출액", cell: (r) => <>{eokCell(r.revenue)}<span className="block text-xs text-sub">증가율 {pct(r.revenueGrowthPct)}</span></> },
-    { label: "영업이익", cell: (r) => <>{eokCell(r.operatingIncome)}<span className="block text-xs text-sub">이익률 {pct(r.operatingMarginPct)}</span></> },
+    { label: "매출액", cell: (r) => <>{eokCell(r.revenue)}<span className="block text-xs">증가율 {pct(r.revenueGrowthPct)}</span></> },
+    { label: "영업이익", cell: (r) => <>{eokCell(r.operatingIncome)}<span className="block text-xs">이익률 {pct(r.operatingMarginPct)}</span></> },
     { label: "당기순이익", cell: (r) => eokCell(r.netIncome) },
     { label: "자산총계", cell: (r) => eokCell(r.totalAssets) },
     { label: "부채총계", cell: (r) => eokCell(r.totalLiabilities) },
@@ -260,12 +270,12 @@ function FinanceTable({ rows }: { rows: FinancialRow[] }) {
       <p className="text-right text-xs text-sub">(단위: 억원)</p>
       <table className="num w-full min-w-[420px] border-t-2 border-ink text-sm">
         <thead>
-          <tr className="border-b border-rule">
-            <th scope="col" className="py-2 text-left font-medium text-sub">
+          <tr className="border-b border-rule bg-wash">
+            <th scope="col" className="px-2 py-2 text-left font-medium text-sub">
               항목
             </th>
             {rows.map((r) => (
-              <th key={r.year} scope="col" className="py-2 text-right font-semibold">
+              <th key={r.year} scope="col" className="px-2 py-2 text-right font-semibold">
                 {r.year}
                 <span className="block text-xs font-normal text-sub">{r.basisShort ?? r.basis}</span>
               </th>
@@ -275,11 +285,11 @@ function FinanceTable({ rows }: { rows: FinancialRow[] }) {
         <tbody>
           {lines.map((l) => (
             <tr key={l.label} className="border-b border-rule">
-              <th scope="row" className="py-2 text-left font-normal">
+              <th scope="row" className="px-2 py-2 text-left font-normal">
                 {l.label}
               </th>
               {rows.map((r) => (
-                <td key={r.year} className="py-2 text-right">
+                <td key={r.year} className="px-2 py-2 text-right">
                   {l.cell(r)}
                 </td>
               ))}
@@ -362,9 +372,9 @@ export function Finance() {
               <div className="overflow-x-auto">
                 <table className="num w-full min-w-[380px] border-t-2 border-ink text-sm">
                   <thead>
-                    <tr className="border-b border-rule text-sub">
+                    <tr className="border-b border-rule bg-wash text-sub">
                       {["월", "가입자 수", "신규 취득", "상실", "전월 대비"].map((h) => (
-                        <th key={h} scope="col" className={`py-2 font-medium ${h === "월" ? "text-left" : "text-right"}`}>
+                        <th key={h} scope="col" className={`px-2 py-2 font-medium ${h === "월" ? "text-left" : "text-right"}`}>
                           {h}
                         </th>
                       ))}
@@ -373,13 +383,13 @@ export function Finance() {
                   <tbody>
                     {nps.monthly.map((x) => (
                       <tr key={x.month} className="border-b border-rule">
-                        <th scope="row" className="py-1.5 text-left font-normal">
+                        <th scope="row" className="px-2 py-1.5 text-left font-normal">
                           {x.month}
                         </th>
-                        <td className="text-right">{x.members === null ? "—" : num(x.members)}</td>
-                        <td className="text-right">{x.joined === null ? "—" : num(x.joined)}</td>
-                        <td className="text-right">{x.left === null ? "—" : num(x.left)}</td>
-                        <td className="text-right">{x.change === null ? "—" : x.change > 0 ? `+${x.change}` : x.change}</td>
+                        <td className="px-2 text-right">{x.members === null ? "—" : num(x.members)}</td>
+                        <td className="px-2 text-right">{x.joined === null ? "—" : num(x.joined)}</td>
+                        <td className="px-2 text-right">{x.left === null ? "—" : num(x.left)}</td>
+                        <td className="px-2 text-right">{x.change === null ? "—" : x.change > 0 ? `+${x.change}` : x.change}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -449,7 +459,7 @@ export function Investment() {
           </li>
         ))}
       </ul>
-      <p className="text-sm text-sub">기존 투자자 판정에 쓰지 않습니다.</p>
+      <p className="text-sm">기존 투자자 판정에 쓰지 않습니다.</p>
     </Disclosure>
   );
 
@@ -475,7 +485,7 @@ export function Investment() {
         <Lines n={4} />
       ) : (
         <>
-          <p className="text-sm text-sub">최근 라운드</p>
+          <p className="text-sm font-semibold">최근 라운드</p>
           <ul className="divide-y divide-rule border-y border-rule">
             {rounds.slice(0, 3).map((x) => (
               <li key={x.id}>
@@ -484,7 +494,7 @@ export function Investment() {
             ))}
           </ul>
           <div className="mt-5">
-            <p className="text-sm text-sub">투자기관 {investors.length}곳</p>
+            <p className="text-sm font-semibold">투자기관 {investors.length}곳</p>
             <p className="font-medium">{investors.slice(0, 5).map((i) => i.name).join(", ")}</p>
             {pendingFacts && <p className="mt-1 text-sm text-sub">원문에서 투자자를 더 확인하고 있습니다 (보통 3분 안에 끝남)</p>}
           </div>
@@ -530,7 +540,7 @@ function InvestorTable({ investors }: { investors: MergedInvestor[] }) {
               {i.name}
               {i.lead && <span className="ml-2 text-xs text-sub">리드</span>}
             </span>
-            <span className="num hidden text-sub sm:block">라운드 {i.roundCount}건</span>
+            <span className="num hidden sm:block">라운드 {i.roundCount}건</span>
             <span className="num hidden text-sub sm:block">{i.lastDate ?? "날짜 미상"}</span>
             <StatusWord w={i.status} />
           </li>
@@ -552,7 +562,7 @@ function RoundRow({ x, memoryKey }: { x: Round; memoryKey: string }) {
         <span className="num text-sm text-sub">{date}</span>
         <span className="font-medium">{stageKo(x.round)}</span>
         <span className="num col-start-2 font-semibold sm:col-start-auto">{x.amount ?? "미공개"}</span>
-        <span className="col-start-2 text-sm text-sub sm:col-start-auto">투자기관 {x.investors.length}곳</span>
+        <span className="col-start-2 text-sm sm:col-start-auto">투자기관 {x.investors.length}곳</span>
       </span>
       {x.otherAmounts.length > 0 && (
         <span className="mt-1 flex flex-wrap items-center gap-2 text-sm sm:ml-[14em]">

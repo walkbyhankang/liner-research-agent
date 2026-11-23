@@ -45,7 +45,7 @@ function FundingInner() {
   const [chosen, setChosen] = useState<Partial<Record<keyof Conditions, true>>>(() => ({
     ...(sp.get("r") ? { region: true } : {}), ...(sp.get("b") ? { biz: true } : {}), ...(sp.get("n") ? { need: true } : {}), ...(sp.get("f") ? { field: true } : {}),
   }));
-  // 기업 유형은 사용자가 고른 것(값 고치기·표시줄에서 고른 것 포함), 관심 분야는 회사 분석 값을 따라간다
+  // 기업 유형은 사용자가 고른 것(회사 정보 수정·표시줄에서 고른 것 포함), 관심 분야는 회사 분석 값을 따라간다
   const cond: Conditions = { ...cond0, biz: cond0.biz ?? init.cond.biz, field: cond0.field ?? init.cond.field };
   const [seenRegion, setSeenRegion] = useState<string | null>(() => cond0.region);
 
@@ -113,7 +113,7 @@ function FundingInner() {
   return (
     <main className="mx-auto w-full max-w-[1200px] px-4 pb-24 pt-6 sm:px-6">
       <h1 className="text-2xl font-semibold">자금 조달</h1>
-      {(!job || !ready) && <p className="mt-2 text-sub">회사 값을 받는 중입니다. 조건을 직접 골라도 됩니다.</p>}
+      {(!job || !ready) && <p className="mt-2">회사 값을 받는 중입니다. 조건을 직접 골라도 됩니다.</p>}
 
       {cond && (
         <div className="mt-4">
@@ -151,14 +151,14 @@ function FundingInner() {
               </div>
             </div>
           )}
-          <p className="mt-3 text-sm text-sub">기업마당 분류값으로 거른 목록입니다. 세부 자격은 담은 뒤 심사 준비에서 공고문으로 대조합니다.</p>
+          <p className="mt-3 text-sm">기업마당 분류값으로 거른 목록입니다. 세부 자격은 담은 뒤 심사 준비에서 공고문으로 대조합니다.</p>
         </div>
       )}
 
       {cond && !cond.biz && (
-        <div className="mt-5 rounded-lg border border-rule p-4">
+        <div className="mt-5 rounded-lg border border-edge p-4">
           <p className="font-semibold">기업 유형을 골라 주세요</p>
-          <p className="mt-1 text-sm text-sub">공공 자료에 기업 유형 근거가 없어 자동으로 채우지 않습니다. 한 번 고르면 바로 목록이 나옵니다.</p>
+          <p className="mt-1 text-sm">공공 자료에 기업 유형 근거가 없어 자동으로 채우지 않습니다. 한 번 고르면 바로 목록이 나옵니다.</p>
           <div className="mt-3">
             <BizPicker current={null} onPick={(b) => set("biz", b)} hint={m?.bizTypeHint ?? null} />
           </div>
@@ -204,7 +204,7 @@ function FundingInner() {
                 render={(g) => <GpCard g={g} existing={false} rivals={backers(g.gp)} save={saveGp(g.gp, false, g.funds.length, g.latestYear)} />}
               />
               {!deepDone && (
-                <p className="mt-4 flex flex-wrap items-center gap-x-2 text-sm text-sub">
+                <p className="mt-4 flex flex-wrap items-center gap-x-2 text-sm">
                   경쟁사에 투자한 운용사를 보려면 회사 분석에서 경쟁사 깊이 비교를 하세요.
                   <Link href={`/c/${c.cid}#rivals`} className="link">
                     경쟁사 단락으로 가기

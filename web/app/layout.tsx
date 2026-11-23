@@ -11,7 +11,8 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ko" className="h-full antialiased">
+    // 글자 다듬기(-webkit-font-smoothing: antialiased)를 쓰지 않는다. macOS 에서 획이 가늘어져 Plex 400 본문이 옅게 보였다(visual-plan 5절)
+    <html lang="ko" className="h-full">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />

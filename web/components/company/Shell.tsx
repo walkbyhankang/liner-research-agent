@@ -1,6 +1,6 @@
 "use client";
 
-// 회사 화면 틀: 머리줄과 단계 메뉴(screens 1.1), 회사 표시줄(1.2), 화면 위 띠(1.10), 값 고치기 창과 새로 분석 확인 창.
+// 회사 화면 틀: 머리줄과 단계 메뉴(screens 1.1), 회사 표시줄(1.2), 화면 위 띠(1.10), 회사 정보 수정 창과 새로 분석 확인 창.
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -49,7 +49,7 @@ function ShellBody({ children }: { children: ReactNode }) {
   };
   const closeEdit = () => {
     setEditOpen(false);
-    // 창이 닫히면 초점을 "값 고치기" 단추로 돌린다(C-19)
+    // 창이 닫히면 초점을 창을 연 "회사 정보 수정" 단추로 돌린다(C-19)
     setTimeout(() => editFrom.current?.focus(), 0);
   };
 
@@ -155,13 +155,15 @@ function StepNav() {
   const job = c.job;
   const officialReady = !job || isTerminal(job.sections.official);
   const running = Boolean(job && job.status === "running");
-  const n = reviewCount(c.local);
+  // 단계 옆 개수(screens 1.1): 이 브라우저에 담은 것. 자금 조달 = 거기서 담은 공고·운용사, 심사 준비 = 담은 항목 전체(입찰공고 제외),
+  // 판로 = 거기서 담은 판로 지원사업과 노트에 담은 입찰공고. 0이면 붙이지 않는다. 회사 분석·노트에는 붙이지 않는다
+  const kinds = (ks: string[]) => c.local.saved.filter((s) => ks.includes(s.kind)).length;
   const items = [
-    { href: base, label: "회사 분석", current: path === base, disabled: false },
-    { href: `${base}/funding`, label: "자금 조달", current: path.startsWith(`${base}/funding`), disabled: !officialReady },
-    { href: `${base}/review`, label: "심사 준비", current: path.startsWith(`${base}/review`), disabled: false },
-    { href: `${base}/sales`, label: "판로", current: path.startsWith(`${base}/sales`), disabled: false },
-    { href: `${base}/note`, label: "노트", current: path.startsWith(`${base}/note`), disabled: false },
+    { href: base, label: "회사 분석", current: path === base, disabled: false, n: 0, sr: "" },
+    { href: `${base}/funding`, label: "자금 조달", current: path.startsWith(`${base}/funding`), disabled: !officialReady, n: kinds(["program", "gp"]), sr: "담은 자금 후보" },
+    { href: `${base}/review`, label: "심사 준비", current: path.startsWith(`${base}/review`), disabled: false, n: reviewCount(c.local), sr: "담은 항목" },
+    { href: `${base}/sales`, label: "판로", current: path.startsWith(`${base}/sales`), disabled: false, n: kinds(["salesProgram", "bid"]), sr: "담은 판로 항목" },
+    { href: `${base}/note`, label: "노트", current: path.startsWith(`${base}/note`), disabled: false, n: 0, sr: "" },
   ];
   return (
     <nav aria-label="단계" className="min-w-0 flex-1 overflow-x-auto">
@@ -186,16 +188,16 @@ function StepNav() {
               <Link
                 href={it.href}
                 aria-current={it.current ? "page" : undefined}
-                aria-label={it.label === "심사 준비" && n > 0 ? `심사 준비, 담은 항목 ${n}개` : undefined}
-                className={`flex min-h-12 w-full items-center justify-center gap-1.5 whitespace-nowrap px-2 text-sm sm:px-3 sm:text-[15px] ${
-                  it.current ? "font-semibold text-ink shadow-[inset_0_-3px_0_var(--color-ledger)]" : "text-sub hover:text-ink"
+                aria-label={it.n > 0 ? `${it.label}, ${it.sr} ${it.n}개` : undefined}
+                className={`flex min-h-12 w-full items-center justify-center gap-1 whitespace-nowrap px-1.5 text-sm text-ink sm:gap-1.5 sm:px-3 ${
+                  it.current ? "font-semibold shadow-[inset_0_-3px_0_var(--color-ledger)]" : "hover:shadow-[inset_0_-3px_0_var(--color-rule)]"
                 }`}
               >
                 {it.label}
                 {it.label === "회사 분석" && running && (
                   <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-ledger motion-safe:animate-pulse" />
                 )}
-                {it.label === "심사 준비" && n > 0 && <span className="num rounded-full bg-ledger-soft px-1.5 text-xs font-semibold text-ledger">{n}</span>}
+                {it.n > 0 && <span className="num min-w-[1.5em] rounded-full bg-ledger-soft px-1.5 text-center text-xs font-semibold leading-5 text-ledger">{it.n}</span>}
               </Link>
             )}
           </li>
@@ -256,6 +258,7 @@ function CompanyBar() {
     <button
       type="button"
       className="chip"
+      data-chip={key}
       aria-expanded={openChip === key}
       aria-controls="company-chip-box"
       onClick={() => {
@@ -287,7 +290,7 @@ function CompanyBar() {
           </p>
           <div className="flex gap-2">
             <button type="button" ref={editBtn} className="btn px-3 sm:px-4" onClick={(e) => openEdit(e.currentTarget)} disabled={!job}>
-              값 고치기
+              회사 정보 수정
             </button>
             {job && !job.isExample && (
               <button type="button" className="btn px-3 sm:px-4" onClick={openRefresh} disabled={running}>
@@ -316,12 +319,14 @@ function CompanyBar() {
             {chip("age", foundedConflict && m?.founded?.usedIndex === null ? "업력 엇갈림" : age ?? (m?.founded ? "업력 미확보" : "업력 확인 중"), foundedEdit ? <StatusWord w="edited" /> : foundedConflict ? <StatusWord w="conflicting" /> : null)}
             {chip("biz", isBizType(bizEdit) ? BIZ_LABEL[bizEdit] : "기업 유형 미확보", isBizType(bizEdit) ? <StatusWord w="edited" /> : null)}
           </div>
-          <p className="cbar-time num whitespace-nowrap text-sm text-sub" aria-live="off">
+          {/* 휴대폰에서는 단추 둘 옆이라 "YYYY-MM-DD HH:mm 분석"이 두 줄로 꺾인다. 진행 중("분석 중 (n초)", 한 줄)부터 두 줄 높이를 잡아
+              분석이 끝날 때 글이 움직이지 않게 한다(A-23) */}
+          <p className="cbar-time num whitespace-nowrap text-sm text-sub max-sm:min-h-12 max-sm:self-start" aria-live="off">
             {timeText}
           </p>
           <div className="cbar-btns no-print flex gap-2">
             <button type="button" ref={editBtn} className="btn px-3 sm:px-4" onClick={(e) => openEdit(e.currentTarget)} disabled={!job}>
-              값 고치기
+              회사 정보 수정
             </button>
             {job && !job.isExample && (
               <button type="button" className="btn px-3 sm:px-4" onClick={openRefresh} disabled={running}>

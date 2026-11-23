@@ -13,7 +13,7 @@ import { BIZ_LABEL } from "@/lib/company-values";
 import { DetailRow, Disclosure, ExtLink, MoreButton, Placeholder, SourceLine, StatusWord, useMore } from "@/components/kit";
 import { useCompany, useTicker } from "@/components/company/context";
 import { BizPicker } from "@/components/company/Shell";
-import { CardList, LoadError, ProgramCard, SavedBar, usePublicData, useToday } from "@/components/funding/Board";
+import { CardList, DueText, LoadError, ProgramCard, SavedBar, usePublicData, useToday } from "@/components/funding/Board";
 
 /** 같은 방문에서 같은 검색어로 다시 열면 다시 묻지 않는다(P-01) */
 const posted = new Set<string>();
@@ -180,7 +180,7 @@ function KeywordEditor({ initial, onSearch }: { initial: string[]; onSearch: (kw
         >
           <label className="min-w-0 flex-1">
             <span className="sr-only">검색어 더하기</span>
-            <input value={add} onChange={(e) => setAdd(e.target.value)} placeholder="검색어 더하기" maxLength={20} className="min-h-11 w-full rounded-md border border-rule px-3 outline-none focus:border-ledger" />
+            <input value={add} onChange={(e) => setAdd(e.target.value)} placeholder="검색어 더하기" maxLength={20} className="min-h-11 w-full rounded-md border border-edge px-3 outline-none focus:border-ledger" />
           </label>
           <button type="submit" className="btn" disabled={kw.length >= 6}>
             더하기
@@ -189,7 +189,7 @@ function KeywordEditor({ initial, onSearch }: { initial: string[]; onSearch: (kw
             다시 찾기
           </button>
         </form>
-        <p className="text-sm text-sub">검색어는 6개까지 넣을 수 있고, 이 브라우저에 저장합니다. 나라장터 조회는 무료입니다.</p>
+        <p className="text-sm">검색어는 6개까지 넣을 수 있고, 이 브라우저에 저장합니다. 나라장터 조회는 무료입니다.</p>
       </div>
     </Disclosure>
   );
@@ -201,15 +201,16 @@ function BidRow({ b, today }: { b: Bid; today: string }) {
   return (
     <DetailRow
       head={
-        <span className="block">
-          <span className="flex flex-wrap items-center gap-2">
-            {b.relevance === "high" && <span className="tag">핵심 낱말 일치</span>}
-            <span className="num text-sm">{today ? bidDeadline(b, today) : ""}</span>
-          </span>
-          <span className="clamp-2 mt-0.5 font-medium">{b.title}</span>
-          <span className="mt-0.5 flex flex-wrap gap-x-3 text-sm text-sub">
-            <span>{b.agency}</span>
-            <span className="num">{b.amount || "공고문 확인"}</span>
+        // 목록 줄: 왼쪽 공고명·수요기관·금액, 오른쪽 끝 기한(screens 1.12). 좁은 화면은 기한이 첫 줄 끝으로 간다
+        <span className="lrow">
+          <span className="lrow-meta flex min-h-[22px] flex-wrap items-center gap-2">{b.relevance === "high" && <span className="tag">핵심 낱말 일치</span>}</span>
+          {today ? <DueText text={bidDeadline(b, today)} /> : <span className="lrow-end" />}
+          <span className="lrow-main">
+            <span className="clamp-2 font-medium">{b.title}</span>
+            <span className="mt-0.5 flex flex-wrap gap-x-3 text-sm">
+              <span className="text-sub">{b.agency}</span>
+              <span className="num">{b.amount || "공고문 확인"}</span>
+            </span>
           </span>
         </span>
       }
@@ -283,7 +284,7 @@ function SalesPrograms() {
               </button>
             ))}
           </div>
-          <p className="mt-2 text-sm text-sub">
+          <p className="mt-2 text-sm">
             자금 조달과 같은 조건({prof.region}, {BIZ_LABEL[prof.biz]})으로 거릅니다.
           </p>
           <div>

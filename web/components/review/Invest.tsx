@@ -245,9 +245,9 @@ function EvidenceBody({ job, which }: { job: AnalysisJob; which: "finance" | "fu
       <div className="py-2">
         <table className="num w-full border-t-2 border-ink text-sm">
           <thead>
-            <tr className="border-b border-rule text-left text-sub">
+            <tr className="border-b border-rule bg-wash text-left text-sub">
               {["날짜", "단계", "금액", "투자기관 수"].map((h) => (
-                <th key={h} scope="col" className="py-1.5 font-medium">
+                <th key={h} scope="col" className="px-2 py-1.5 font-medium">
                   {h}
                 </th>
               ))}
@@ -256,10 +256,10 @@ function EvidenceBody({ job, which }: { job: AnalysisJob; which: "finance" | "fu
           <tbody>
             {r.rounds.slice(0, 5).map((x) => (
               <tr key={x.id} className="border-b border-rule">
-                <td className="py-1.5">{x.date ?? (x.reportedDate ? `보도 ${x.reportedDate}` : "날짜 미상")}</td>
-                <td>{stageKo(x.round)}</td>
-                <td>{x.amount ?? "미공개"}</td>
-                <td>{x.investors.length}곳</td>
+                <td className="px-2 py-1.5">{x.date ?? (x.reportedDate ? `보도 ${x.reportedDate}` : "날짜 미상")}</td>
+                <td className="px-2">{stageKo(x.round)}</td>
+                <td className="px-2">{x.amount ?? "미공개"}</td>
+                <td className="px-2">{x.investors.length}곳</td>
               </tr>
             ))}
           </tbody>
@@ -403,11 +403,12 @@ function Evidence({ job }: { job: AnalysisJob }) {
 function RelatedList({ items }: { items: Related[] }) {
   const c = useCompany();
   return (
-    <ul className="space-y-1">
+    // 링크가 든 줄과 글만 있는 줄의 높이를 같게(.link-fit). 줄 높이 44px 이상이라 이웃 줄의 누르는 영역과 겹치지 않는다
+    <ul>
       {items.map((r) => (
-        <li key={r.text}>
+        <li key={r.text} className="py-2.5">
           {r.to ? (
-            <Link href={`/c/${c.cid}#${r.to}`} className="link">
+            <Link href={`/c/${c.cid}#${r.to}`} className="link link-fit">
               {r.text}
             </Link>
           ) : (
@@ -494,7 +495,7 @@ function MemoBox({ value, onSave }: { value: string; onSave: (v: string) => void
         timer.current = setTimeout(() => onSave(next), 600);
       }}
       onBlur={() => onSave(v)}
-      className="mt-1 block w-full rounded-md border border-rule bg-paper p-2 text-base font-normal outline-none focus:border-ledger"
+      className="mt-1 block w-full rounded-md border border-edge bg-paper p-2 text-base font-normal outline-none focus:border-ledger"
     />
   );
 }
@@ -516,16 +517,18 @@ function DueDiligence({ job }: { job: AnalysisJob }) {
               {g.items.map((item) => {
                 const rel = item.related(ctx);
                 return (
-                  <li key={item.id} className="flex items-start justify-between gap-3 py-2" data-dd-item={item.id}>
+                  <li key={item.id} className="flex items-start justify-between gap-3 py-2.5" data-dd-item={item.id}>
                     <div className="min-w-0">
                       <p>{item.text}</p>
                       {rel.map((r) =>
                         r.to ? (
-                          <Link key={r.text} href={`/c/${c.cid}#${r.to}`} className="link text-sm">
-                            분석에 있음: {r.text}
-                          </Link>
+                          <p key={r.text} className="mt-1 text-sm">
+                            <Link href={`/c/${c.cid}#${r.to}`} className="link link-fit">
+                              분석에 있음: {r.text}
+                            </Link>
+                          </p>
                         ) : (
-                          <p key={r.text} className="text-sm text-sub">
+                          <p key={r.text} className="mt-1 text-sm text-sub">
                             분석에 있음: {r.text}
                           </p>
                         ),

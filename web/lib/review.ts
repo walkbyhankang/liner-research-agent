@@ -2,6 +2,8 @@
 import type { AnalysisJob, Bid, NoticeAnalysis, Value, Verdict } from "./contract.ts";
 import { byCurrencyTexts, daysUntil, eok, fmtMD, signed, stageKo } from "./format.ts";
 import { isTerminal } from "./view.ts";
+import { SOON_DAYS, dday } from "./finder.ts";
+import { savedNotices, type CheckRecord, type SavedItem } from "./local.ts";
 
 export const VERDICT_ORDER: Verdict[] = ["미충족", "확인 필요", "충족", "판단 대상 아님"];
 export const sortRows = (rows: NoticeAnalysis["match"]["rows"]) => [...rows].sort((a, b) => VERDICT_ORDER.indexOf(a.verdict) - VERDICT_ORDER.indexOf(b.verdict));
@@ -94,6 +96,26 @@ export function openValues(job: AnalysisJob): OpenValue[] {
     else if (v.status === "unavailable") out.push({ label, value: v, kind: "missing" });
   }
   return out;
+}
+
+/**
+ * 회사 분석 "지금 확인할 것"(screens 4.0.3)의 개수. 사실을 센 것만 둔다(점수·확률 없음).
+ * - 엇갈린 값·미확보 값: 분석이 진행 중이면 세지 않는다. 새로 분석 중에는 보이는 job 이 저장된 분석(done) 위에 새 결과를 얹은 것이라
+ *   진행 중 작업(live)의 상태로도 본다(새 결과가 오는 동안 개수가 흔들리지 않게).
+ * - 마감 임박·미충족 요건: 담은 공고(savedNotices, 두 화면에서 담은 같은 공고는 하나)로 센다. 분석 진행과 상관없다.
+ *   마감 임박은 마감일이 14일 안이면 아직 접수 전이어도 센다(screens 4.0.3: 자금 조달 거르기 isSoon 은 접수 중 목록을 줄이는 것이고,
+ *   여기는 이미 담은 공고를 놓치지 않게 하는 것이라 일부러 다르다).
+ */
+export function checkNowCounts(job: AnalysisJob, live: AnalysisJob | null, saved: readonly SavedItem[], checks: Record<string, CheckRecord>, today: string | null) {
+  const running = job.status === "running" || live?.status === "running";
+  const values = running ? [] : openValues(job);
+  const programs = savedNotices(saved);
+  const soon = today
+    ? programs.map((s) => (typeof s.meta.end === "string" ? dday(s.meta.end, today) : null)).filter((d): d is number => d !== null && d >= 0 && d <= SOON_DAYS)
+    : [];
+  const checked = programs.map((s) => checks[s.itemId]).filter((r): r is CheckRecord => Boolean(r?.result));
+  const unmet = gaps(checked.map((r) => ({ programId: r.programId, programTitle: "", result: r.result! }))).unmet;
+  return { conflicts: values.filter((o) => o.kind === "conflict"), missing: values.filter((o) => o.kind === "missing"), soon, unmet };
 }
 
 export const npsChangeText = (job: AnalysisJob) => {

@@ -8,9 +8,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DEFAULT_ESTIMATES, type AnalysisJob } from "@/lib/contract";
 import { elapsedText } from "@/lib/format";
 import { SCREEN_SECTIONS, TOC_TEXT, isTerminal, keyTiles, phaseOf, stillChecking, unavailableScreens, type ScreenKey, type Tile, type Word } from "@/lib/view";
-import { Disclosure, Placeholder, StatusWord, nb } from "@/components/kit";
+import { checkNowCounts, type OpenValue } from "@/lib/review";
+import { Chevron, Disclosure, Placeholder, StatusWord, VerdictMark, nb, useOpen } from "@/components/kit";
 import { restoreAnchor, useCompany, useTicker } from "@/components/company/context";
-import { WORD_MEANING } from "@/components/company/values";
+import { ConflictLines, WORD_MEANING } from "@/components/company/values";
+import { useToday } from "@/components/funding/Board";
 import { Finance, Investment, Overview } from "@/components/company/sections-a";
 import { News, Rivals, Tech } from "@/components/company/sections-b";
 
@@ -47,6 +49,7 @@ export function AnalysisScreen() {
       <main className="min-w-0 max-w-[760px] pb-10">
         <ProgressLine job={job} />
         <KeyStrip job={job} />
+        <CheckNow job={job} />
         <FundingRow job={job} />
         <Disclosure text="상태 표시 안내" memoryKey={`${c.cid}:legend`} className="mt-2">
           <dl className="space-y-2 py-2">
@@ -184,8 +187,8 @@ function Toc({ job }: { job: AnalysisJob }) {
                 e.preventDefault();
                 goSection(s.key);
               }}
-              className={`flex min-h-12 items-center gap-2 whitespace-nowrap px-3 text-sm lg:min-h-11 lg:justify-between lg:border-l-2 lg:px-3 ${
-                current === s.key ? "font-semibold text-ink shadow-[inset_0_-3px_0_var(--color-ledger)] lg:border-ledger lg:shadow-none" : "text-sub lg:border-rule"
+              className={`flex min-h-12 items-center gap-2 whitespace-nowrap px-3 text-sm text-ink lg:min-h-11 lg:justify-between lg:border-l-2 lg:px-3 ${
+                current === s.key ? "font-semibold shadow-[inset_0_-3px_0_var(--color-ledger)] lg:border-ledger lg:shadow-none" : "lg:border-rule"
               }`}
             >
               <span>{s.label}</span>
@@ -278,7 +281,8 @@ function ProgressLine({ job }: { job: AnalysisJob }) {
 function KeyStrip({ job }: { job: AnalysisJob }) {
   const tiles = keyTiles(job);
   return (
-    <div className="mt-6 border-t-2 border-b border-t-ink border-b-rule">
+    // 재무제표식 숫자 띠: 굵은 잉크 윗줄과 가는 잉크 아랫줄(화면에서 굵은 선은 여기 한 곳)
+    <div className="mt-6 border-t-2 border-b border-ink">
       <ul className="grid grid-cols-2 gap-px bg-rule lg:grid-cols-4" aria-label="핵심 값">
         {tiles.map((t) => (
           <li key={t.key} className="bg-paper">
@@ -292,7 +296,8 @@ function KeyStrip({ job }: { job: AnalysisJob }) {
 
 function TileCell({ t }: { t: Tile }) {
   // 칸 높이는 값이 다 왔을 때(기준 줄 2줄 + 나중에 오는 "웹 조사" 줄)에 맞춰 미리 잡는다. 늦게 오는 줄이 띠 높이를 바꿔 아래가 밀리지 않게.
-  // 실측(업스테이지·기준 기업, 2026-11-23): 끝난 칸 내용 높이 최대 1180 폭 167px, 820 폭 140px, 390 폭 162px
+  // 실측(업스테이지·기준 기업, 2026-11-23): 끝난 칸 내용 높이 최대 1180 폭 167px, 820 폭 140px, 390 폭 162px.
+  // 글 크기 조정(숫자 32~36px, 이름표·기준 15px) 뒤 다시 잼: 기준 기업·가짜 F-FULL 최대 1180 폭 165px, 820 폭 141px, 390 폭 161px
   return (
     <a
       href={`#${t.anchor}`}
@@ -303,33 +308,34 @@ function TileCell({ t }: { t: Tile }) {
       aria-busy={t.loading || undefined}
       className="block h-full min-h-[164px] px-3 py-3 hover:bg-wash sm:min-h-[144px] sm:px-4 lg:min-h-[168px]"
     >
+      {/* 위계: 이름표(15 굵게) → 숫자(32~36 가장 굵게, 단위는 18로 붙임) → 기준(15 보조 글, 숫자 바로 밑) */}
       <span className="flex items-start justify-between gap-2">
-        <span className="text-sm text-sub">{t.label}</span>
+        <span className="text-sm font-semibold">{t.label}</span>
         {t.word && <StatusWord w={t.word} />}
       </span>
       {t.loading ? (
         <span className="mt-1 block space-y-2">
-          <Placeholder h={30} w="70%" />
+          <Placeholder h={36} w="70%" />
           <span className="block text-sm text-sub">확인 중</span>
         </span>
       ) : t.missing ? (
         <span className="mt-1 block text-base font-semibold leading-snug">{t.missing}</span>
       ) : (
-        <span className="mt-1 block">
+        <span className="mt-0.5 block">
           {t.big.map((b) => (
-            <span key={b} className="num block text-2xl font-semibold leading-tight tracking-tight lg:text-[32px]">
+            <span key={b} className="num block text-[32px] font-bold leading-[1.15] tracking-tight lg:text-[36px]">
               <BigNumber text={b} />
             </span>
           ))}
           {t.basis.map((b) => (
-            <span key={b} className="num mt-1 block text-sm text-sub">
+            <span key={b} className="num mt-1 block text-sm leading-snug text-sub">
               {nb(b)}
             </span>
           ))}
         </span>
       )}
       {t.extra && (
-        <span className="mt-1 block text-sm text-sub">
+        <span className="mt-1 block text-sm leading-snug">
           {nb(t.extra)} {t.extraWord && <StatusWord w={t.extraWord} />}
         </span>
       )}
@@ -347,9 +353,138 @@ function BigNumber({ text }: { text: string }) {
   return (
     <>
       {m[1]}
-      <span className="text-lg font-medium">{m[2]}</span>
+      <span className="ml-0.5 text-lg font-semibold tracking-normal">{m[2]}</span>
       {m[3] && <span className="mt-1 block text-sm font-medium tracking-normal text-sub">{m[3].trim()}</span>}
     </>
+  );
+}
+
+// ---------------------------------------------------------------- 지금 확인할 것
+
+/** 회사 값 이름 → 그 값이 보이는 단락(openValues 의 이름표) */
+const VALUE_SECTION: Record<string, ScreenKey> = {
+  지역: "overview", 본사: "overview", 대표: "overview", 설립: "overview", "업종(금융위)": "overview", "업종(웹 조사)": "overview", "직원 수": "overview",
+  "매출(공식)": "finance", "매출(웹 조사)": "finance", "국민연금 가입자": "finance", "국내 특허": "tech",
+};
+
+/**
+ * "지금 확인할 것"(screens 4.0.3): 사실을 센 개수만 둔다(점수·확률 없음). 0인 항목은 숨기고, 끝난 분석을 열었을 때 모두 0이면 묶음을 그리지 않는다.
+ * 이 방문에서 분석이 진행되는 것을 봤으면 틀을 끝까지 두고 항목은 한 줄로 둔다(끝나는 순간 아래가 밀리지 않게).
+ * - 엇갈린 값·미확보 값: 합친 회사 값(merged)의 상태로 센다. 미팅 근거 묶음 "미팅 전에 정리할 값"과 같은 셈(openValues). 분석이 진행 중이면(새로 분석 포함) 세지 않는다.
+ * 셈 자체는 lib/review.ts checkNowCounts(단위 시험이 있다).
+ * - 마감 임박 담은 공고: 이 브라우저에 담은 공고(판로 지원사업 포함) 가운데 마감이 오늘부터 14일 안(자금 조달 "마감 임박"과 같은 기준).
+ * - 미충족 요건: 공고문 자격 대조를 한 담은 공고의 "미충족" 요건 수(심사 준비 "부족한 요건"과 같은 셈). 대조한 것이 없으면 없음.
+ * 값 항목은 누르면 아래에 목록이 펼쳐지고(값마다 그 단락으로 가는 링크), 공고 항목은 심사 준비로 간다.
+ */
+function CheckNow({ job }: { job: AnalysisJob }) {
+  const c = useCompany();
+  const today = useToday();
+  // 펼친 목록은 같은 방문 안에서 다른 단계에 다녀와도 유지한다(screens 1.4). 한 번에 한 항목만 열린다
+  const [openConflict, setOpenConflict] = useOpen(`${c.cid}:ck:conflict`);
+  const [openMissing, setOpenMissing] = useOpen(`${c.cid}:ck:missing`);
+  const open: OpenValue["kind"] | null = openConflict ? "conflict" : openMissing ? "missing" : null;
+  const running = job.status === "running" || c.live?.status === "running";
+  // 이 방문에서 분석(새로 분석 포함)이 진행되는 것을 봤으면 묶음 틀을 끝까지 둔다. 끝나는 순간 묶음이 새로 생기거나 사라지면
+  // 그 아래(자금 후보 줄·단락)가 밀리기 때문이다. 처음부터 끝난 분석을 열었고 셀 것이 없으면 묶음을 그리지 않는다
+  const [seenRunning, setSeenRunning] = useState(running);
+  if (running && !seenRunning) setSeenRunning(true); // 그리는 중 상태 맞추기(React 권장 방식, 효과 없이)
+  // 분석이 진행되는 동안에는 펼친 값 목록을 닫는다. 열어 둔 채면 끝나는 순간 목록이 다시 펼쳐지며 아래를 민다(사용자가 다시 열면 된다)
+  if (running && (openConflict || openMissing)) {
+    setOpenConflict(false);
+    setOpenMissing(false);
+  }
+  const { conflicts, missing, soon, unmet } = checkNowCounts(job, c.live, c.local.saved, c.local.checks, today);
+  const any = conflicts.length > 0 || missing.length > 0 || soon.length > 0 || unmet > 0;
+  if (!any && !running && !seenRunning) return null;
+
+  const listed = open === "conflict" ? conflicts : open === "missing" ? missing : [];
+  const toggle = (k: OpenValue["kind"]) => {
+    setOpenConflict(k === "conflict" && open !== "conflict");
+    setOpenMissing(k === "missing" && open !== "missing");
+  };
+  const valueButton = (k: OpenValue["kind"], n: number) => (
+    <button type="button" className="btn gap-2 px-3 font-medium" aria-expanded={open === k} aria-controls="checknow-list" onClick={() => toggle(k)}>
+      <StatusWord w={k === "conflict" ? "conflicting" : "unavailable"} />
+      <span>
+        값 <span className="num font-semibold">{n}</span>개
+      </span>
+      <Chevron className={`text-ledger transition-transform duration-150 ${open === k ? "rotate-180" : ""}`} />
+    </button>
+  );
+  return (
+    <section aria-labelledby="checknow-h" className="no-print mt-4 bg-wash px-3 py-3 sm:px-4" data-checknow>
+      <h2 id="checknow-h" className="text-sm font-semibold">
+        지금 확인할 것
+      </h2>
+      {/* 항목은 늘 한 줄(넘치면 옆으로 밀어 보기): 항목 수가 바뀌어도 묶음 높이가 같아 아래가 밀리지 않는다. 초점 테두리가 잘리지 않게 덧댐을 둔다 */}
+      <ul className="scroll-row -mx-1.5 mt-1.5 flex gap-2 overflow-x-auto p-1.5">
+        {running && (
+          <li className="flex min-h-11 shrink-0 items-center text-sm text-sub">엇갈린 값·미확보 값은 분석이 끝나면 셉니다</li>
+        )}
+        {!running && !any && <li className="flex min-h-11 shrink-0 items-center text-sm text-sub">지금 확인할 것이 없습니다</li>}
+        {conflicts.length > 0 && <li>{valueButton("conflict", conflicts.length)}</li>}
+        {missing.length > 0 && <li>{valueButton("missing", missing.length)}</li>}
+        {soon.length > 0 && (
+          <li>
+            <Link href={`/c/${c.cid}/review?tab=grants`} className="btn gap-2 px-3 font-medium">
+              <span>
+                마감 임박 담은 공고 <span className="num font-semibold">{soon.length}</span>건
+              </span>
+              <span className="num font-bold">{Math.min(...soon) === 0 ? "오늘 마감" : `D-${Math.min(...soon)}`}</span>
+            </Link>
+          </li>
+        )}
+        {unmet > 0 && (
+          <li>
+            <Link href={`/c/${c.cid}/review?tab=grants`} className="btn gap-2 px-3 font-medium">
+              <VerdictMark v="미충족" />
+              <span>
+                요건 <span className="num font-semibold">{unmet}</span>개
+              </span>
+            </Link>
+          </li>
+        )}
+      </ul>
+      <div id="checknow-list" role="region" aria-label={open === "conflict" ? "엇갈린 값" : "미확보 값"} className={listed.length ? "mt-2" : "hidden"}>
+        <ul className="divide-y divide-rule bg-paper px-3">
+          {listed.map((o) => {
+            const key = VALUE_SECTION[o.label] ?? "overview";
+            const label = SCREEN_SECTIONS.find((s) => s.key === key)?.label ?? "";
+            return (
+              <li key={o.label} className="grid items-start gap-x-4 py-2 sm:grid-cols-[8em_minmax(0,1fr)_auto]">
+                <span className="font-semibold">{o.label}</span>
+                <span className="min-w-0">{o.kind === "conflict" ? <ConflictLines v={o.value} /> : <>미확보: {o.value.reason ?? "자료 없음"}</>}</span>
+                {o.label === "지역" ? (
+                  // 지역은 단락이 아니라 회사 표시줄의 지역 칩에 있다(누르면 값과 출처, 미확보면 회사 정보 수정 창)
+                  <button
+                    type="button"
+                    className="link text-sm"
+                    onClick={() => {
+                      const chip = document.querySelector<HTMLElement>("[data-chip=region]");
+                      chip?.scrollIntoView({ block: "center" });
+                      chip?.focus({ preventScroll: true });
+                    }}
+                  >
+                    회사 표시줄에서 보기
+                  </button>
+                ) : (
+                  <a
+                    href={`#${key}`}
+                    className="link text-sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      goSection(key);
+                    }}
+                  >
+                    {label} 단락에서 보기
+                  </a>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
   );
 }
 

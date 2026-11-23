@@ -8,7 +8,7 @@ import type { NoticeAnalysis, NoticeCompany, Verdict } from "@/lib/contract";
 import { ApiFail, api } from "@/lib/api";
 import { EDIT_LABEL, filledCount, noticeCompany, rivalNoticeCompany } from "@/lib/company-values";
 import { dday, shortDate, type Program } from "@/lib/finder";
-import { putCheck, putRivalCheck, rivalCheckOf, toggleSaved, type CheckRecord, type SavedItem } from "@/lib/local";
+import { putCheck, putRivalCheck, removeNotice, rivalCheckOf, savedNotices, type CheckRecord, type SavedItem } from "@/lib/local";
 import { gaps, sortRows, verdictCounts } from "@/lib/review";
 import { runTask } from "@/lib/tasks";
 import { useTask } from "@/lib/useTask";
@@ -17,7 +17,7 @@ import { DetailRow, Disclosure, ExtLink, StatusWord, VerdictMark, useNow } from 
 import { useCompany } from "@/components/company/context";
 import { useShell } from "@/components/company/Shell";
 import { Quote } from "@/components/company/values";
-import { usePublicData, useToday } from "@/components/funding/Board";
+import { DueText, usePublicData, useToday } from "@/components/funding/Board";
 
 const LIMIT_TEXT = "오늘 호출 상한에 닿아 대조하지 못했습니다. 내일 0시 이후에 다시 대조할 수 있습니다.";
 
@@ -39,7 +39,7 @@ const companyLabel: Record<keyof NoticeCompany, string> = {
 
 function UsedValue({ field, company }: { field: string; company: NoticeCompany }) {
   const k = fieldKey(field);
-  if (!k) return <p className="text-sm text-sub">대조에 쓴 회사 값: 이 조건에 맞는 회사 값 칸이 없습니다.</p>;
+  if (!k) return <p className="text-sm">대조에 쓴 회사 값: 이 조건에 맞는 회사 값 칸이 없습니다.</p>;
   return (
     <p className="text-sm">
       <span className="text-sub">대조에 쓴 회사 값: </span>
@@ -55,8 +55,7 @@ export function Grants() {
   const job = c.job;
   const { openEdit } = useShell();
   const { data } = usePublicData();
-  const items: SavedProgram[] = c.local.saved
-    .filter((s) => s.kind === "program" || s.kind === "salesProgram")
+  const items: SavedProgram[] = savedNotices(c.local.saved) // 두 화면에서 담은 같은 공고는 하나로
     .map((item) => ({ item, program: data?.programs.find((p) => p.id === item.itemId) ?? null }));
   const end = (x: SavedProgram) => x.program?.period.end ?? (typeof x.item.meta.end === "string" ? x.item.meta.end : "9999-12-31");
   items.sort((a, b) => end(a).localeCompare(end(b)));
@@ -119,7 +118,7 @@ export function Grants() {
               대조에 쓰는 회사 값 <span className="num">{filled}/8</span>개 채움
             </p>
             <button type="button" className="btn" onClick={(e) => openEdit(e.currentTarget)}>
-              값 고치기
+              회사 정보 수정
             </button>
           </div>
           {filled < 3 && <p className="text-sm text-amber">회사 값이 비어 있으면 대부분 &lsquo;확인 필요&rsquo;로 나옵니다.</p>}
@@ -137,7 +136,7 @@ export function Grants() {
                 <dd>{c.local.edits.notes?.value || "비어 있음"}</dd>
               </div>
             </dl>
-            <p className="mt-2 text-sm text-sub">함께 보내는 값</p>
+            <p className="mt-2 text-sm font-semibold">함께 보내는 값</p>
             <ul className="text-sm">
               {typeof job.merged.patentCount?.raw === "number" && (
                 <li className="flex flex-wrap items-center gap-2">
@@ -214,12 +213,12 @@ function NoticeCard({ x, company }: { x: SavedProgram; company: NoticeCompany | 
 
   return (
     <article className="card p-4" data-notice={id}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <h3 className="clamp-2 min-w-0 flex-1 text-lg font-semibold leading-snug">{x.item.title}</h3>
-        {/* 휴대폰에서는 마감을 제목 위 한 줄로 올려 제목이 전체 폭을 쓰게 한다 */}
-        <span className="num text-sm max-sm:order-first max-sm:w-full">{endDay ? (d !== null && d >= 0 ? `D-${d}, ${shortDate(endDay)} 마감` : `${shortDate(endDay)} 마감`) : "신청기간 미기재"}</span>
+      {/* 목록 줄(screens 1.12): 오른쪽 끝에 기한. 휴대폰에서는 기한을 제목 위 한 줄 끝으로 올려 제목이 전체 폭을 쓰게 한다 */}
+      <div className="lrow">
+        <div className="lrow-meta">{x.item.kind === "salesProgram" && <span className="meta">판로 지원사업</span>}</div>
+        <DueText text={endDay ? (d !== null && d >= 0 ? `D-${d}, ${shortDate(endDay)} 마감` : `${shortDate(endDay)} 마감`) : "신청기간 미기재"} />
+        <h3 className="lrow-main clamp-2 text-lg font-semibold leading-snug">{x.item.title}</h3>
       </div>
-      {x.item.kind === "salesProgram" && <p className="text-xs text-sub">판로 지원사업</p>}
 
       {/* 화면 읽기 알림: 시작·끝·실패처럼 뜻 있는 변화만. 보이는 진행 글의 경과 초는 알림 영역 밖에 두어 매초 읽지 않게 한다 */}
       <p className="sr-only" role="status">
@@ -280,7 +279,7 @@ function NoticeCard({ x, company }: { x: SavedProgram; company: NoticeCompany | 
 
       {result && (
         <div className={open ? "mt-3 space-y-4" : "hidden"}>
-          <NoticeDetail cid={c.cid} programId={id} result={result} rec={rec!} onRerun={run} url={url} onRemove={() => toggleSaved(c.cid, { kind: x.item.kind, itemId: id, title: x.item.title, meta: x.item.meta })} />
+          <NoticeDetail cid={c.cid} programId={id} result={result} rec={rec!} onRerun={run} url={url} onRemove={() => removeNotice(c.cid, id)} />
         </div>
       )}
     </article>
@@ -289,7 +288,8 @@ function NoticeCard({ x, company }: { x: SavedProgram; company: NoticeCompany | 
 
 const VERDICTS: Verdict[] = ["미충족", "확인 필요", "충족"];
 
-function NoticeDetail({ cid, programId, result, rec, onRerun, url, onRemove }: { cid: string; programId: string; result: NoticeAnalysis; rec: CheckRecord; onRerun: () => void; url: string | null; onRemove: () => void }) {
+function NoticeDetail({ cid, programId, result, rec, onRerun, url, onRemove }: { cid: string; programId: string; result: NoticeAnalysis; rec: CheckRecord; onRerun: () => void; url: string | null; onRemove: () => Promise<boolean> }) {
+  const [removeFailed, setRemoveFailed] = useState(false);
   const rows = sortRows(result.match.rows);
   const judged = rows.filter((r) => VERDICTS.includes(r.verdict));
   const others = rows.filter((r) => r.verdict === "판단 대상 아님");
@@ -375,11 +375,16 @@ function NoticeDetail({ cid, programId, result, rec, onRerun, url, onRemove }: {
           <ExtLink href={url} className="btn">
             공고 원문
           </ExtLink>
-          <button type="button" className="btn btn-quiet" onClick={onRemove}>
+          <button type="button" className="btn btn-quiet" onClick={() => void onRemove().then((ok) => setRemoveFailed(!ok))}>
             담은 공고에서 빼기
           </button>
         </span>
       </div>
+      {removeFailed && (
+        <p role="alert" className="text-sm font-medium text-amber">
+          브라우저에 저장된 목록에서 빼지 못했습니다. 다시 눌러 주세요.
+        </p>
+      )}
     </>
   );
 }
@@ -430,11 +435,11 @@ function RivalCheck({ cid, programId, mine, company }: { cid: string; programId:
   return (
     <div className="space-y-3">
       <p className="text-sm">우리 회사의 지역·기업 유형·필요 자금은 그대로 두고, 나머지만 경쟁사 값으로 바꿔 같은 공고를 대조합니다.</p>
-      {!job?.sections.rivals_deep.result && <p className="text-sm text-sub">경쟁사 깊이 비교를 하면 경쟁사 값이 채워져 결과가 구체적이 됩니다.</p>}
+      {!job?.sections.rivals_deep.result && <p className="text-sm">경쟁사 깊이 비교를 하면 경쟁사 값이 채워져 결과가 구체적이 됩니다.</p>}
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm">
           <span className="sr-only">경쟁사</span>
-          <select value={key} onChange={(e) => setPick(e.target.value)} className="min-h-11 rounded-md border border-rule bg-paper px-2 text-base">
+          <select value={key} onChange={(e) => setPick(e.target.value)} className="min-h-11 rounded-md border border-edge bg-paper px-2 text-base">
             {rivals.map((r) => (
               <option key={r.key} value={r.key}>
                 {r.name}
@@ -455,7 +460,7 @@ function RivalCheck({ cid, programId, mine, company }: { cid: string; programId:
             <span className="font-semibold">
               {rival.name} 조건의 종합 문구: {rec.result.match.overall}
             </span>{" "}
-            <span className="text-sub">(우리 회사: {mine.match.overall})</span>
+            <span>(우리 회사: {mine.match.overall})</span>
           </p>
           {gained.length > 0 ? (
             <div>
@@ -473,10 +478,10 @@ function RivalCheck({ cid, programId, mine, company }: { cid: string; programId:
               </ul>
             </div>
           ) : (
-            <p className="text-sub">경쟁사 조건으로 바꿔도 새로 충족되는 조건이 없습니다. 공개된 경쟁사 정보가 적으면 차이가 드러나지 않습니다.</p>
+            <p>경쟁사 조건으로 바꿔도 새로 충족되는 조건이 없습니다. 공개된 경쟁사 정보가 적으면 차이가 드러나지 않습니다.</p>
           )}
-          {lost.length > 0 && <p className="text-sub">반대로 우리 회사는 충족하지만 경쟁사 조건으로는 충족하지 못하는 조건이 {lost.length}건 있습니다.</p>}
-          {unknown.length > 0 && <p className="text-sub">우리 회사는 충족하지만 경쟁사는 공개 정보가 없어 판단하지 못한 조건이 {unknown.length}건 있습니다. 경쟁사가 못 미친다는 뜻은 아닙니다.</p>}
+          {lost.length > 0 && <p>반대로 우리 회사는 충족하지만 경쟁사 조건으로는 충족하지 못하는 조건이 {lost.length}건 있습니다.</p>}
+          {unknown.length > 0 && <p>우리 회사는 충족하지만 경쟁사는 공개 정보가 없어 판단하지 못한 조건이 {unknown.length}건 있습니다. 경쟁사가 못 미친다는 뜻은 아닙니다.</p>}
           <p className="text-sub">경쟁사의 인증, 체납·대출 여부처럼 공개 자료에서 확인하지 못한 값은 &lsquo;확인 필요&rsquo;로 남습니다. 경쟁사가 이 자금을 실제로 받았다는 뜻이 아닙니다.</p>
         </div>
       )}

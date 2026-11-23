@@ -111,7 +111,7 @@ export function NewsList({ fixed }: { fixed?: NewsCategory[] }) {
         <p className="text-sm font-medium text-amber">{pages.error}</p>
       ) : (
         <>
-          <p className="num text-sm text-sub">
+          <p className="num text-sm font-semibold">
             {cats.length ? `${cats.join(", ")} 기사` : "기사"} {total}건
           </p>
           <ul id={mr.listId} className="divide-y divide-rule">
@@ -205,7 +205,7 @@ export function News() {
               ))}
             </ul>
           ) : (
-            <p className="text-sub">중요 사건으로 정리된 것이 없습니다.</p>
+            <p>중요 사건으로 정리된 것이 없습니다.</p>
           )}
           <div className="mt-4">
             {events.length > 3 && (
@@ -311,7 +311,7 @@ export function Tech() {
             <p className="mt-1 text-xs text-sub">공개 전 기간이라 적게 보일 수 있습니다.</p>
             <SourceLine word="confirmed" label="특허 공개 원문 (Google Patents)" detail={`${fmtDay(r?.queriedAt)} 조회, 출원인이 이 회사인 국내 특허만`} />
           </figure>
-          <p className="mt-5 text-sm text-sub">주요 특허</p>
+          <p className="mt-5 text-sm font-semibold">주요 특허</p>
           <ul className="divide-y divide-rule border-y border-rule">
             {patents.slice(0, 3).map((p) => (
               <li key={p.id}>
@@ -345,7 +345,7 @@ export function Tech() {
                     </li>
                   ))}
                 </ul>
-                <p className="text-sm text-sub">건수에 넣지 않았습니다.</p>
+                <p className="text-sm">건수에 넣지 않았습니다.</p>
               </Disclosure>
             )}
             <Disclosure text="이 숫자의 한계" memoryKey={k("limits")}>
@@ -459,7 +459,7 @@ function Papers() {
                   <div key={t.name}>
                     <p className="font-semibold">{t.name}</p>
                     {t.summary && <p className="text-sm">{t.summary}</p>}
-                    {t.institutions.length > 0 && <p className="text-sm text-sub">주요 연구기관: {t.institutions.slice(0, 3).map((x) => x.name).join(", ")}</p>}
+                    {t.institutions.length > 0 && <p className="text-sm">주요 연구기관: {t.institutions.slice(0, 3).map((x) => x.name).join(", ")}</p>}
                     <ul className="mt-1 space-y-1 text-sm">
                       {t.keyPapers.slice(0, 3).map((p) => (
                         <li key={p.title}>
@@ -497,7 +497,7 @@ function Papers() {
               {est.seconds ? `보통 ${elapsedText(est.seconds)}, ` : ""}Liner 학술 검색 {profileDone ? `${kw}회` : "최대 6회"}, 모델 1회
             </span>
           </div>
-          {!profileDone && <p className="text-sm text-sub">회사 기술 분야를 받으면 실행할 수 있습니다.</p>}
+          {!profileDone && <p className="text-sm">회사 기술 분야를 받으면 실행할 수 있습니다.</p>}
           {err && (
             <p role="alert" className="text-sm font-medium text-amber">
               {err}
@@ -577,13 +577,13 @@ export function Rivals() {
 
   return (
     <SectionFrame id="rivals" label="경쟁사" env={env} envKey="profile" summary={summaryLine(job, "rivals", confirmed.length)} partialNote={false}
-      footer={!loading ? <p className="text-sm text-sub">확정한 경쟁사는 심사 준비의 &lsquo;경쟁사 조건이라면?&rsquo;에 쓰고, 깊이 비교를 하면 자금 조달에서 경쟁사에 투자한 운용사를 표시합니다.</p> : null}
+      footer={!loading ? <p className="text-sm">확정한 경쟁사는 심사 준비의 &lsquo;경쟁사 조건이라면?&rsquo;에 쓰고, 깊이 비교를 하면 자금 조달에서 경쟁사에 투자한 운용사를 표시합니다.</p> : null}
     >
       {loading ? (
         <Lines n={4} />
       ) : (
         <>
-          <p className="text-sm text-sub">맞는 경쟁사를 고르면 심사 준비와 자금 조달에서 함께 씁니다. 국내 기업만 후보로 보여 줍니다.</p>
+          <p className="text-sm">맞는 경쟁사를 고르면 심사 준비와 자금 조달에서 함께 씁니다. 국내 기업만 후보로 보여 줍니다.</p>
           <ul className="mt-2 divide-y divide-rule border-y border-rule">
             {shown.slice(0, 5).map((r) => (
               <li key={r.key}>{row(r, k(r.key))}</li>
@@ -631,7 +631,7 @@ export function Rivals() {
               >
                 <label className="min-w-0 flex-1 text-sm">
                   회사 이름
-                  <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className="mt-1 block min-h-11 w-full rounded-md border border-rule px-3 text-base outline-none focus:border-ledger" />
+                  <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className="mt-1 block min-h-11 w-full rounded-md border border-edge px-3 text-base outline-none focus:border-ledger" />
                 </label>
                 <button type="submit" className="btn">
                   넣기
@@ -792,12 +792,12 @@ function DeepResult({ rivals }: { rivals: RivalDeep[] }) {
 
   return (
     <div className="mt-3">
-      <p className="text-sm text-sub">회사마다 기준 연도가 다를 수 있습니다. 칸 안의 연도를 함께 보세요.</p>
+      <p className="text-sm">회사마다 기준 연도가 다를 수 있습니다. 칸 안의 연도를 함께 보세요.</p>
       <div className="mt-2 hidden overflow-x-auto sm:block">
         <table className="num w-full border-t-2 border-ink text-sm" data-compare="table">
           <thead>
-            <tr className="border-b border-rule text-left text-sub">
-              <th scope="col" className="py-2 pr-3 font-medium">
+            <tr className="border-b border-rule bg-wash text-left text-sub">
+              <th scope="col" className="py-2 pl-2 pr-3 font-medium">
                 회사
               </th>
               {cols.map(([, h]) => (
@@ -810,13 +810,13 @@ function DeepResult({ rivals }: { rivals: RivalDeep[] }) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.name} className="border-b border-rule align-top">
-                <th scope="row" className={`py-2 pr-3 text-left ${r.mine ? "font-bold" : "font-medium"}`}>
+                <th scope="row" className={`py-2 pl-2 pr-3 text-left ${r.mine ? "font-bold" : "font-medium"}`}>
                   {r.name}
                 </th>
                 {cols.map(([key]) => {
                   const cell = r[key] as Cell;
                   return (
-                    <td key={String(key)} className={`py-2 pr-3 ${cell.missing ? "text-sub" : ""}`}>
+                    <td key={String(key)} className={`py-2 pr-3 ${cell.missing ? "font-medium" : ""}`}>
                       {nb(cell.text)}
                     </td>
                   );
@@ -847,7 +847,7 @@ function DeepResult({ rivals }: { rivals: RivalDeep[] }) {
             <InvestBars currency={cur} bars={bars} />
           </figure>
         ))}
-        {noAmount.length > 0 && <p className="text-sm text-sub">금액 미확보: {noAmount.join(", ")}</p>}
+        {noAmount.length > 0 && <p className="text-sm">금액 미확보: {noAmount.join(", ")}</p>}
       </div>
       <div className="mt-3 space-y-0">
         <SourceLine label="매출: 금융위원회 요약재무제표 (공공 API)" detail={null} />
@@ -886,7 +886,7 @@ function DeepResult({ rivals }: { rivals: RivalDeep[] }) {
                 </ul>
               )}
               <p className="text-sm">확인된 특허 {r.patents?.total ?? 0}건</p>
-              {r.errors.length > 0 && <p className="text-sm text-sub">미확보 사유: {r.errors.join(" ")}</p>}
+              {r.errors.length > 0 && <p className="text-sm">미확보 사유: {r.errors.join(" ")}</p>}
             </div>
           </Disclosure>
         ))}

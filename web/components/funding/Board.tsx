@@ -9,6 +9,7 @@ import {
   type Fund, type GpGroup, type Meta, type Only, type Profile, type Program, type ProgramMatch, type SortMode,
 } from "@/lib/finder";
 import { programSorter } from "@/lib/funding";
+import { msToNextKstMidnight, todayKST } from "@/lib/format";
 import { Disclosure, ExtLink, useMore } from "@/components/kit";
 
 // ---------------------------------------------------------------- 공고·펀드 목록(정적 파일, 한 번만 받는다)
@@ -71,15 +72,56 @@ export function computeBoard(data: PublicData, prof: Profile, today: string, q: 
 
 // ---------------------------------------------------------------- 카드
 
+/**
+ * 목록 줄 오른쪽 끝 칸(screens 1.12): 큰 줄(D-12, 이미 투자함)과 작은 줄(12.31 마감). 좁은 화면은 한 줄로 이어진다.
+ * 화면 읽기에는 지금처럼 "D-12, 12.31 마감" 한 덩어리로 읽힌다.
+ */
+export function Due({ main, sub, strong = false }: { main: ReactNode; sub?: ReactNode; strong?: boolean }) {
+  return (
+    <span className="lrow-end">
+      <span className={`due-main num ${strong ? "font-bold" : ""}`}>{main}</span>
+      {sub && (
+        <>
+          <span className="sr-only">, </span>
+          <span className="due-sub num">{sub}</span>
+        </>
+      )}
+    </span>
+  );
+}
+
+/** "D-12, 12.31 마감" 같은 기한 글을 큰 줄과 작은 줄로 나눈다(쉼표 앞이 큰 줄). 7일 안 마감(D-0~D-7, 오늘 마감)은 더 굵게 */
+export function DueText({ text }: { text: string }) {
+  const i = text.indexOf(", ");
+  const main = i < 0 ? text : text.slice(0, i);
+  const d = /^D-(\d+)$/.exec(main);
+  // 남은 날이 있는 기한만 큰 줄로. "입찰 예정 12.5", "신청기간 미기재" 같은 글은 보통 크기 한 줄
+  if (!d && main !== "오늘 마감")
+    return (
+      <span className="lrow-end">
+        <span className="num whitespace-nowrap text-sm">{text}</span>
+      </span>
+    );
+  const strong = main === "오늘 마감" || Number(d![1]) <= 7;
+  return i < 0 ? <Due main={main} strong={strong} /> : <Due main={main} sub={text.slice(i + 2)} strong={strong} />;
+}
+
 function Deadline({ p, today }: { p: Program; today: string }) {
   const pd = p.period;
   if (pd.status === "접수 중") {
     const d = dday(pd.end, today) ?? 0;
-    // 7일 안 마감은 굵게만. 호박색은 엇갈림·확인 필요에만 쓴다
-    return <span className={`num text-sm ${d <= 7 ? "font-bold text-ink" : "font-medium"}`}>{d === 0 ? `오늘 마감, ${shortDate(pd.end)} 마감` : `D-${d}, ${shortDate(pd.end)} 마감`}</span>;
+    // 7일 안 마감은 더 굵게만. 호박색은 엇갈림·확인 필요에만 쓴다
+    return <Due main={d === 0 ? "오늘 마감" : `D-${d}`} sub={`${shortDate(pd.end)} 마감`} strong={d <= 7} />;
   }
-  if (pd.status === "접수 예정") return <span className="num text-sm">{shortDate(pd.start)} 접수 시작</span>;
-  return <span className="text-sm text-sub">{pd.raw || "신청기간 미기재"}</span>;
+  if (pd.status === "접수 예정") return <Due main={shortDate(pd.start)} sub="접수 시작" />;
+  return (
+    <span className="lrow-end">
+      {/* 기간 원문은 길이가 정해져 있지 않아(예: "2020.01.01 ~ 2026.12.31", "예산 소진 시까지") 칸 안에서 줄을 바꾼다. 짧은 날짜 글만 한 줄로 둔다 */}
+      <span className="due-sub whitespace-normal" data-due-raw>
+        {pd.raw || "신청기간 미기재"}
+      </span>
+    </span>
+  );
 }
 
 /** 분류·지역·개수 꼬리표. 상태 낱말과 섞이지 않게 테두리 없는 보조 글(globals.css .meta) */
@@ -103,21 +145,25 @@ export function ProgramCard({ m, today, related, save, foot }: { m: ProgramMatch
   const region = m.local && p.regions.includes("전국") ? p.agencyRegion ?? "전국" : p.regions.join(", ");
   return (
     <article className={`card p-4 ${save.on ? "border-ledger" : ""}`} data-program={p.id}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className={mark}>{p.sub || p.category}</span>
-        <span className={mark}>{region}</span>
-        {related && <span className="tag">회사 사업과 관련</span>}
-        {!m.ok && <span className="tag">{m.excluded === "지역" ? "지금 조건과 다른 지역" : "지금 조건과 다른 대상"}</span>}
-        <span className="ml-auto">
-          <Deadline p={p} today={today} />
-        </span>
+      {/* 목록 줄: 왼쪽 분류·제목·지원 내용·기관, 오른쪽 끝 기한(좁은 화면은 분류 줄 끝) */}
+      <div className="lrow">
+        <div className="lrow-meta flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className={mark}>{p.sub || p.category}</span>
+          {/* 지역이 여럿인 공고(예: 10개 시·도)는 글이 길어 칸 안에서 줄을 바꾼다. 안 그러면 좁은 화면에서 오른쪽 기한 칸을 덮는다 */}
+          <span className={`${mark} whitespace-normal`}>{region}</span>
+          {related && <span className="tag">회사 사업과 관련</span>}
+          {!m.ok && <span className="tag">{m.excluded === "지역" ? "지금 조건과 다른 지역" : "지금 조건과 다른 대상"}</span>}
+        </div>
+        <Deadline p={p} today={today} />
+        <div className="lrow-main">
+          <h3 className="clamp-2 mt-1 text-lg font-semibold leading-snug">{p.title}</h3>
+          {benefit && <p className="clamp-2 mt-1 text-sm">{benefit}</p>}
+          <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-sub">
+            <span>{p.agency}</span>
+            {p.operator && p.operator !== p.agency && <span>운영 {p.operator}</span>}
+          </p>
+        </div>
       </div>
-      <h3 className="clamp-2 mt-2 text-lg font-semibold leading-snug">{p.title}</h3>
-      {benefit && <p className="clamp-2 mt-1 text-sm">{benefit}</p>}
-      <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-sub">
-        <span>{p.agency}</span>
-        {p.operator && p.operator !== p.agency && <span>운영 {p.operator}</span>}
-      </p>
       <div className="no-print mt-3 flex flex-wrap items-center gap-2 border-t border-rule pt-3">
         <button
           type="button"
@@ -178,7 +224,7 @@ export function ProgramCard({ m, today, related, save, foot }: { m: ProgramMatch
               </ExtLink>
             )}
           </div>
-          {p.contact && <p className="text-sub">문의 {p.contact}</p>}
+          {p.contact && <p>문의 {p.contact}</p>}
           <p className="num text-xs text-sub">등록 {p.created}, 출처 기업마당</p>
           {foot}
         </div>
@@ -192,18 +238,25 @@ export function GpCard({ g, existing, rivals, save, showBadges = true }: { g: Gp
   const first = g.funds[0];
   return (
     <article className={`card p-4 ${save.on ? "border-ledger" : ""}`} data-gp={g.gp}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        {showBadges && existing && <span className="tag">이미 투자함</span>}
-        {showBadges && rivals.length > 0 && <span className="tag">경쟁사에 투자</span>}
-        <span className={mark}>펀드 {g.funds.length}개</span>
-        <span className="num ml-auto text-sm">최근 결성 {g.latestYear}년</span>
+      {/* 목록 줄: 왼쪽 펀드 수·운용사 이름·대표 펀드, 오른쪽 끝 표시(이미 투자함·경쟁사에 투자)와 최근 결성 연도 */}
+      <div className="lrow">
+        <div className="lrow-meta flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className={mark}>펀드 {g.funds.length}개</span>
+        </div>
+        <span className="lrow-end">
+          {showBadges && existing && <span className="tag">이미 투자함</span>}
+          {showBadges && rivals.length > 0 && <span className="tag">경쟁사에 투자</span>}
+          <span className="num whitespace-nowrap text-sm">최근 결성 {g.latestYear}년</span>
+        </span>
+        <div className="lrow-main">
+          <h3 className="mt-1 text-lg font-semibold leading-snug">{g.gp}</h3>
+          {rivals.length > 0 && <p className="text-sm">{rivals.join(", ")}에 투자한 곳입니다.</p>}
+          <p className="clamp-2 mt-1 text-sm">{first.name}</p>
+          <p className="num text-xs text-sub">
+            출자 분야 {first.field}, 만기 {first.maturity}
+          </p>
+        </div>
       </div>
-      <h3 className="mt-2 text-lg font-semibold">{g.gp}</h3>
-      {rivals.length > 0 && <p className="text-sm">{rivals.join(", ")}에 투자한 곳입니다.</p>}
-      <p className="clamp-2 mt-1 text-sm">{first.name}</p>
-      <p className="num text-xs text-sub">
-        출자 분야 {first.field}, 만기 {first.maturity}
-      </p>
       <div className="no-print mt-3 flex flex-wrap items-center gap-2 border-t border-rule pt-3">
         {g.funds.length > 1 && (
           <button type="button" className="btn btn-quiet -ml-2.5" aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -240,7 +293,7 @@ export function CardList<T>({ items, render, empty, keyOf, listClass = "mt-3 spa
   const mr = useMore(items.length, 5, 10);
   const { reset } = mr;
   useEffect(() => reset(), [items, reset]);
-  if (!items.length) return <p className="mt-3 rounded-md border border-dashed border-rule p-5 text-sm text-sub">{empty}</p>;
+  if (!items.length) return <p className="mt-3 rounded-md border border-dashed border-edge p-5 text-sm">{empty}</p>;
   return (
     <div>
       <div id={mr.listId} className={listClass}>
@@ -264,7 +317,7 @@ export function LaneHead({ lane, title, line }: { lane: "debt" | "equity"; title
     <div className={`${lane === "debt" ? "lane-debt" : "lane-equity"} pt-3`}>
       {/* 좁은 화면은 갈래 탭이 제목을 대신 보인다. 제목 순서(h1 → h2 → h3)는 화면 읽기에 남긴다 */}
       <h2 className="sr-only text-lg font-bold lg:not-sr-only">{title}</h2>
-      <p className="text-sm text-sub">{line}</p>
+      <p className="text-sm">{line}</p>
     </div>
   );
 }
@@ -285,7 +338,7 @@ export function LaneTabs({ lane, setLane, debt, equity }: { lane: "debt" | "equi
           role="tab"
           aria-selected={lane === id}
           onClick={() => setLane(id)}
-          className={`min-h-12 flex-1 text-[15px] ${lane === id ? `font-semibold text-ink ${id === "debt" ? "shadow-[inset_0_-3px_0_var(--color-debt)]" : "shadow-[inset_0_-3px_0_var(--color-equity)]"}` : "text-sub"}`}
+          className={`min-h-12 flex-1 text-[15px] ${lane === id ? `font-semibold text-ink ${id === "debt" ? "shadow-[inset_0_-3px_0_var(--color-debt)]" : "shadow-[inset_0_-3px_0_var(--color-equity)]"}` : "text-ink"}`}
         >
           {label} <span className="num">{n}</span>
         </button>
@@ -331,11 +384,11 @@ export function FilterPanel({ need, q, setQ, sort, setSort, memoryKey }: { need:
         <div className="flex flex-wrap gap-2">
           <label className="min-w-0 flex-1 text-sm">
             <span className="sr-only">결과 안에서 찾기</span>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="결과 안에서 찾기" className="min-h-11 w-full rounded-md border border-rule px-3 text-base outline-none focus:border-ledger" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="결과 안에서 찾기" className="min-h-11 w-full rounded-md border border-edge bg-paper px-3 text-base outline-none focus:border-ledger" />
           </label>
           <label className="text-sm">
             <span className="sr-only">정렬</span>
-            <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} className="min-h-11 rounded-md border border-rule bg-paper px-2 text-base outline-none focus:border-ledger">
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} className="min-h-11 rounded-md border border-edge bg-paper px-2 text-base outline-none focus:border-ledger">
               {(Object.keys(SORT_TEXT) as SortMode[]).map((s) => (
                 <option key={s} value={s}>
                   {SORT_TEXT[s]}
@@ -396,10 +449,34 @@ export function SavedBar({ n, href, label = "심사 준비로 가기" }: { n: nu
 export const needLabel = (id: Profile["need"]) => needs.find((n) => n.id === id)?.label ?? "";
 export const fieldLabel = (id: Profile["field"]) => fundFields.find((f) => f.id === id)?.label ?? "";
 
-const noSubscribe = () => () => {};
 /** 오늘(한국 시간). 서버에서 그릴 때는 빈 글이라 날짜에 기대는 목록은 브라우저에서만 만든다 */
+/**
+ * 오늘 날짜(서울)를 쓰는 화면이 날이 바뀌면 다시 그리게 한다: 서울 자정에 한 번, 그리고 잠들었던 탭이 다시 보일 때.
+ * 그래야 열어 둔 채 자정을 넘긴 화면이 어제 기준 "오늘 마감"·마감 임박 개수를 계속 보이지 않는다.
+ */
+function subscribeToday(cb: () => void) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      cb();
+      arm();
+    }, msToNextKstMidnight(Date.now()));
+  };
+  const onVisible = () => {
+    if (document.visibilityState !== "visible") return;
+    cb();
+    arm();
+  };
+  arm();
+  document.addEventListener("visibilitychange", onVisible);
+  return () => {
+    clearTimeout(timer);
+    document.removeEventListener("visibilitychange", onVisible);
+  };
+}
 export function useToday() {
-  return useSyncExternalStore(noSubscribe, () => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10), () => "");
+  return useSyncExternalStore(subscribeToday, () => todayKST(), () => "");
 }
 
 export function useBoard(data: PublicData | null, prof: Profile | null, today: string, q: string, sort: SortMode, only: Only, related: (p: Program) => boolean) {

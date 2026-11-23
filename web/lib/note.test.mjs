@@ -110,3 +110,95 @@ test("불러오기: 넣을 레코드를 다 만들기 전에는 지금 브라우
   assert.deepEqual(getLocal(CID).saved, fullLocal.saved);
   assert.equal(getLocal(CID).briefs.가나벤처스.gp, "가나벤처스");
 });
+
+test("심사 준비에서 공고 빼기: 자금 조달·판로 두 화면에서 담은 같은 공고를 함께 뺀다(담기 단추는 자기 종류만)", async () => {
+  const store = await import("./store.ts");
+  store.setBackendForTest(store.memoryBackend());
+  const { ensureLocal, getLocal, toggleSaved, removeNotice, reviewCount } = await import("./local.ts");
+  const cid = "0000000000002";
+  await ensureLocal(cid);
+  const item = (kind) => ({ kind, itemId: "PBLN_X", title: "수출 공고", meta: { end: "2026-12-01" } });
+  toggleSaved(cid, item("program"));
+  toggleSaved(cid, item("salesProgram"));
+  toggleSaved(cid, { kind: "gp", itemId: "가나벤처스", title: "가나벤처스", meta: {} });
+  assert.equal(reviewCount(getLocal(cid)), 2);
+  toggleSaved(cid, item("salesProgram")); // 판로 화면의 담기 단추: 자기 종류만
+  assert.deepEqual(getLocal(cid).saved.map((s) => s.kind).sort(), ["gp", "program"]);
+  toggleSaved(cid, item("salesProgram"));
+  await new Promise((r) => setTimeout(r, 0));
+  // 저장소 지우기가 실패하면 화면에서도 빼지 않고 false(두 종류 모두 그대로)
+  const mem = store.memoryBackend();
+  for (const s of await store.all("saved", cid)) await mem.put("saved", s.key, s.value);
+  store.setBackendForTest({ ...mem, delMany: async () => { throw new Error("abort"); } });
+  assert.equal(await removeNotice(cid, "PBLN_X"), false);
+  assert.deepEqual(getLocal(cid).saved.map((s) => s.kind).sort(), ["gp", "program", "salesProgram"]);
+  store.setBackendForTest(mem);
+  assert.equal(await removeNotice(cid, "PBLN_X"), true); // 심사 준비의 빼기: 두 종류 모두
+  assert.deepEqual(getLocal(cid).saved.map((s) => s.kind), ["gp"]);
+  assert.equal(reviewCount(getLocal(cid)), 1);
+  assert.deepEqual((await store.all("saved", cid)).map((r) => r.value.kind), ["gp"]);
+});
+
+test("여러 열쇠 지우기(delMany)는 한 번에: 실패하면 아무것도 지우지 않는다", async () => {
+  const store = await import("./store.ts");
+  const mem = store.memoryBackend();
+  store.setBackendForTest(mem);
+  await store.put("saved", ["c1", "program", "P"], { k: 1 });
+  await store.put("saved", ["c1", "salesProgram", "P"], { k: 2 });
+  assert.equal(await store.delMany("saved", [["c1", "program", "P"], ["c1", "salesProgram", "P"]]), true);
+  assert.deepEqual(await store.all("saved", "c1"), []);
+  store.setBackendForTest({ ...mem, delMany: async () => { throw new Error("abort"); } });
+  await store.put("saved", ["c1", "program", "Q"], { k: 3 });
+  assert.equal(await store.delMany("saved", [["c1", "program", "Q"]]), false);
+  assert.equal((await store.all("saved", "c1")).length, 1);
+});
+
+/** IndexedDB 처럼 쓰기를 부른 순서대로 하나씩 처리하는 시험용 저장소. delMany 는 gate 가 열릴 때까지 기다린다 */
+function orderedBackend(mem, gate) {
+  let q = Promise.resolve();
+  const seq = (fn) => (q = q.then(fn, fn));
+  return { ...mem, put: (s, k, v) => seq(() => mem.put(s, k, v)), del: (s, k) => seq(() => mem.del(s, k)), delMany: (s, ks) => seq(async () => { await gate; return mem.delMany(s, ks); }) };
+}
+
+test("빼는 동안 이 탭에서 같은 공고를 새로 담으면 그 새 항목은 남는다(화면과 저장소가 같다)", async () => {
+  const store = await import("./store.ts");
+  const mem = store.memoryBackend();
+  let release;
+  const gate = new Promise((r) => (release = r));
+  store.setBackendForTest(orderedBackend(mem, gate));
+  const { ensureLocal, getLocal, toggleSaved, removeNotice } = await import("./local.ts");
+  const cid = "0000000000003";
+  await ensureLocal(cid);
+  const item = (kind) => ({ kind, itemId: "PBLN_Y", title: "수출 공고", meta: { end: "2026-12-01" } });
+  toggleSaved(cid, item("program"));
+  await new Promise((r) => setTimeout(r, 0));
+  const pending = removeNotice(cid, "PBLN_Y"); // 지우기가 끝나기 전에
+  toggleSaved(cid, item("salesProgram")); // 판로에서 같은 공고를 새로 담음
+  await new Promise((r) => setTimeout(r, 0));
+  release();
+  assert.equal(await pending, true);
+  assert.deepEqual(getLocal(cid).saved.map((s) => s.kind), ["salesProgram"]);
+  assert.deepEqual((await store.all("saved", cid)).map((r) => r.value.kind), ["salesProgram"]);
+});
+
+test("다른 탭이 담아 이 탭 메모리에 없는 사본도 빼기에서 함께 지워진다(새로고침해도 되살아나지 않는다)", async () => {
+  const store = await import("./store.ts");
+  store.setBackendForTest(store.memoryBackend());
+  const tabA = await import("./local.ts?tab=a"); // 탭 둘: 메모리는 따로, 저장소는 같이
+  const tabB = await import("./local.ts?tab=b");
+  const cid = "0000000000004";
+  const item = (kind) => ({ kind, itemId: "PBLN_Z", title: "수출 공고", meta: { end: "2026-12-01" } });
+  await tabA.ensureLocal(cid);
+  tabA.toggleSaved(cid, item("program")); // 탭 A: 자금 조달에서 담음
+  await new Promise((r) => setTimeout(r, 0));
+  await tabB.ensureLocal(cid);
+  tabB.toggleSaved(cid, item("salesProgram")); // 탭 B: 판로에서 담음(탭 A 메모리에는 없음)
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(tabA.getLocal(cid).saved.map((s) => s.kind), ["program"]);
+  assert.equal(await tabA.removeNotice(cid, "PBLN_Z"), true); // 탭 A 심사 준비에서 빼기
+  assert.deepEqual(tabA.getLocal(cid).saved, []);
+  assert.deepEqual(await store.all("saved", cid), []); // 저장소에도 없다 → 새로고침해도 되살아나지 않는다
+  const reload = await import("./local.ts?tab=reload");
+  await reload.ensureLocal(cid);
+  assert.deepEqual(reload.getLocal(cid).saved, []);
+});

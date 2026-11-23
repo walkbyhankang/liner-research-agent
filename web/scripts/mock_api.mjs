@@ -36,10 +36,29 @@ const companyIdFor = (name, crno) => {
   return `n-${createHash("sha256").update(normName(name)).digest("hex").slice(0, 16)}`;
 };
 
+/** 새로 분석 작업(refreshJob). 지금 시나리오의 결과를 바탕으로, refreshDone 전에는 facts 가 진행 중, 뒤에는 다 끝남(더 새 analyzedAt) */
+const REFRESH_ID = "c".repeat(32);
+function refreshJobView() {
+  const j = jobOf(st.scenario);
+  j.jobId = REFRESH_ID;
+  if (st.refreshDone) {
+    j.analyzedAt = "2026-11-22T21:30:00+09:00";
+    j.busy = false;
+    return j;
+  }
+  j.status = "running";
+  j.analyzedAt = null;
+  j.busy = true;
+  j.sections.facts = { ...j.sections.facts, status: "running", stage: null, result: null, error: null, analyzedAt: null, seconds: 5, retryable: false };
+  return j;
+}
+
 function scenarioJob() {
   let job;
   if (st.scenario === "F-STAGED") job = clone(FIX["F-STAGED"].exchanges[Math.min(st.step, 6)].response);
   else job = jobOf(st.scenario);
+  // stagedConflict: 단계별 분석이 끝날 때 설립이 엇갈린 채로 끝난다(ux-check A-29: 끝나는 순간 "지금 확인할 것"이 아래를 밀지 않는지)
+  if (st.scenario === "F-STAGED" && st.stagedConflict && job.status !== "running") job.merged.founded = jobOf("F-CONFLICT").merged.founded;
   for (const [k, env] of Object.entries(st.overrides)) job.sections[k] = clone(env);
   if (typeof st.refreshRemaining === "number") job.refresh.remainingToday = st.refreshRemaining;
   // 경과가 예상의 2배를 넘은 단락(A-20)
@@ -98,6 +117,11 @@ async function api(req, res, url, body) {
     const cid = companyIdFor(body?.name ?? "", body?.crno);
     const job = scenarioJob();
     if (body?.refresh && job.isExample) return send(res, 409, ex("F-EXAMPLE", (e) => e.method === "POST").response);
+    // refreshJob: 새로 분석이 다른 작업 id(REFRESH_ID)로 시작한다. 저장된 분석 위에 진행 중 작업이 얹히는 모양(ux-check A-30)
+    if (body?.refresh && st.refreshJob) {
+      st.refreshStarted = true;
+      return send(res, 202, { jobId: REFRESH_ID, companyId: cid, started: true });
+    }
     if (cid === job.companyId && !body?.refresh) return send(res, job.status === "running" ? 200 : 200, { jobId: job.jobId, companyId: cid, started: false });
     return send(res, 202, { jobId: job.jobId, companyId: cid, started: true });
   }
@@ -150,6 +174,7 @@ async function api(req, res, url, body) {
     return send(res, 202, { jobId: m[1], key, started: true });
   }
   m = /^analysis\/([0-9a-f]{32})$/.exec(p);
+  if (m && st.refreshJob && st.refreshStarted && m[1] === REFRESH_ID) return send(res, 200, refreshJobView());
   if (m) {
     const job = scenarioJob();
     if (m[1] !== job.jobId) return err(res, 404, "not_found", "분석 작업을 찾을 수 없습니다");

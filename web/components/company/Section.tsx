@@ -42,11 +42,12 @@ export function SectionFrame({
   const fresh = env.analyzedAt && job.analyzedAt && env.analyzedAt > job.analyzedAt && phase !== "loading";
 
   return (
-    // 단락 경계는 잉크색 1px 선과 넉넉한 위 여백으로, 단락 안의 펼치기 줄·목록 선(회색 1px)과 구분한다
-    <section id={id} aria-labelledby={`h-${id}`} aria-busy={phase === "loading" || undefined} className="anchor border-t border-ink/60 pb-10 pt-8 sm:pt-10">
+    // 단락 경계는 잉크색 1px 머리줄과 넉넉한 위 여백으로, 단락 안의 펼치기 줄·목록 선(회색 1px)과 구분한다.
+    // 단락 이름은 18px 굵게(이정표), 바로 아래 한 줄 요약은 21px(첫인상). 굵은 2px 선은 핵심 값 띠에만 쓴다
+    <section id={id} aria-labelledby={`h-${id}`} aria-busy={phase === "loading" || undefined} className="anchor border-t border-ink pb-10 pt-6 sm:pt-8">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
-          <h2 id={`h-${id}`} data-anchor tabIndex={-1} className="flex flex-wrap items-center gap-2 text-base font-bold">
+          <h2 id={`h-${id}`} data-anchor tabIndex={-1} className="flex flex-wrap items-center gap-2 text-lg font-bold leading-snug">
             {label}
             {phase === "unavailable" && <StatusWord w="unavailable" />}
           </h2>
@@ -140,7 +141,7 @@ function UnavailableHead({ env, envKey, label }: { env: AnyEnv; envKey: SectionK
 /** 단락 바닥의 이어지는 곳 한 줄 */
 export function NextLine({ text, href, linkText }: { text: string; href: string; linkText: string }) {
   return (
-    <p className="no-print flex flex-wrap items-center gap-x-2 text-sm text-sub">
+    <p className="no-print flex flex-wrap items-center gap-x-2 text-sm">
       <span>{text}</span>
       <Link href={href} className="link">
         {linkText}

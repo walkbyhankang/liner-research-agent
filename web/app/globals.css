@@ -1,11 +1,16 @@
 @import "tailwindcss";
 
-/* 성장노트 시각 토큰(docs/ux/visual-plan.md 3절). 바탕은 흰색 하나, 칠은 엇갈림·미확보·담은 항목 막대에만 쓴다 */
+/* 성장노트 시각 토큰(docs/ux/visual-plan.md 3절, 가독성 조정은 5절). 바탕은 흰색 하나.
+   칠은 엇갈림·미확보·담은 항목 막대, 그리고 층(펼친 내용·표 머리·"지금 확인할 것")을 가르는 옅은 회색(wash)에만 쓴다 */
 @theme {
   --color-paper: #ffffff;
   --color-ink: #1e2a3f;
-  --color-sub: #586377;
-  --color-rule: #dde2e9;
+  /* 보조 글: 이름표·출처·기준일·꼬리표에만(흰 바탕 6.7:1). 값과 문장은 ink */
+  --color-sub: #515c70;
+  /* 선 두 가지: rule = 목록 줄 사이·표 안의 가는 선(1.5:1), edge = 카드·입력·단추처럼 영역을 가르는 경계.
+     edge 는 흰 바탕(3.31:1)과 옅은 회색 층 wash(3.03:1) 둘 다에서 3:1 을 넘는다(펼친 회색 층 안의 입력 칸도 경계가 보이게) */
+  --color-rule: #c9d0da;
+  --color-edge: #848e9e;
   --color-ledger: #0c6b58;
   --color-ledger-deep: #0a5a4a;
   --color-ledger-soft: #e5f1ed;
@@ -18,9 +23,10 @@
   --color-debt: #8b6534;
   --color-equity: #3a52a0;
   --font-sans: "IBM Plex Sans", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
-  --text-xs: 12px;
+  /* 글 크기 단계(visual-plan 3.2): 13 꼬리표·출처 / 15 보조 글·목록 보조 줄·표 / 16 본문·값 / 18 단락 이름·카드 제목 / 21 한 줄 요약 / 28 화면 제목 / 36 회사 이름·핵심 숫자 */
+  --text-xs: 13px;
   --text-xs--line-height: 1.55;
-  --text-sm: 14px;
+  --text-sm: 15px;
   --text-sm--line-height: 1.6;
   --text-base: 16px;
   --text-base--line-height: 1.7;
@@ -125,7 +131,7 @@ button:disabled {
     min-width: 44px;
     padding: 0 16px;
     border-radius: 6px;
-    border: 1px solid var(--color-rule);
+    border: 1px solid var(--color-edge);
     background: var(--color-paper);
     color: var(--color-ink);
     font-size: 15px;
@@ -135,11 +141,12 @@ button:disabled {
     white-space: nowrap;
   }
   .btn:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--color-ink) 45%, transparent);
+    border-color: var(--color-ink);
   }
   .btn:disabled {
     color: var(--color-sub);
     background: var(--color-wash);
+    border-color: var(--color-rule);
   }
   .btn-primary {
     background: var(--color-ledger);
@@ -182,6 +189,16 @@ button:disabled {
     text-underline-offset: 3px;
     text-decoration-thickness: 1px;
   }
+  /*
+   * 목록·정의 목록 행 안의 링크(기업 정보의 홈페이지 등): 누르는 영역은 위아래 10px 덧대 44px(15px 글 한 줄 24px + 20px)로 두고,
+   * 같은 크기의 음수 여백으로 배치 높이는 글 한 줄 그대로 둔다. 그래서 링크가 든 행만 높아지지 않는다.
+   * 이 링크가 든 목록은 행 높이를 44px 이상(py-2.5)으로 잡아 이웃 행의 누르는 영역과 겹치지 않게 한다.
+   */
+  .link-fit {
+    min-height: 0;
+    padding-block: 10px;
+    margin-block: -10px;
+  }
 
   .chip {
     display: inline-flex;
@@ -190,10 +207,17 @@ button:disabled {
     min-height: 44px;
     padding: 0 14px;
     border-radius: 999px;
-    border: 1px solid var(--color-rule);
+    border: 1px solid var(--color-edge);
     background: var(--color-paper);
-    font-size: 14px;
+    font-size: 15px;
     white-space: nowrap;
+  }
+  /* 휴대폰에서는 칩 좌우 여백을 줄인다. 회사 표시줄의 "지역 확인 중"·"업력 확인 중"·"기업 유형 미확보" 칩 셋이 15px 글로도 한 줄에 들어,
+     공식 자료가 오며 칩이 짧아질 때 아래가 52px 올라붙지 않게 한다(A-23) */
+  @media (max-width: 639px) {
+    .chip {
+      padding: 0 10px;
+    }
   }
   .chip[aria-pressed="true"],
   .chip[aria-selected="true"] {
@@ -211,8 +235,8 @@ button:disabled {
     padding: 0 6px;
     border-radius: 4px;
     border: 1px solid transparent;
-    font-size: 12px;
-    line-height: 20px;
+    font-size: 13px;
+    line-height: 22px;
     font-weight: 500;
     white-space: nowrap;
     color: var(--color-sub);
@@ -228,8 +252,8 @@ button:disabled {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 12px;
-    line-height: 20px;
+    font-size: 13px;
+    line-height: 22px;
     font-weight: 700;
     white-space: nowrap;
     color: var(--color-ink);
@@ -246,8 +270,8 @@ button:disabled {
   .meta {
     display: inline-flex;
     align-items: center;
-    font-size: 12px;
-    line-height: 20px;
+    font-size: 13px;
+    line-height: 22px;
     font-weight: 500;
     white-space: nowrap;
     color: var(--color-sub);
@@ -301,6 +325,7 @@ button:disabled {
   .disclosure[aria-expanded="true"] {
     box-shadow: inset 2px 0 0 var(--color-ledger);
     padding-left: 14px;
+    padding-right: 10px;
   }
   .disclosure .chev {
     color: var(--color-ledger);
@@ -310,9 +335,23 @@ button:disabled {
   .disclosure[aria-expanded="true"] .chev {
     transform: rotate(180deg);
   }
+  /* 펼친 내용(2층)은 옅은 회색 바탕으로 한 층 아래임을 보인다. 왼쪽 녹색 선은 펼친 줄에서 이어진다 */
+  .disclosure[aria-expanded="true"] {
+    background: var(--color-wash);
+  }
   .panel {
     box-shadow: inset 2px 0 0 var(--color-ledger);
-    padding: 4px 0 12px 14px;
+    background: var(--color-wash);
+    padding: 4px 14px 14px 14px;
+  }
+  /* 회색 층 안에서는 3층(열린 줄·자세히)과 자리 표시, 미확보 칠을 흰색으로 뒤집어 층이 겹쳐도 구분되게 한다 */
+  .panel .row-btn:hover,
+  .panel .row-btn[aria-expanded="true"],
+  .panel .row-body,
+  .panel .ph,
+  .panel .word-unavailable,
+  .panel table {
+    background: var(--color-paper);
   }
 
   /* 줄 자세히 */
@@ -340,13 +379,13 @@ button:disabled {
     background: var(--color-wash);
     border-radius: 0;
     box-shadow: inset 2px 0 0 var(--color-sub);
-    font-size: 14px;
+    font-size: 15px;
   }
 
   /* 출처 줄: 각주선 하나 아래 두 부분 */
   .source {
     margin-top: 12px;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.6;
     color: var(--color-sub);
   }
@@ -374,9 +413,63 @@ button:disabled {
   }
 
   .card {
-    border: 1px solid var(--color-rule);
+    border: 1px solid var(--color-edge);
     border-radius: 10px;
     background: var(--color-paper);
+  }
+
+  /*
+   * 목록 줄(공고·운용사 카드, 입찰공고 줄): 왼쪽에 이름과 부가 정보, 오른쪽 끝에 상태·기한(screens 1.12).
+   * 좁은 화면은 오른쪽 칸을 첫 줄(분류 꼬리표 줄) 끝으로 올려 제목이 전체 폭을 쓰게 한다.
+   */
+  .lrow {
+    display: grid;
+    /* 왼쪽 칸은 줄바꿈하지 않는 글(펀드 N개 등)의 폭만큼은 지킨다. 오른쪽 칸(표시 둘 + 결성 연도)은 남은 폭 안에서 줄을 바꾼다.
+       minmax(0, 1fr) 이면 좁은 카드에서 오른쪽 칸이 한 줄 폭을 다 가져가 왼쪽 글이 그 위로 넘쳤다 */
+    grid-template-columns: minmax(min-content, 1fr) auto;
+    grid-template-areas: "meta end" "main main";
+    column-gap: 16px;
+    align-items: start;
+  }
+  .lrow-meta {
+    grid-area: meta;
+    min-width: 0;
+  }
+  .lrow-main {
+    grid-area: main;
+    min-width: 0;
+  }
+  .lrow-end {
+    grid-area: end;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: baseline;
+    column-gap: 6px;
+    text-align: right;
+  }
+  @media (min-width: 640px) {
+    .lrow {
+      grid-template-areas: "meta end" "main end";
+    }
+    .lrow-end {
+      flex-direction: column;
+      align-items: flex-end;
+      max-width: 11em;
+    }
+  }
+  /* 오른쪽 칸의 큰 줄(D-12, 이미 투자함)과 작은 줄(12.31 마감) */
+  .due-main {
+    font-size: 18px;
+    line-height: 1.35;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .due-sub {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-sub);
+    white-space: nowrap;
   }
 
   /* 갈래 머리 윗선은 두 갈래가 나란히 보이는 넓은 화면에만. 좁은 화면은 갈래 탭 밑줄이 같은 일을 한다 */
@@ -387,6 +480,15 @@ button:disabled {
     .lane-equity {
       box-shadow: inset 0 3px 0 var(--color-equity);
     }
+  }
+
+  /* 한 줄로 옆으로 미는 줄("지금 확인할 것" 항목): 스크롤 막대를 숨긴다. 일반 스크롤 막대(Windows 등)는 넘칠 때만 생겨 높이를 차지하므로,
+     넘침이 생기고 사라지는 순간 아래가 밀린다. 옆으로는 손가락·트랙패드·Tab 키로 넘긴다 */
+  .scroll-row {
+    scrollbar-width: none;
+  }
+  .scroll-row::-webkit-scrollbar {
+    display: none;
   }
 
   .clamp-2 {

@@ -179,7 +179,7 @@ function Start() {
               placeholder="예: https://example.co.kr"
               inputMode="url"
               aria-describedby="company-home-help"
-              className="mt-1 min-h-11 w-full rounded-md border border-rule px-3 outline-none focus:border-ledger"
+              className="mt-1 min-h-11 w-full rounded-md border border-edge px-3 outline-none focus:border-ledger"
             />
             <p id="company-home-help" className="mt-1 text-sm text-sub">
               같은 이름의 다른 회사와 구별하는 데 씁니다.
@@ -190,7 +190,7 @@ function Start() {
             홈페이지 주소도 넣기 (선택)
           </button>
         )}
-        <p className="mt-3 text-sm text-sub">공식 자료는 10초 안에 보이고, 나머지는 준비되는 대로 채웁니다. 전체는 3분 안팎입니다.</p>
+        <p className="mt-3 text-sm">공식 자료는 10초 안에 보이고, 나머지는 준비되는 대로 채웁니다. 전체는 3분 안팎입니다.</p>
       </form>
 
       <Recent />
@@ -217,7 +217,7 @@ function Start() {
           <li>뉴스 (NAVER 뉴스 검색)</li>
           <li>Liner 검색과 모델</li>
         </ul>
-        <p className="text-sm text-sub">근거가 없는 값은 만들지 않고 &lsquo;미확보&rsquo;로 둡니다.</p>
+        <p className="text-sm">근거가 없는 값은 만들지 않고 &lsquo;미확보&rsquo;로 둡니다.</p>
       </Disclosure>
     </div>
   );
@@ -482,7 +482,7 @@ function Confirm({ query }: { query: string }) {
           <Dot on={picked === NONE} />
           <span>
             <span className="font-bold">목록에 없음</span>
-            <span className="block text-sm text-sub">법인 등록 전이거나 이름이 다른 경우입니다. 공식 재무·고용 자료 없이 공개 자료로만 분석합니다.</span>
+            <span className="block text-sm">법인 등록 전이거나 이름이 다른 경우입니다. 공식 재무·고용 자료 없이 공개 자료로만 분석합니다.</span>
           </span>
         </div>
       </div>

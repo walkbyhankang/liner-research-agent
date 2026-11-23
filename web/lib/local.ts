@@ -118,7 +118,21 @@ export function setEdit(cid: string, field: keyof Edits, value: string | null) {
 export const savedKey = (cid: string, kind: SavedKind, itemId: string) => [cid, kind, itemId];
 export const isSaved = (l: Local, kind: SavedKind, itemId: string) => l.saved.some((s) => s.kind === kind && s.itemId === itemId);
 /** 심사 준비로 가는 담은 항목 수(공고, 운용사, 판로 지원사업). 입찰공고는 노트에만 담긴다 */
-export const reviewCount = (l: Local) => l.saved.filter((s) => s.kind !== "bid").length;
+/**
+ * 담은 공고(자금 조달에서 담은 공고 + 판로 지원사업). 수출·내수 공고는 두 화면에 모두 나와 같은 공고를 두 번 담을 수 있으므로
+ * 공고 id 로 하나로 센다. 나중에 담은 쪽을 남긴다(담을 때 저장한 마감일이 더 새것이라 마감 연장이 반영된다. 같은 시각이면 자금 조달 쪽).
+ * 심사 준비 목록·개수와 "지금 확인할 것"이 같은 셈을 쓴다.
+ */
+export function savedNotices(saved: readonly SavedItem[]): SavedItem[] {
+  const out = new Map<string, SavedItem>();
+  for (const s of saved) {
+    if (s.kind !== "program" && s.kind !== "salesProgram") continue;
+    const prev = out.get(s.itemId);
+    if (!prev || s.savedAt > prev.savedAt || (s.savedAt === prev.savedAt && s.kind === "program")) out.set(s.itemId, s);
+  }
+  return [...out.values()];
+}
+export const reviewCount = (l: Local) => savedNotices(l.saved).length + l.saved.filter((s) => s.kind === "gp").length;
 
 export function toggleSaved(cid: string, item: Omit<SavedItem, "savedAt">): boolean {
   const on = !isSaved(getLocal(cid), item.kind, item.itemId);
@@ -129,6 +143,22 @@ export function toggleSaved(cid: string, item: Omit<SavedItem, "savedAt">): bool
   if (on) void store.put("saved", savedKey(cid, item.kind, item.itemId), { ...item, savedAt: now() });
   else void store.del("saved", savedKey(cid, item.kind, item.itemId));
   return on;
+}
+
+/**
+ * 심사 준비에서 공고를 뺀다. 심사 준비는 두 화면(자금 조달·판로)에서 담은 같은 공고를 하나로 보이므로(savedNotices),
+ * 빼기도 두 종류를 한 번에 지운다. 자금 조달·판로 화면의 담기 단추는 지금처럼 자기 종류만 바꾼다(toggleSaved).
+ */
+export async function removeNotice(cid: string, itemId: string): Promise<boolean> {
+  const kinds: SavedKind[] = ["program", "salesProgram"];
+  // 저장소에서는 두 종류 열쇠를 모두 트랜잭션 하나로 지운다(다른 탭이 담아 이 탭 메모리에 없는 사본까지).
+  // 화면(메모리)에서는 빼기를 시작할 때 있던 항목만 뺀다: IndexedDB 는 같은 저장소의 쓰기 트랜잭션을 만든 순서대로 처리하므로,
+  // 빼기를 시작한 뒤 이 탭에서 새로 담은 것은 지우기 다음에 쓰여 저장소에도 화면에도 남는다.
+  // 지워진 뒤에만 화면에서 뺀다. 실패하면(모두 남음) 화면도 그대로 두고 false 를 돌려 부르는 쪽이 다시 누르라고 알린다
+  const target = getLocal(cid).saved.filter((s) => s.itemId === itemId && kinds.includes(s.kind));
+  const ok = await store.delMany("saved", kinds.map((k) => savedKey(cid, k, itemId)));
+  if (ok) update(cid, (l) => ({ ...l, saved: l.saved.filter((s) => !target.includes(s)) }));
+  return ok;
 }
 
 // ---------------------------------------------------------------- 대조·요약 결과

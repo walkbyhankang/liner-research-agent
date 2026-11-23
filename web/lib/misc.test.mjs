@@ -2,10 +2,11 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import test from "node:test";
-import { ageLabel, byCurrencyTexts, daysSince, elapsedText, eok, fmtBzno, fmtTime, formerNamesText, isStale, moneyText, safeUrl, shortCompany, stageKo, wonDisplay, wrapSvgText, yearsSince } from "./format.ts";
+import { ageLabel, byCurrencyTexts, daysSince, elapsedText, eok, fmtBzno, fmtTime, formerNamesText, isStale, moneyText, msToNextKstMidnight, safeUrl, shortCompany, stageKo, todayKST, wonDisplay, wrapSvgText, yearsSince } from "./format.ts";
 import { normName, sameNameIds, userRivalKey } from "./names.ts";
 import { initialConditions, relatedTo, rivalBackers, splitExisting } from "./funding.ts";
-import { bidDeadline, gaps, sortBids, sortRows, verdictCounts } from "./review.ts";
+import { bidDeadline, checkNowCounts, gaps, sortBids, sortRows, verdictCounts } from "./review.ts";
+import { reviewCount, savedNotices } from "./local.ts";
 import { memoryBackend } from "./store.ts";
 import { createHash } from "node:crypto";
 
@@ -125,6 +126,32 @@ test("대조 결과: 미충족·확인 필요·충족 순, 개수, 부족한 요
   assert.equal(g.groups[0].items.length, 2);
 });
 
+test("지금 확인할 것: 새로 분석이 진행 중이면 값 개수를 세지 않고, 두 화면에서 담은 같은 공고는 한 번만 센다", () => {
+  const saved = job("F-CONFLICT"); // 설립이 엇갈린 저장된 분석(done)
+  assert.equal(saved.status, "done");
+  assert.equal(checkNowCounts(saved, null, [], {}, "2026-11-22").conflicts.length, 1);
+  // 새로 분석 중: 보이는 job 은 저장된 분석(done) 위에 얹은 것이고, 진행 중 작업(live)은 running
+  const live = { ...saved, jobId: "c".repeat(32), status: "running", analyzedAt: null };
+  const during = checkNowCounts(saved, live, [], {}, "2026-11-22");
+  assert.deepEqual([during.conflicts.length, during.missing.length], [0, 0]);
+  // 같은 수출 공고를 자금 조달(program)과 판로(salesProgram)에서 모두 담음: 마감 임박 1건, 미충족 요건은 대조 1건 몫만
+  const a = fx("F-NOTICE").exchanges[0].response;
+  const item = (kind) => ({ kind, itemId: "P1", title: "수출 공고", meta: { end: "2026-11-30" }, savedAt: "2026-11-22T10:00:00+09:00" });
+  const items = [item("program"), item("salesProgram"), { kind: "gp", itemId: "G1", title: "운용사", meta: {}, savedAt: "x" }];
+  const checks = { P1: { programId: "P1", result: a } };
+  const c2 = checkNowCounts(saved, live, items, checks, "2026-11-22");
+  assert.deepEqual([c2.soon, c2.unmet], [[8], verdictCounts(a).unmet]);
+  assert.deepEqual(savedNotices(items).map((s) => s.kind), ["program"]);
+  assert.equal(reviewCount({ saved: items }), 2); // 공고 1 + 운용사 1
+  // 마감이 연장된 뒤 판로에서 다시 담음: 나중에 담은 쪽(새 마감일)을 쓴다. 옛 마감(이미 지남)에 가려 마감 임박에서 빠지지 않는다
+  const old = { ...item("program"), meta: { end: "2026-11-20" }, savedAt: "2026-11-01T10:00:00+09:00" };
+  const fresh = { ...item("salesProgram"), meta: { end: "2026-11-29" }, savedAt: "2026-11-21T10:00:00+09:00" };
+  for (const order of [[old, fresh], [fresh, old]]) {
+    assert.deepEqual(savedNotices(order).map((s) => s.meta.end), ["2026-11-29"]);
+    assert.deepEqual(checkNowCounts(saved, null, order, {}, "2026-11-22").soon, [7]);
+  }
+});
+
 test("입찰공고: 진행 중 → 핵심 낱말 일치 → 마감 가까운 순(P-03), 마감 글", () => {
   const items = fx("F-SALES").exchanges[1].response.sections.sales.result.items;
   const s = sortBids(items);
@@ -162,4 +189,20 @@ test("화면 코드에 시제품 단계 문구, 가상 데이터, 별 기호가 
     .join("\n");
   for (const w of ["POC", "프로토타입", "가상 데이터", "(가상)", "시연 가정", "펀딩노트 —", "★", "☆", "✓"]) assert.ok(!src.includes(w), w);
   assert.equal((src.match(/시제품/g) ?? []).length, 1); // 지원사업 낱말 칩(finder.ts needChips.tech) 하나
+});
+
+test("날이 바뀌면(서울 자정) 오늘 날짜와 마감 임박 셈이 바뀐다: 자정 시각 계산, 창에 들어오고 나가는 공고", () => {
+  // 2026-11-22 23:59:30 서울 = 14:59:30Z → 다음 자정까지 30초(+1초 여유)
+  const t = Date.parse("2026-11-22T14:59:30Z");
+  assert.equal(todayKST(new Date(t)), "2026-11-22");
+  assert.equal(msToNextKstMidnight(t), 31_000);
+  assert.equal(todayKST(new Date(t + msToNextKstMidnight(t))), "2026-11-23");
+  const saved = job("F-FULL");
+  const s = (end) => [{ kind: "program", itemId: end, title: end, meta: { end }, savedAt: "x" }];
+  // 마감 당일은 "오늘 마감"(0), 다음 날은 빠진다
+  assert.deepEqual(checkNowCounts(saved, null, s("2026-11-22"), {}, "2026-11-22").soon, [0]);
+  assert.deepEqual(checkNowCounts(saved, null, s("2026-11-22"), {}, "2026-11-23").soon, []);
+  // 15일 남은 공고는 다음 날 14일 창에 들어온다
+  assert.deepEqual(checkNowCounts(saved, null, s("2026-12-07"), {}, "2026-11-22").soon, []);
+  assert.deepEqual(checkNowCounts(saved, null, s("2026-12-07"), {}, "2026-11-23").soon, [14]);
 });

@@ -15,6 +15,8 @@ export interface Backend {
   get(store: StoreName, key: Key): Promise<unknown>;
   put(store: StoreName, key: Key, value: unknown): Promise<void>;
   del(store: StoreName, key: Key): Promise<void>;
+  /** 여러 열쇠를 한 번에(IndexedDB 는 트랜잭션 하나) 지운다. 하나라도 실패하면 아무것도 지우지 않는다 */
+  delMany(store: StoreName, keys: Key[]): Promise<void>;
   /** companyId 를 주면 그 회사 것만 */
   all(store: StoreName, companyId?: string): Promise<Row[]>;
 }
@@ -35,6 +37,9 @@ export function memoryBackend(): Backend {
     },
     async del(store, key) {
       data.get(store)!.delete(keyText(key));
+    },
+    async delMany(store, keys) {
+      for (const k of keys) data.get(store)!.delete(keyText(k));
     },
     async all(store, companyId) {
       return [...data.get(store)!.values()].filter((r) => companyId === undefined || belongs(r.key, companyId)).map((r) => ({ key: r.key, value: clone(r.value) }));
@@ -67,6 +72,11 @@ function idbBackend(db: IDBDatabase): Backend {
     async del(store, key) {
       const s = tx(store, "readwrite");
       s.delete(key as IDBValidKey);
+      await done(s.transaction);
+    },
+    async delMany(store, keys) {
+      const s = tx(store, "readwrite");
+      for (const k of keys) s.delete(k as IDBValidKey);
       await done(s.transaction);
     },
     async all(store, companyId) {
@@ -170,6 +180,15 @@ export async function del(store: StoreName, key: Key): Promise<void> {
     await (await backend()).del(store, key);
   } catch {
     // 지우지 못해도 화면은 메모리 값으로 계속 간다
+  }
+}
+/** 여러 열쇠를 한 트랜잭션으로 지운다. 실패하면 false(아무것도 지워지지 않음) */
+export async function delMany(store: StoreName, keys: Key[]): Promise<boolean> {
+  try {
+    await (await backend()).delMany(store, keys);
+    return true;
+  } catch {
+    return false;
   }
 }
 export async function all<T>(store: StoreName, companyId?: string): Promise<Row<T>[]> {

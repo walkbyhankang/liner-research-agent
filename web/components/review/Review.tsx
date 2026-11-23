@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useCompany } from "@/components/company/context";
 import { Grants } from "@/components/review/Grants";
 import { Invest } from "@/components/review/Invest";
+import { savedNotices } from "@/lib/local";
 
 type Tab = "grants" | "invest";
 
@@ -13,10 +14,18 @@ export function ReviewScreen() {
   const c = useCompany();
   const sp = useSearchParams();
   const path = usePathname();
-  const grants = c.local.saved.filter((s) => s.kind === "program" || s.kind === "salesProgram").length;
+  const grants = savedNotices(c.local.saved).length;
   const gps = c.local.saved.filter((s) => s.kind === "gp").length;
   const fromUrl = sp.get("tab");
-  const [tab, setTab] = useState<Tab | null>(fromUrl === "invest" ? "invest" : fromUrl === "grants" ? "grants" : null);
+  const urlTab: Tab | null = fromUrl === "invest" ? "invest" : fromUrl === "grants" ? "grants" : null;
+  const [tab, setTab] = useState<Tab | null>(urlTab);
+  // 주소의 ?tab= 이 바뀌면 그것을 따른다. Next 가 지나온 화면을 살려 두므로(next.config cacheComponents) 처음 값만 읽으면,
+  // 투자 갈래를 보다 회사 분석의 "마감 임박 담은 공고" 링크(?tab=grants)로 돌아와도 투자 갈래가 남는다
+  const [urlSeen, setUrlSeen] = useState(fromUrl);
+  if (fromUrl !== urlSeen) {
+    setUrlSeen(fromUrl);
+    if (urlTab) setTab(urlTab);
+  }
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   // 처음 갈래: 담은 공고가 있으면 정책자금·지원사업, 없고 담은 운용사가 있으면 투자(R-01)
   const current: Tab = tab ?? (c.local.loaded && grants === 0 && gps > 0 ? "invest" : "grants");
@@ -57,7 +66,7 @@ export function ReviewScreen() {
                 setTab(next);
                 tabs.current[(i + 1) % 2]?.focus();
               }}
-              className={`min-h-12 flex-1 px-4 text-[15px] sm:flex-none ${current === id ? "font-semibold text-ink shadow-[inset_0_-3px_0_var(--color-ledger)]" : "text-sub"}`}
+              className={`min-h-12 flex-1 px-4 text-[15px] sm:flex-none ${current === id ? "font-semibold text-ink shadow-[inset_0_-3px_0_var(--color-ledger)]" : "text-ink"}`}
             >
               {label} <span className="num">{n}</span>
             </button>

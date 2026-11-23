@@ -13,7 +13,7 @@ export type Edits = Partial<Record<EditField, Edit>>;
 export const BIZ_LABEL: Record<BizTypeId, string> = { venture: "창업·벤처기업", sme: "중소기업", micro: "소상공인" };
 export const isBizType = (v: unknown): v is BizTypeId => v === "venture" || v === "sme" || v === "micro";
 
-/** 값 고치기 창의 칸 이름(screens 1.8) */
+/** 회사 정보 수정 창의 칸 이름(screens 1.8) */
 export const EDIT_LABEL: Record<EditField, string> = {
   region: "지역", bizType: "기업 유형", founded: "설립 연월", industry: "업종", employees: "직원 수", revenue: "최근 연매출", need: "필요한 자금", notes: "그 밖의 사항",
 };
@@ -89,7 +89,7 @@ export function noticeCompany(job: JobLike, edits: Edits): NoticeCompany {
   };
 }
 
-/** "대조에 쓰는 회사 값 {n}/8개 채움": 값 고치기 8칸이 대조에 실제로 들어가는 값으로 채워졌는가 */
+/** "대조에 쓰는 회사 값 {n}/8개 채움": 회사 정보 수정 창 8칸이 대조에 실제로 들어가는 값으로 채워졌는가 */
 export function filledCount(job: JobLike, edits: Edits): number {
   const c = noticeCompany(job, edits);
   return [c.region, c.biz, c.founded, c.industry, c.employees, c.revenue, c.need, edited(edits, "notes")].filter((v) => v.trim()).length;

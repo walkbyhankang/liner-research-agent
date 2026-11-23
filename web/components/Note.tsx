@@ -377,7 +377,7 @@ export function NoteScreen() {
             value={memoText}
             onChange={(e) => onMemo(e.target.value)}
             maxLength={4000}
-            className="no-print mt-2 block w-full rounded-md border border-rule p-3 text-base outline-none focus:border-ledger"
+            className="no-print mt-2 block w-full rounded-md border border-edge p-3 text-base outline-none focus:border-ledger"
           />
           <p className="print-only whitespace-pre-wrap">{memoText || "없음"}</p>
           <p className="no-print mt-1 h-5 text-xs text-sub" aria-live="polite">

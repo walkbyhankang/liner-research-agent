@@ -16,6 +16,9 @@ export function todayKST(now: Date = new Date()): string {
   return t.toISOString().slice(0, 10);
 }
 
+/** 서울 시각으로 다음 자정까지 남은 밀리초(+1초 여유: 깨어났을 때 확실히 다음 날이게) */
+export const msToNextKstMidnight = (now: number) => 86_400_000 - ((now + 9 * 3_600_000) % 86_400_000) + 1000;
+
 /** 분석 시각부터 지금까지 지난 날 수(내림). */
 export function daysSince(iso: string, now: Date = new Date()): number {
   const t = Date.parse(iso);

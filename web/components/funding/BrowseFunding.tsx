@@ -163,7 +163,7 @@ export function BrowseFunding() {
         }
       />
       <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-16 pt-6 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-rule px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-edge px-4 py-3">
           <p>회사 이름을 넣으면 조건을 채우고, 공고문 자격 대조까지 이어집니다.</p>
           <Link href="/" className="btn btn-primary">
             회사 분석 시작
@@ -180,7 +180,7 @@ export function BrowseFunding() {
             분야를 봅니다.
           </p>
         )}
-        <p className="mt-2 text-sm text-sub">기업마당 분류값으로 거른 목록입니다. 세부 자격은 공고문에서 확인하세요.</p>
+        <p className="mt-2 text-sm">기업마당 분류값으로 거른 목록입니다. 세부 자격은 공고문에서 확인하세요.</p>
 
         {error && <LoadError />}
         {!data && !error && <p className="mt-6 text-sub">공고와 펀드 목록을 불러오는 중입니다</p>}
@@ -228,7 +228,7 @@ export function BrowseFunding() {
                 )}
               </div>
               {savedCount === 0 ? (
-                <p className="mt-3 text-sm text-sub">카드의 &lsquo;저장&rsquo;을 누르면 여기에 모이고, 목록을 복사해 팀에 공유할 수 있습니다.</p>
+                <p className="mt-3 text-sm">카드의 &lsquo;저장&rsquo;을 누르면 여기에 모이고, 목록을 복사해 팀에 공유할 수 있습니다.</p>
               ) : (
                 <div className="mt-3 grid gap-3 lg:grid-cols-2">
                   {savedLists.programs.map((m) => (
