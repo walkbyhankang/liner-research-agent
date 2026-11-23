@@ -345,7 +345,7 @@ def test_four_post_paths_share_a_per_address_limit(clock):
 
 def test_last_forwarded_value_is_used_so_spoofed_first_values_do_not_help(clock):
     client = TestClient(api_main.app)
-    for i in range(6):  # 접속자가 맨 앞에 아무 값이나 넣어도, 터널이 맨 뒤에 붙인 실제 주소로 센다
+    for i in range(6):  # 접속자가 맨 앞에 아무 값이나 넣어도, 프록시가 맨 뒤에 넣은 실제 주소로 센다(Tailscale Serve 는 아예 그 값 하나로 바꿔 넘긴다)
         assert post(client, i, f"10.0.0.{i}, 198.51.100.20").status_code != 429
     assert post(client, 0, "1.2.3.4, 198.51.100.20").status_code == 429
     assert post(client, 0, "198.51.100.20, 1.2.3.4").status_code != 429  # 맨 뒤 값이 다르면 다른 주소

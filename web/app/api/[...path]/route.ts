@@ -1,5 +1,5 @@
 // 화면과 같은 주소에서 분석 서버(FastAPI)를 부르기 위한 통로(계약 2.14).
-// 브라우저가 분석 서버 주소를 직접 알 필요가 없어, 터널 등으로 화면만 공개해도 기능이 동작한다.
+// 브라우저가 분석 서버 주소를 직접 알 필요가 없어, Tailscale Serve 등으로 화면만 공개해도 기능이 동작한다.
 // 정한 경로만 넘기고, 질의 문자열과 x-forwarded-for 머리글을 그대로 넘긴다. 직접 만드는 오류 본문은 {detail, code, retryAt}.
 import http from "node:http";
 import https from "node:https";

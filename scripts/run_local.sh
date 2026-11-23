@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 성장노트(Next.js 화면 + FastAPI 분석 서버)를 띄운다. 기존 Streamlit 화면은 참고용으로, 인자를 줄 때만 띄운다.
-# 두 서버 모두 127.0.0.1 에만 연다(같은 컴퓨터에서만 접속). 밖에 공개할 때는 터널로 화면 서버(3100)만 연다.
+# 두 서버 모두 127.0.0.1 에만 연다(같은 컴퓨터에서만 접속). 팀에게 보여 줄 때는 Tailscale Serve 로 화면 서버(3100)만
+# tailnet 안에 연다: tailscale serve --bg --http=3100 http://127.0.0.1:3100 (끄기: tailscale serve --http=3100 off, README 5절).
 #
 #   scripts/run_local.sh              성장노트(화면 + 분석 서버)
 #   scripts/run_local.sh growthnote   같음

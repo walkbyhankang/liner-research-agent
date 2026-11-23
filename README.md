@@ -107,6 +107,24 @@ scripts/run_local.sh        # 성장노트 화면 + 분석 서버
 | `FUNDING_WEB_PORT`, `FUNDING_API_PORT`, `STREAMLIT_PORT` | 포트(기본 3100, 8000, 8501). 이름은 펀딩노트 때 그대로 |
 | `FUNDING_SKIP_BUILD=1` | 빌드 결과가 있으면 화면을 다시 빌드하지 않음 |
 
+### 팀에게 보여 주기 (Tailscale Serve)
+
+두 서버는 `127.0.0.1`에만 열립니다. 팀원에게 보여 줄 때는 [Tailscale Serve](https://tailscale.com/kb/1312/serve)로 **화면 서버(3100)만 tailnet 안에** 엽니다. 인터넷 전체에 여는 Funnel은 쓰지 않습니다. 분석 서버(8000)는 tailnet에서도 닿지 않습니다.
+
+macOS 앱으로 설치하면 CLI가 `PATH`에 없어 `/Applications/Tailscale.app/Contents/MacOS/Tailscale`로 부릅니다(아래 `tailscale`). CLI가 멈출 때가 있어 짧은 시간 제한을 두고 실행합니다.
+
+```bash
+tailscale serve --bg --http=3100 http://127.0.0.1:3100   # 켜기(뒤에서 계속 돎)
+tailscale serve status                                   # 주소 확인: http://<기기 이름>.<tailnet 이름>.ts.net:3100
+tailscale serve --http=3100 off                          # 끄기
+```
+
+- **주소는 전체 이름으로** 엽니다. Serve는 Host 이름을 보고 연결하므로, tailnet IP(`100.x.y.z:3100`)로 열면 Tailscale이 404를 돌려줍니다.
+- **HTTPS**: 관리 화면 DNS에서 MagicDNS와 HTTPS Certificates를 켜면 `https`로 열 수 있습니다. 켜기 전에는 `http`로 엽니다(tailnet 안의 통신은 Tailscale이 암호화합니다).
+- **팀원 초대**: 관리 화면 Machines → 이 기기 → Share에서 1회용 초대 링크를 만듭니다(Reusable 끔). 팀원은 자기 Tailscale 계정으로 수락하고 MagicDNS를 켠 뒤 전체 이름으로 접속합니다. 수락한 사람은 Share 창에서 확인하고 Revoke invite로 회수합니다. 링크는 누구나 수락할 수 있으므로 비밀번호처럼 다룹니다.
+- **요청 제한과 관계**: Serve는 접속자가 보낸 `x-forwarded-for`를 버리고 접속 기기의 tailnet 주소로 바꿔 넘깁니다(2026-11-23 확인, `docs/contract.md` 2.12). 그래서 접속 주소별 분당 6회 제한이 기기마다 적용됩니다.
+- **공개용 서버는 따로 띄우기를 권합니다**: 같은 폴더에서 개발하며 다시 빌드하면 떠 있는 화면 서버가 옛 화면 파일을 찾지 못해 화면이 깨집니다. 커밋된 코드만 둔 별도 워크트리에서 `scripts/run_local.sh`를 띄우고 Serve는 그 3100을 엽니다.
+
 ### `.env` 키
 
 | 키 | 필요 | 없으면 |
@@ -183,13 +201,13 @@ node scripts/ux-check.mjs            # Chrome 경로는 CHROME_PATH 로 바꾼�
 
 ## 8. 보안
 
-- 화면 서버와 분석 서버는 `127.0.0.1`에만 엽니다. 밖에 공개할 때는 터널로 화면 서버(3100)만 엽니다.
+- 화면 서버와 분석 서버는 `127.0.0.1`에만 엽니다. 팀에게 보여 줄 때는 Tailscale Serve로 화면 서버(3100)만 tailnet 안에 엽니다(5절). 초대받은 tailnet 사용자만 접속할 수 있습니다.
 - 화면 서버의 통로(`web/app/api/[...path]/route.ts`)는 정한 경로만 분석 서버로 넘기고, `POST` 본문은 4000자까지 받습니다.
 - **내부망 차단**: 웹 원문·특허 원문을 여는 모듈(`fetcher.py`)과 공고문을 받는 모듈(`funding/docs.py`)은 사설·루프백·링크 로컬·예약 주소로 가는 요청을 막고, 리다이렉트마다 다시 검사합니다. `http`·`https`만 엽니다. 공고문은 기업마당 주소에서만 받습니다.
-- **요청 제한**: 접속 주소마다 분당 6회(`GROWTH_RATE_LIMIT_PER_MINUTE`). 접속 주소는 `x-forwarded-for`의 맨 뒤 값(터널이 붙인 값)을 씁니다.
+- **요청 제한**: 접속 주소마다 분당 6회(`GROWTH_RATE_LIMIT_PER_MINUTE`). 접속 주소는 `x-forwarded-for`의 맨 뒤 값을 씁니다. Tailscale Serve는 접속자가 보낸 이 머리글을 버리고 접속 기기의 tailnet 주소로 바꿔 넘기므로, 가짜 머리글로 제한을 피할 수 없습니다(실제 요청으로 확인).
 - 오류 응답에 내부 경로, 예외 이름·내용, 키를 넣지 않습니다.
 - 분석 스냅샷은 저장 전에 키를 지우고(`analysis.scrub`) 키 모양이 남았으면 쓰지 않습니다. `results/`는 Git에서 제외합니다(제3자 기사 발췌가 들어 있음).
-- 로그인이 없어 주소를 아는 사람은 누구나 쓸 수 있습니다. 비용을 막는 장치는 위의 호출 상한과 요청 제한뿐입니다.
+- 성장노트 자체에는 로그인이 없습니다. 접속은 Tailscale 초대를 받은 tailnet 사용자로 좁혀지고, 그 안에서 비용을 막는 장치는 위의 호출 상한과 요청 제한입니다.
 
 ## 9. 구조
 
