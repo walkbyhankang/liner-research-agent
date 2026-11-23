@@ -1,4 +1,4 @@
-"""growth/ 로 옮긴 수집 모듈 테스트(research/ 테스트에서 옮긴 것 + 호출 상한·학술 검색). 실제 API 를 부르지 않는다."""
+"""growth/ 수집 모듈 테스트(팀원의 통합 분석 프로토타입(커밋 98d8c6c) 시험에서 옮긴 것 + 호출 상한·학술 검색). 실제 API 를 부르지 않는다."""
 from __future__ import annotations
 
 import json
@@ -28,7 +28,7 @@ def _client(handler, **limits):
     return LinerClient("k" * 20, "env", transport=httpx.MockTransport(handler), sleep=lambda s: None, limits=lim)
 
 
-# ---------------------------------------------------------------- 공공 자료·뉴스·나라장터(research/test_research 에서)
+# ---------------------------------------------------------------- 공공 자료·뉴스·나라장터
 
 def test_pick_recent_years_prefers_consolidated_and_computes_ratios():
     rows = [{"연도": "2022", "구분": "별도요약재무제표", "매출액": 100.0, "영업이익": 10.0},
@@ -226,7 +226,7 @@ def test_cache_put_is_safe_under_concurrent_writes():
     assert common.cache_get("t", {"k": 1}, 1)["v"] in range(6)  # 손상 없이 읽힌다
 
 
-def test_cache_layout_matches_research_cache():
+def test_cache_layout_keeps_existing_cache_folder():
     """같은 폴더·열쇠 규칙(results/cache/research/<종류>/<sha1(ident)[:20]>.json)이라 쌓인 캐시를 그대로 쓴다."""
     import hashlib
     ident = {"q": "가나다", "lang": "ko", "c": "kr", "n": 10, "d": None}
@@ -272,7 +272,7 @@ def test_scholar_client_does_not_retry_timeouts():
     b.settle({L.LINER_SCHOLAR: sc.requests})
 
 
-# ---------------------------------------------------------------- 회사 프로필(research/test_parallel 에서)
+# ---------------------------------------------------------------- 회사 프로필
 
 def test_domestic_only_drops_foreign_branch_self_and_duplicates():
     comps = [{"name": "퓨리오사AI", "is_korean": True, "country": "한국"},
@@ -299,7 +299,7 @@ def test_profile_skips_model_when_search_finds_nothing():
     assert not any("chat" in p for p in seen)  # 자료가 없으면 모델을 부르지 않는다
 
 
-# ---------------------------------------------------------------- 투자 이력(research/test_funding_history 에서)
+# ---------------------------------------------------------------- 투자 이력
 
 COLS = ["name", "status", "funding_stage", "total_raised", "location", "website", "funding_round_count", "funding_rounds", "also_known_as", "sources"]
 REB = ["Ganada Tech", "", "Series C", "932981469.0", "Seoul, Korea", "ganada.example.com", "3",
@@ -323,6 +323,8 @@ def test_related_entity_rounds_are_kept_apart_from_this_company():
     data = {"knowledge": [{"title": "Companies matching", "columns": COLS, "rows": [REB, SAP, OTHER], "sources": ["People Data Labs"]}]}
     cards, rounds = fh.from_premium(data, ["가나다테크", "Ganada Tech"], "ganada.example.com", "q")
     assert {c["name"]: c["match"] for c in cards} == {"Ganada Tech": "exact", "Ganada Technology Holdings": "related"}
+    assert all(r["entity"] != "Ganad Defense" for r in rounds)  # 이름만 닮은 다른 회사는 라운드에도 넣지 않는다
+    assert any(r["entity"] == "Ganada Technology Holdings" and r["round"] == "Series A" for r in rounds)  # 투자대상 법인명 보존
     item = {"company": "가나다테크", "name_en": "Ganada Tech", "cards": cards, "rounds": fh.merge_rounds(rounds), "web_used": False}
     out = fh.to_contract(item, "2026-11-22T20:00:00+09:00")
     assert [r["round"] for r in out["rounds"]] == ["Corporate round", "Series A", "Seed"] and [r["id"] for r in out["rounds"]] == ["r1", "r2", "r3"]
@@ -348,6 +350,9 @@ def test_merge_only_obvious_duplicates_and_keep_amount_conflicts():
     a = next(r for r in out if r["round"] == "Series A")
     assert a["amount"] == "$70M" and a["other_amounts"] == ["620억원"]  # 금액 차이는 지우지 않는다
     assert a["investors"] == ["KT Investment", "KT"] and a["source_type"] == "premium_structured+web_reported"
+    inv = fh.investor_table(out)
+    assert {i["투자기관"] for i in inv} == {"KT Investment", "KT", "산업은행"}
+    assert next(i for i in inv if i["투자기관"] == "산업은행")["유형(이름 기반 추정)"].startswith("정책금융")  # 이름 기반 추정
 
 
 def test_clean_web_keeps_only_quoted_facts():
@@ -383,10 +388,14 @@ def test_collect_uses_premium_first_and_supplements_with_web():
                                                       "url": "https://n.kr/9", "date": "2024-03-01"}]})
     lw = Liner(_client(handler))
     cos = [fh.company_entry("가나다테크", "Ganada Tech", homepage="ganada.example.com"), fh.company_entry("다라마", "DARAMA")]
-    out = fh.collect(lw, cos)
+    news_by = {"가나다테크": {"articles": [{"date": "2026-01-01", "title": "가나다테크 투자 유치", "description": "", "url": "https://x",
+                                         "매체": "x", "분류": ["투자유치"]}]}}
+    out = fh.collect(lw, cos, news_by)
     gd, dx = out["by_company"]["가나다테크"], out["by_company"]["다라마"]
     assert gd["summary"]["rounds"] == 3 and gd["summary"]["total_raised"] == 932981469.0 and not gd["web_used"]
+    assert gd["articles"] and gd["articles"][0]["제목"] == "가나다테크 투자 유치" and dx["articles"] == []
     assert dx["web_used"] and dx["rounds"][0]["amount"] == "1100억원" and dx["rounds"][0]["lead"] == ["카타파캐피탈"]
+    assert any(c["api"] == "Liner Web Search" for c in dx["calls"])
     assert [k for k, _ in seen].count("premium") == 3 and [k for k, _ in seen].count("search") == 1 and [k for k, _ in seen].count("model") == 1
     fh.collect(lw, cos)  # 두 번째 실행은 캐시 재사용
     assert len(seen) == 5
@@ -414,7 +423,7 @@ def test_cumulative_prefers_pdl_then_sums_rounds_by_currency():
     assert fh.cumulative(related_only, [])["basis"] == "none"  # 유사 이름 카드의 누적액은 대상의 누적액으로 쓰지 않는다
 
 
-# ---------------------------------------------------------------- 특허(research/test_patents 에서)
+# ---------------------------------------------------------------- 특허
 
 PAGE_B = ("KR102867987B1 - 모델 세트 성능 평가 방법 및 시스템 Info Publication number KR102867987B1 Application number KR1020230179893A "
           "Other languages English ( en ) Inventor 홍길동 Original Assignee 주식회사 가나다테크 Priority date 2022-12-23 Filing date 2023-12-12 "
@@ -446,7 +455,8 @@ class FakeFetcher:
 def test_parse_page_reads_bibliographic_fields():
     p = patents.parse_page(PAGE_B, "KR102867987B1 - 모델 세트 성능 평가 방법 및 시스템 - Google Patents", "KR102867987B1")
     assert p["assignee"] == "주식회사 가나다테크" and p["application_no"] == "10-2023-0179893" and p["filing_date"] == "2023-12-12"
-    assert p["publication_no"] == "KR20240101389A" and p["registration_no"] == "KR102867987B1"
+    assert p["publication_no"] == "KR20240101389A" and p["publication_date"] == "2024-07-02"
+    assert p["registration_no"] == "KR102867987B1" and p["title"] == "모델 세트 성능 평가 방법 및 시스템"
     assert p["cpc"][0] == "G06V30/00" and p["abstract"].startswith("본 개시는")
     assert patents.parse_page(PAGE_NODATE, "", "KR102775032B1")["filing_date"] == ""  # 없는 값은 만들지 않는다
 
@@ -472,6 +482,7 @@ def test_company_patents_dedups_by_application_and_counts_pages(monkeypatch):
     c = patents.company_patents(lw, patents.entry("가나다테크", "Ganada", is_self=True), use=b.use)
     assert n["search"] == 2  # 기업당 Liner 검색 2회
     assert [p["application_no"] for p in c["patents"]] == ["10-2023-0179893", "10-2023-0179503"]
+    assert c["patents"][0]["publication_no"] == "KR20240101389A" and c["patents"][0]["registration_no"] == "KR102867987B1"  # A·B 문서를 한 출원으로
     assert [m["pub_no"] for m in c["mentions"]] == ["KR102000000B1"]  # 출원인이 다르면 언급 문서로만
     s = patents.summary_contract(c["summary"])
     assert s["total"] == 2 and s["byYear"] == {"2023": 1} and s["noFilingDate"] == 1  # 출원일 없는 건은 연도 집계에서 뺀다

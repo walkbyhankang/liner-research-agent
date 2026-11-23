@@ -4,7 +4,6 @@
 - 타입은 TypedDict 다. 응답은 평범한 dict 로 만들고, 테스트에서 pydantic TypeAdapter 로 모양을 검사한다
   (모든 TypedDict 에 extra="forbid" 를 걸어 계약에 없는 키가 섞이면 실패한다).
 - 모든 키는 언제나 들어 있다. 값이 없으면 null(None)이고, 목록은 빈 목록이다. 예외는 GpBrief.model 하나(지금 코드 그대로).
-- 이 모듈은 research/ 를 불러오지 않는다.
 """
 import hashlib
 import re

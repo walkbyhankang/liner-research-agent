@@ -70,7 +70,7 @@
 | 모델(Responses) | `/api/v1/responses` (`liner-gpt-router`) | `facts` 단락: 해커톤 이전 기업분석 엔진(`pipeline.run_models`)의 분야별 사실 추출 |
 | 학술 검색 | `/api/v1/tools/search/scholar` | 논문 동향(열 때 실행)의 추가 논문 |
 
-Search Agent는 `app_legacy.py`(해커톤 이전 검증 화면)에서만 씁니다. Deep Research는 어디서도 부르지 않습니다.
+Search Agent는 기존 엔진 CLI(`run_probe.py`)에서만 씁니다(성장노트는 쓰지 않습니다). Deep Research는 어디서도 부르지 않습니다.
 
 검색은 코드가 Liner 검색으로 하고, 모델에는 그 결과만 줍니다. 모델이 낸 근거 문장과 금액은 코드가 원문(공고문, 검색 결과, 웹 원문)과 대조해 원문에 있는 것만 남깁니다.
 
@@ -104,8 +104,8 @@ scripts/run_local.sh        # 성장노트 화면 + 분석 서버
 
 | 설정 | 뜻 |
 |---|---|
-| `scripts/run_local.sh [growthnote\|streamlit\|all]` | 기본 `growthnote`(옛 이름 `fundingnote`도 받음). `streamlit`은 참고용 Streamlit만, `all`은 둘 다 |
-| `FUNDING_WEB_PORT`, `FUNDING_API_PORT`, `STREAMLIT_PORT` | 포트(기본 3100, 8000, 8501). 이름은 펀딩노트 때 그대로 |
+| `scripts/run_local.sh [growthnote]` | 인자 없이 실행하면 성장노트(화면 + 분석 서버). `growthnote`와 옛 이름 `fundingnote`도 받음 |
+| `FUNDING_WEB_PORT`, `FUNDING_API_PORT` | 포트(기본 3100, 8000). 이름은 펀딩노트 때 그대로 |
 | `FUNDING_SKIP_BUILD=1` | 빌드 결과가 있으면 화면을 다시 빌드하지 않음 |
 
 ### 팀에게 보여 주기 (Tailscale Serve)
@@ -152,11 +152,11 @@ tailscale serve --http=3100 off                          # 끄기
 ## 6. 테스트
 
 ```bash
-.venv/bin/python -m pytest -q tests   # Python 434개
-npm --prefix web test                 # 화면 규칙 83개
+.venv/bin/python -m pytest -q tests   # Python 412개
+npm --prefix web test                 # 화면 규칙 101개
 ```
 
-화면 완료 기준(`docs/ux/acceptance.md`)은 가짜 분석 서버와 빌드한 화면, 설치된 Chrome으로 자동 점검합니다(265건, 사람 확인 기준의 자동 보조 점검 포함, 2026-11-23). 실제 서버로 처음부터 끝까지 쓴 검증 기록은 `docs/verification.md`입니다.
+화면 완료 기준(`docs/ux/acceptance.md`)은 가짜 분석 서버와 빌드한 화면, 설치된 Chrome으로 자동 점검합니다(317건, 사람 확인 기준의 자동 보조 점검 포함, 2026-11-23). 실제 서버로 처음부터 끝까지 쓴 검증 기록은 `docs/verification.md`입니다.
 
 ```bash
 cd web && npm run build              # web/node_modules 가 없으면 먼저 npm ci
@@ -223,17 +223,15 @@ api/main.py             분석 서버(FastAPI): 공고문 대조, 운용사 요�
 api/analysis.py         회사 분석 엔드포인트(/api/corp/search, /api/analysis…, /api/company/…, /api/example)
 growth/                 성장노트 분석: 단락 작업(jobs, sections), 합친 값(merge), 스냅샷(store), 호출 상한(limits),
                         계약 타입(contract), facts(기존 엔진 연결), 수집 모듈(public_data, company, news, patents,
-                        papers, funding_history, gov, liner — 팀원의 research/ 에서 옮겨 고침)
+                        papers, funding_history, gov, liner — 팀원의 통합 분석 프로토타입에서 옮겨 고침)
 funding/                펀딩노트 Python: 공고문 추출·대조, 회사 조회, 운용사 요약, 경쟁사 투자 이력
-pipeline.py, planner.py, sources.py, fetcher.py, categories.py, integrate.py, analysis.py, liner_client.py, config.py
-                        해커톤 이전 기업분석 엔진과 Liner 클라이언트
+pipeline.py, planner.py, sources.py, fetcher.py, categories.py, integrate.py, analysis.py, liner_client.py, config.py, run_probe.py
+                        해커톤 이전 기업분석 엔진과 Liner 클라이언트, 엔진 CLI(run_probe.py)
 fixtures/analysis/      가짜 응답(합성 데이터, 테스트·개발 전용)
 scripts/                run_local.sh(실행), fetch_public_data.py(스냅샷), build_growth_fixtures.py(가짜 응답),
-                        analyze_notice.py(공고문 대조 실험, 유료), diagnose_runtime.py(Streamlit 계측, 유료)
+                        analyze_notice.py(공고문 대조 실험, 유료)
 tests/                  pytest
 docs/                   설계(integration-design.md, ux/, contract.md), 조사·실험 기록, 제출물(submission/)
-research/, app.py       팀원의 Streamlit 통합 분석(참고용, 성장노트는 불러오지 않음)
-app_legacy.py, run_probe.py   해커톤 이전 Streamlit 검증 화면, CLI
 results/                분석 스냅샷·캐시·하루 사용량·실행 결과(Git 제외)
 ```
 
@@ -241,14 +239,14 @@ results/                분석 스냅샷·캐시·하루 사용량·실행 결�
 
 ## 10. 기존 결과물과 해커톤 기간에 새로 만든 것
 
-대회 규정에 따라 구분합니다. 날짜는 Git 기록 기준입니다.
+대회 규정에 따라 구분합니다. 날짜와 커밋은 Git 기록 기준입니다.
 
 | 구분 | 경로 | 성장노트와의 관계 |
 |---|---|---|
-| **해커톤 이전 프로토타입** (2026-11-20 첫 커밋) | `app_legacy.py`(처음 이름 `app.py`, 8개 탭 Streamlit), `pipeline.py`, `planner.py`, `sources.py`, `fetcher.py`, `categories.py`, `integrate.py`, `analysis.py`, `liner_client.py`, `config.py`, `run_probe.py`, `tests/test_core.py`, `tests/test_v2.py`, `docs/architecture.md` | `facts` 단락이 이 엔진을 `funding/profile.py`를 거쳐 그대로 쓴다. 스냅샷 키 지우기(`analysis.scrub`)도 이 엔진의 것 |
+| **해커톤 이전 프로토타입** (2026-11-20 첫 커밋 `f84dfed`) | 기업분석 엔진 `pipeline.py`, `planner.py`, `sources.py`, `fetcher.py`, `categories.py`, `integrate.py`, `analysis.py`, `liner_client.py`, `config.py`와 CLI `run_probe.py`, `tests/test_core.py`, `tests/test_v2.py`, `docs/architecture.md`. 엔진을 확인하던 8개 탭 검증 화면도 이때 만들었고, 제출 저장소에서는 지웠다(원본: 커밋 `f84dfed`) | `facts` 단락이 이 엔진을 `funding/profile.py`를 거쳐 그대로 쓴다. 스냅샷 키 지우기(`analysis.scrub`)도 이 엔진의 것 |
 | 해커톤 기간에 기존 파일에 더한 것 | `liner_client.py`(게이트웨이 JSON 호출 `chat_json`, 학술 검색 `search_scholar`), `config.py`(경로·한도 상수), `fetcher.py`(내부망 차단), `requirements.txt`(`pypdf`, `fastapi`, `uvicorn`) | 엔진의 원래 동작은 바꾸지 않았다 |
 | **펀딩노트** (2026-11-21, 신규) | `funding/`, `api/main.py`, `web/`(첫 화면), `web/public/data/`, `scripts/fetch_public_data.py`, `scripts/analyze_notice.py`, `scripts/run_local.sh`, `tests/test_fetch_public_data.py`, `tests/test_funding_notice.py`, `tests/test_funding_service.py`, `docs/`의 계획·조사·실험·제출물 초안 | 성장노트가 이어 쓴다: 공고문 대조·운용사 요약(`funding/`, 엔드포인트), 자금·판로 대조 규칙(`web/lib/finder.ts`), 공공 데이터 스냅샷. 펀딩노트 화면 부품(`Finder`, `NoticeCheck` 등)과 가상 데이터가 든 사례 화면은 지웠다 |
-| **팀원의 Streamlit 통합 분석** (2026-11-22, 신규) | `research/`, `app.py`(6개 탭), `scripts/diagnose_runtime.py`, `tests/test_research.py`, `tests/test_funding_history.py`, `tests/test_parallel.py`, `tests/test_patents.py` | 참고용으로 남긴다. 성장노트 코드는 `research/`를 불러오지 않는다. 성장노트가 쓰는 수집 기능은 `growth/`로 옮겨 고쳤다(파일 머리에 원본 표시) |
+| **팀원의 통합 분석 프로토타입** (2026-11-22, 신규, 커밋 `88c19bf`·`98d8c6c`) | 회사 이름 하나로 회사 프로필·공공 자료·뉴스·특허·논문·투자 이력·나라장터를 모아 6개 탭으로 보이던 화면, 그 수집·분석 모듈, 시험, 실행 시간 진단 스크립트. 제출 저장소에서는 지웠다(원본: 커밋 `98d8c6c`) | 성장노트가 쓰는 수집 기능은 `growth/`로 옮겨 고쳤다(파일 머리에 원본 커밋 표시). 시험도 `tests/test_growth_collect.py`, `tests/test_growth_jobs.py`로 옮겼다 |
 | **성장노트 통합** (2026-11-22~23, 신규) | `growth/`, `api/analysis.py`, `api/main.py`(하루 상한·요청 제한·오류 모양), `web/`(화면 다시 만듦: `app/c/[id]/`, `components/`, `lib/`의 새 파일, `scripts/mock_api.mjs`, `scripts/ux-check.mjs`), `fixtures/analysis/`, `scripts/build_growth_fixtures.py`, `tests/conftest.py`, `tests/test_growth_*.py`, `tests/test_limits.py`, `tests/test_security.py`, `docs/integration-design.md`, `docs/ux/`, `docs/contract.md`, `THIRD_PARTY_NOTICES.md` | — |
 
 심사 준비의 투자 미팅 예상 질문과 실사 대비 자료는 `anthropics/financial-services`(Apache-2.0)의 목록을 한국어로 다시 쓴 것입니다(`THIRD_PARTY_NOTICES.md`).
@@ -279,34 +277,3 @@ results/                분석 스냅샷·캐시·하루 사용량·실행 결�
 - 금융위 API가 개인사업자를 다루는지. 다루지 않으면 개인사업자는 언제나 "목록에 없음"으로 분석합니다.
 - 실제 사용자(대표·재무 담당자) 대상 검증. 시간이 얼마나 줄어드는지는 재지 않았습니다.
 - "성장노트" 상표 등록 여부.
-
----
-
-## 참고: Streamlit 통합 분석 (팀원 작업, 참고용)
-
-팀원이 해커톤 기간에 만든 Streamlit 화면입니다. 성장노트의 회사 분석은 이 기능을 옮겨 와 만들었고, 이 화면은 비교·참고용으로만 남깁니다. 성장노트는 이 코드를 불러오지 않습니다.
-
-```bash
-scripts/run_local.sh streamlit    # http://127.0.0.1:8501 (STREAMLIT_PORT 로 변경)
-scripts/run_local.sh all          # 성장노트와 함께
-.venv/bin/python -m streamlit run app_legacy.py   # 해커톤 이전 8개 탭 검증 화면
-```
-
-기업명 하나로 6개 탭을 한 번에 수집·분석합니다(`app.py`, `research/`).
-
-| 탭 | 내용 |
-|---|---|
-| 1. 기업 검색 | 전체 분석 시작 버튼, 진행률, 기업 기본정보, 주요 사업·제품·핵심 기술, 국내 경쟁사 최대 5개, 기술 키워드 |
-| 2. 기업 세부정보 | 3개 사업연도 재무, 국민연금 12개월, 최근 12개월 뉴스와 중요 사건, 투자유치 이력·투자기관 |
-| 3. 경쟁사 동향 | 대상기업과 국내 경쟁사의 재무·고용·투자유치 비교 표·그래프(통화별), 경쟁사 요약 |
-| 4. 기술동향 | 기술 분야별 논문 수 추이, 주요 연구기관, 논문 목록(OpenAlex 인용 지표), 기업별 논문 건수, 국내 특허 출원 동향 |
-| 5. 정부사업·입찰공고 | 기업마당 지원사업과 나라장터 입찰공고를 한 목록으로(진행 중 → 관련성 → 마감 임박 순) |
-| 6. 펀딩 | 펀딩노트 회사 조회 결과, 모태펀드 운용사 후보(기존 투자자 제외), 정책융자·보증 후보 |
-
-- 동작: ① 기업 프로필이 끝나면 ②~⑥을 병렬로 실행합니다(`research/controller.py`). 탭을 옮겨도 API를 다시 부르지 않고, 실패한 항목만 "자료 확보 불가"로 둡니다.
-- 호출 한도(팀원 코드 기준): Liner 검색 45(Premium 12 포함)·모델 10·학술 12회와 펀딩노트 회사 조회.
-- 저장: 결과는 `results/integrated/`, 외부 응답 캐시는 `results/cache/research/`(성장노트와 같은 캐시 폴더)입니다.
-- 팀원 측정(업스테이지, 캐시 없음, 각 1회): 병렬화 전 약 388.5초 → 후 약 150.0초. 특허 기능을 더하기 전 측정입니다.
-- 팀원이 적은 한계: 국내 경쟁사·기술 키워드·기업 단계는 모델이 정리한 초안이고, 논문·특허 건수는 검색으로 확인된 범위이며, 나라장터는 최근 28일만 찾습니다.
-
-팀원이 쓴 전체 설명(탭별 표시 내용, API 목록, 실행 과정, 수정 내역)은 커밋 `98d8c6c`의 `README.md`에 있습니다(`git show 98d8c6c:README.md`).

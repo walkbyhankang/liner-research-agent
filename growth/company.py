@@ -1,4 +1,4 @@
-"""회사 프로필: 사업내용·제품·핵심 기술·국내 경쟁사·검색 낱말(research/company.py 에서 옮김).
+"""회사 프로필: 사업내용·제품·핵심 기술·국내 경쟁사·검색 낱말(팀원의 통합 분석 프로토타입(커밋 98d8c6c)에서 옮김).
 
 Liner 웹 검색 3회 결과를 모델 1회로 정리한다. 모델에는 검색 결과의 제목·발췌만 넘기고 자료에 없는 값은 비우게 한다.
 옮기며 바꾼 것: 법인 식별(find_corps)은 identity 단락이 하므로 여기서는 하지 않고 받은 법인만 쓴다.
@@ -127,7 +127,7 @@ def branch_mark(text: str) -> bool:
 
 
 def aliases(prof: dict, corp: dict | None) -> list[str]:
-    """뉴스·특허 이름 맞추기에 쓰는 다른 이름(research/controller._aliases 그대로)."""
+    """뉴스·특허 이름 맞추기에 쓰는 다른 이름(팀원의 통합 분석 프로토타입(커밋 98d8c6c)의 별칭 규칙 그대로)."""
     out = [prof.get("name_ko") or "", prof.get("name_en") or "", *(prof.get("aliases") or [])]
     if corp:
         out += [re.sub(r"주식회사|\(주\)|㈜", "", n).strip() for n in corp.get("names") or []]

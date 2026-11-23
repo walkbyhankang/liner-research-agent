@@ -56,4 +56,4 @@
 | `sources.py` | 유지. URL 정규화·기업 식별·출처 신뢰도 |
 | `analysis.py`의 `scrub`, `pipeline.find_secret_leaks` | 유지. 키 누출 방지 |
 | `categories.py`의 적격성 판정 | 규칙 대조 엔진의 출발점으로 재사용 |
-| `pipeline.py`, `app.py`, `planner.py`, `integrate.py` | 기업분석용 흐름·Streamlit UI라 새 흐름으로 대체. 필요한 함수만 가져온다 |
+| `pipeline.py`, `app.py`, `planner.py`, `integrate.py` | 기업분석용 흐름·검증 화면이라 새 흐름으로 대체. 필요한 함수만 가져온다(검증 화면 `app.py`는 뒤에 제출 정리 때 지움) |

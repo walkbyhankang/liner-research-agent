@@ -1,4 +1,4 @@
-"""공공데이터포털: 금융위 기업기본정보·요약재무제표, 국민연금 사업장 가입자(research/public_data.py 에서 옮김).
+"""공공데이터포털: 금융위 기업기본정보·요약재무제표, 국민연금 사업장 가입자(팀원의 통합 분석 프로토타입(커밋 98d8c6c)에서 옮김).
 
 엔드포인트·파라미터·응답 필드는 261117_Liner/04_public_company_data_probe 에서 실제 호출로 확인한 것과 같다.
 무료 API 이지만 같은 요청은 파일 캐시(24시간)로 다시 쓴다.
@@ -294,7 +294,7 @@ def pick_recent_years(rows: list[dict], n: int = 3) -> list[dict]:
 
 
 def financial_row(r: dict, *, with_ratios: bool) -> dict:
-    """research 재무 행(한글 키) → 계약 FinancialRow(8.2절)."""
+    """pick_recent_years 의 재무 행(한글 키) → 계약 FinancialRow(8.2절)."""
     basis = r.get("구분") or ""
     short = "연결" if "연결" in basis else ("별도" if "별도" in basis else None)
     g = lambda k: (float(r[k]) if r.get(k) is not None else None)  # noqa: E731

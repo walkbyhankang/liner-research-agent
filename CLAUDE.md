@@ -17,8 +17,7 @@
 ## 구조 (이동·리팩터링은 명시적 지시가 있을 때만)
 - `web/` 성장노트 화면(Next.js) / `api/` FastAPI(`main.py` 공고문 대조·운용사 요약·상태·요청 제한, `analysis.py` 회사 분석 경로)
 - `growth/` 회사 분석 서버 패키지(단락 작업·합친 값·스냅샷·수집 모듈, `limits.py` 호출 상한, `contract.py` 계약 타입) / `funding/` 공고문 추출·대조, 운용사 요약, 회사 조회 엔진
-- 기존 엔진(flat): `config.py` 설정·키 / `liner_client.py` HTTP·한도·재시도 / `planner.py` / `sources.py` / `fetcher.py` 원문 확인(내부망 차단) / `categories.py` / `integrate.py` / `analysis.py` 정규화·마스킹 / `pipeline.py`
-- 참고용(팀원 Streamlit 통합 분석, 제출 때 지워질 수 있음): `research/`, `app.py`, `app_legacy.py`. **성장노트 코드(`growth/`, `api/`, `web/`)는 `research/`를 불러오지 않는다.**
+- 기존 엔진(flat): `config.py` 설정·키 / `liner_client.py` HTTP·한도·재시도 / `planner.py` / `sources.py` / `fetcher.py` 원문 확인(내부망 차단) / `categories.py` / `integrate.py` / `analysis.py` 정규화·마스킹 / `pipeline.py` / `run_probe.py` 기존 엔진 CLI
 
 ## 보안
 - API 키·토큰을 소스, 로그, 결과 파일, 커밋에 넣거나 출력하지 않는다. `.env`는 커밋 금지(`.env.example`만 추적).
@@ -28,7 +27,7 @@
 
 ## API 호출·비용
 - 유료 호출을 최소화한다. 테스트는 `httpx.MockTransport`로 하며 실제 호출은 사용자가 요청할 때만 한다.
-- 성장노트 한도: API별 하루 상한과 단락별 상한(`growth/limits.py`, `docs/contract.md` 14절). 단락의 Liner 클라이언트는 `budget.liner_client()`로만 만든다. 기존 엔진(Streamlit 검증 화면)의 한도는 검색 최대 50, Model 6, Agent 1, Premium 1(`LinerClient`가 강제).
+- 성장노트 한도: API별 하루 상한과 단락별 상한(`growth/limits.py`, `docs/contract.md` 14절). 단락의 Liner 클라이언트는 `budget.liner_client()`로만 만든다. 기존 엔진의 한도는 검색 최대 50, Model 6, Agent 1, Premium 1(`LinerClient`가 강제).
 - 524/429/5xx는 Retry-After를 따라 최대 1회만 재시도하고, 타임아웃은 재시도하지 않는다. Deep Research는 호출하지 않는다.
 - 기본 검색은 `include_knowledge=false`를 명시 전송한다(공식 기본값이 true).
 

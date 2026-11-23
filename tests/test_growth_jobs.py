@@ -738,6 +738,37 @@ def test_model_failure_then_run_unavailable_section_again(world):
     assert after["sections"]["news"]["status"] == "partial"  # 뒤 단락은 자동으로 다시 하지 않는다
 
 
+def test_profile_dependents_run_together_and_unexpected_error_stays_in_its_section(world, monkeypatch):
+    """profile 뒤 세 단락(funding_history·news·patents)은 함께 돌고, 단락 안의 예상하지 못한 오류는 그 단락만 미확보로 끝낸다.
+    오류 글(예외 내용·키)은 응답과 스냅샷에 넣지 않는다. 팀원의 통합 분석 프로토타입(커밋 98d8c6c)의 병렬 실행·실패 격리 시험을 옮긴 것."""
+    together = threading.Barrier(3, timeout=10)  # 셋이 동시에 돌지 않으면 시간 초과 → 그 단락이 미확보가 되어 아래 검사에서 걸린다
+    orig = dict(sections.RUNNERS)
+
+    def runner(key: str, fail: bool):
+        def run(ctx):
+            together.wait()
+            if fail:
+                raise RuntimeError(f"{key} down {LINER_KEY}")
+            return orig[key](ctx)
+        return run
+    for key, fail in (("funding_history", True), ("news", False), ("patents", True)):
+        monkeypatch.setitem(sections.RUNNERS, key, runner(key, fail))
+    v = run_full(world)
+    check_contract(v)
+    s = v["sections"]
+    assert v["status"] == "done" and s["news"]["status"] == "done" and s["news"]["result"]["articles"]
+    assert all(s[k]["status"] == "done" for k in ("identity", "official", "profile", "facts"))
+    for key in ("funding_history", "patents"):
+        assert (s[key]["status"], s[key]["error"]["code"], s[key]["retryable"]) == ("unavailable", "upstream_error", True)
+        assert s[key]["error"]["message"] == "이 단락의 자료를 처리하지 못했습니다." and s[key]["result"] is None
+    saved = world.manager.store.path_of(v["jobId"]).read_text(encoding="utf-8")
+    for text in (json.dumps(v, ensure_ascii=False), saved):
+        assert " down " not in text and LINER_KEY not in text
+    m = v["merged"]
+    assert m["patentCount"] is None or m["patentCount"]["status"] == "unavailable"
+    assert {i["name"] for i in m["investors"]} == {"가나다벤처스", "라마바인베스트"}  # 투자 이력 없이 facts 의 확인·보도 투자기관만
+
+
 def test_free_api_daily_limit_on_demand_section(world):
     v = run_full(world)
     L._reset_for_tests({"GROWTH_DAILY_LIMIT_DATAGOKR_G2B": "0"})
@@ -881,6 +912,36 @@ def test_rivals_deep_records_confirmed_patent_items(world):
     assert pt["total"] == len(pt["items"]) and pt["registered"] == sum(1 for p in pt["items"] if p["registrationNo"])
     assert pt["byYear"] == {"2023": 1}
     assert sections.RIVAL_PATENT_ITEMS == L.PATENT_PAGES_PER_COMPANY == 30  # 원문 확인 상한과 같아 확인된 특허가 잘리지 않는다
+
+
+def test_rivals_deep_runs_rivals_together_keeps_order_and_isolates_one_failure(world, monkeypatch):
+    """경쟁사 여러 곳은 함께 모으고, 결과는 고른 순서대로 두며, 한 곳의 실패는 그 경쟁사에만 남는다(자료가 섞이지 않음).
+    팀원의 통합 분석 프로토타입(커밋 98d8c6c)의 경쟁사 병렬 수집 시험을 옮긴 것."""
+    v = run_full(world)
+    orig = news.collect
+    together = threading.Barrier(2, timeout=10)  # 두 경쟁사의 뉴스 수집이 동시에 돌지 않으면 시간 초과
+    threads = set()
+
+    def collect(name, *a, **k):
+        threads.add(threading.current_thread().name)
+        together.wait()
+        if name == "고장":
+            raise RuntimeError("뉴스 API 오류")
+        return orig(name, *a, **k)
+    monkeypatch.setattr(news, "collect", collect)
+    picks = [{"key": "rival:마바사에이아이", "name": "마바사", "nameEn": "Mabasa", "crno": None},
+             {"key": "rival:고장", "name": "고장", "nameEn": "", "crno": None}]
+    world.manager.run_section(v["jobId"], "rivals_deep", picks, None)
+    after = wait_idle(world.manager, v["jobId"])
+    check_contract(after)
+    rd = after["sections"]["rivals_deep"]
+    assert rd["status"] == "done" and rd["result"]["rivalSet"] == ["rival:마바사에이아이", "rival:고장"]
+    a, b = rd["result"]["rivals"]
+    assert (a["name"], b["name"]) == ("마바사", "고장")  # 고른 순서 그대로
+    assert a["corp"]["crno"] == "1101110000005" and a["summary"]["business"] == "마바사는 칩을 만든다." and a["patents"]["total"] == 1
+    assert "경쟁사 뉴스를 받지 못했습니다." in b["errors"] and "경쟁사 뉴스를 받지 못했습니다." not in a["errors"]
+    assert b["corp"] is None and b["summary"] is None and b["patents"]["total"] == 0  # 다른 경쟁사 자료가 섞이지 않는다
+    assert len(threads) == 2 and all(t.startswith("rival") for t in threads)
 
 
 def test_rivals_deep_records_articles_given_to_summary_model(world):

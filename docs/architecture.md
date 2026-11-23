@@ -2,12 +2,12 @@
 
 > 해커톤 이전(2026-11-20)에 세운 계획이다. 지금 구조(성장노트: `web/` 화면, `api/`·`growth/` 분석 서버)는 `README.md`와 `docs/integration-design.md`를 본다.
 >
-> 이 문서는 **계획**이다. 현재 코드는 flat 구조의 Streamlit 프로토타입이며, 아래 분리는 아직 수행하지 않았다.
+> 이 문서는 **계획**이다. 당시 코드는 flat 구조의 프로토타입(검증 화면 + CLI)이었고, 아래 분리는 수행하지 않았다. 당시의 검증 화면(`app.py`)은 제출 저장소에서 지웠다(원본: 커밋 `f84dfed`).
 
 ## 1. 현재 구조 (v0.2)
 
 ```
-app.py (Streamlit UI) ──┐
+app.py (검증 화면) ─────┐
 run_probe.py (CLI) ─────┼─▶ pipeline.py ─▶ planner / sources / fetcher / categories / integrate / analysis
                         │          └────────▶ liner_client.py ─▶ Liner API (Search · Agent · Responses)
 tests/ ─────────────────┘                     config.py
@@ -18,7 +18,7 @@ tests/ ─────────────────┘                   
 ### 현재 결합도 문제 (분리 시 해결 대상)
 - `pipeline.py`가 분석 흐름, 품질 지표, 파일 저장을 모두 담당한다.
 - `pipeline.run_analysis()`가 동기 호출이며 진행 상황을 `progress` 콜백으로만 전달한다.
-- `app.py`가 `st.session_state`에 `run` dict를 보관한다. 분석 결과 스키마가 dict 관례로만 존재하고 타입 정의가 없다.
+- 검증 화면(`app.py`)이 세션 상태에 `run` dict를 보관한다. 분석 결과 스키마가 dict 관례로만 존재하고 타입 정의가 없다.
 - `config.py`가 전역 상수로 한도를 갖고, API 키를 환경변수·`.env`에서 직접 읽는다.
 - 결과 저장소가 `results/<실행ID>/` 파일시스템뿐이다.
 
@@ -27,13 +27,13 @@ tests/ ─────────────────┘                   
 | 계층 | 역할 | 기술 |
 |---|---|---|
 | **Core** | 검색·통합·검증·분석 엔진. UI·HTTP 프레임워크에 의존하지 않음 | Python |
-| **Streamlit** | 내부 검증·디버깅용 UI. Core를 직접 호출 | Streamlit |
+| **검증 화면** | 내부 검증·디버깅용 UI. Core를 직접 호출 | Python |
 | **API** | Core를 HTTP로 노출. 작업 생성·진행 조회·결과 조회 | FastAPI |
 | **Web** | 사용자 웹 UI | React / Next.js |
 
 ```
 Web (Next.js) ──HTTP/SSE──▶ API (FastAPI) ──▶ Core ──▶ Liner API
-Streamlit ───────────────────────────────────▶ Core
+검증 화면 ───────────────────────────────────▶ Core
 ```
 
 ### 목표 디렉터리 (제안)
@@ -41,7 +41,7 @@ Streamlit ───────────────────────�
 liner-research-agent/
 ├─ core/              # 현재 Python 모듈을 이동 (config, liner_client, planner, sources, fetcher, categories, integrate, analysis, pipeline)
 ├─ apps/
-│  ├─ streamlit/app.py
+│  ├─ validation/app.py   # 검증 화면
 │  ├─ api/            # FastAPI
 │  └─ web/            # Next.js
 ├─ tests/
@@ -59,7 +59,7 @@ liner-research-agent/
 4. **설정 주입** — 전역 상수·키 탐색을 `Settings` 객체로 주입하게 바꾼다. 사용자별 키·한도 지원의 전제 조건이다.
 5. **진행 이벤트화** — `progress` 콜백을 이벤트 스트림(단계, 호출 수, 오류)으로 일반화한다. SSE의 기반이 된다.
 6. **FastAPI** — 아래 엔드포인트를 제공한다. 분석은 수 분이 걸리므로 비동기 작업으로 실행한다.
-7. **Next.js** — 현재 Streamlit의 8개 탭을 대응하는 화면으로 구현한다. Plotly 대신 웹 차트 라이브러리를 선택한다.
+7. **Next.js** — 검증 화면의 8개 탭을 대응하는 웹 화면으로 구현한다. 차트는 웹 차트 라이브러리를 고른다.
 
 ### API 초안
 | 메서드 | 경로 | 설명 |

@@ -1,5 +1,5 @@
 """뉴스: NAVER 뉴스 검색 API(중심) + Liner 웹 검색(보완), 중복 기사 정리, 주제 분류, Liner 요약 1회
-(research/news.py 에서 옮김).
+(팀원의 통합 분석 프로토타입(커밋 98d8c6c)에서 옮김).
 
 NAVER 요청 형식은 261117_Liner/03_news_api_benchmark/newsbench/clients.py 와 같다(무료, 키는 머리글로만 보낸다).
 기사를 하나씩 모델에 보내지 않고 정리된 목록을 한 번에 묶어 요약한다.

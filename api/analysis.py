@@ -3,7 +3,6 @@
 - 요청 모양 검사(길이·형식)는 여기 선언한 대로 FastAPI 가 한다(어기면 422, 본문은 FastAPI 기본 모양).
 - 그 밖의 오류는 error() 로 {"detail", "code", "retryAt"} 를 돌려준다(계약 3절). 글에는 내부 경로·예외·키 이름을 넣지 않는다.
 - 접속 주소별 요청 제한(2.12절)은 ② 담당이다(이 파일의 POST 경로가 대상).
-- 이 파일과 growth/ 는 research/ 를 불러오지 않는다.
 """
 import logging
 from typing import Annotated

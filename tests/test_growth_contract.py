@@ -1,6 +1,5 @@
 """성장노트 계약 검사: 가짜 응답이 growth/contract.py 타입과 맞는지, 한글 키·점수 필드·실제 회사 이름이 없는지,
-growth/·api/ 가 research/ 를 불러오지 않는지, 호출 상한 인터페이스가 계약대로 움직이는지. 실제 API 는 부르지 않는다."""
-import ast
+growth/ 가 공용 파일의 학술 검색에 기대지 않는지, 호출 상한 인터페이스가 계약대로 움직이는지. 실제 API 는 부르지 않는다."""
 import json
 import re
 import sys
@@ -369,17 +368,12 @@ def test_rivals_deep_estimate_matches_section_caps():
     assert all(liner_sum(n + 1) - liner_sum(n) == est["perRival"] for n in range(1, 5))
 
 
-# ---------------------------------------------------------------- research/ 를 불러오지 않음
+# ---------------------------------------------------------------- 공용 파일의 학술 검색에 기대지 않음
 
-@pytest.mark.parametrize("path", sorted((ROOT / "growth").glob("*.py")) + sorted((ROOT / "api").glob("*.py")), ids=lambda p: p.name)
-def test_growth_and_api_do_not_import_research(path):
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    mods = [a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names]
-    mods += [n.module or "" for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
-    assert not [m for m in mods if m == "research" or m.startswith("research.")]
-    src = path.read_text(encoding="utf-8")
-    if path.parent.name == "growth":  # 팀원이 공용 파일에 더한 학술 검색에 기대지 않는다(계약 16절)
-        assert not re.search(r"\bsearch_scholar\b|SEARCH_SCHOLAR_PATH|MAX_SCHOLAR_CALLS", src)
+@pytest.mark.parametrize("path", sorted((ROOT / "growth").glob("*.py")), ids=lambda p: p.name)
+def test_growth_does_not_use_shared_scholar_search(path):
+    """논문 동향의 학술 검색은 growth/liner.py 의 자체 클라이언트(ScholarClient)로만 한다(계약 16절)."""
+    assert not re.search(r"\bsearch_scholar\b|SEARCH_SCHOLAR_PATH|MAX_SCHOLAR_CALLS", path.read_text(encoding="utf-8"))
 
 
 def test_analysis_router_declares_contract_endpoints():
