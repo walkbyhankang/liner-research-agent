@@ -465,7 +465,8 @@ def run_patents(ctx: RunCtx) -> dict:
         return unavailable(error("upstream_error", source=SRC_LINER))
     if lim is not None and not r["pages_checked"]:
         return unavailable(limit_error(lim))
-    return unavailable(error("no_data", "출원인이 이 회사로 확인된 국내 특허를 찾지 못했습니다. 검색에 걸리지 않은 특허는 빠집니다."), result)
+    # 화면 이름 "검색으로 확인한 특허"(계약 8.7, 2026-11-23)와 같은 말. 짧은 사유는 merge.py 의 patentCount 기본값(같은 말의 짧은 꼴)
+    return unavailable(error("no_data", "출원인이 이 회사로 확인된 특허를 검색에서 찾지 못했습니다. 검색에 걸리지 않은 특허는 빠집니다."), result)
 
 
 # ---------------------------------------------------------------- papers (8.8)

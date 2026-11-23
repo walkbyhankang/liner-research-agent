@@ -526,7 +526,7 @@ def merged_for(ctx: Ctx, done: dict, *, nocorp=False, conflict=False, empty=Fals
         if pt and pt["summary"]["total"]:
             m["patentCount"] = val(f"{pt['summary']['total']}건", pt["summary"]["total"], "confirmed", src("patents", ctx))
         else:
-            m["patentCount"] = unavailable("출원인이 확인된 특허를 찾지 못함")
+            m["patentCount"] = unavailable("출원인이 확인된 특허를 검색에서 찾지 못함")
     if facts_done and f:
         if c and conflict:
             web = fields["founded"]
@@ -663,7 +663,7 @@ def make_job(*, step=6, base=T0, nocorp=False, conflict=False, empty=False, mone
                 status, retry = "unavailable", True
                 msg = {"funding_history": "투자 라운드 자료를 찾지 못했습니다. 투자 이력이 없다는 뜻은 아닙니다.",
                        "news": "최근 12개월 기사를 찾지 못했습니다.",
-                       "patents": "출원인이 이 회사로 확인된 국내 특허를 찾지 못했습니다. 검색에 걸리지 않은 특허는 빠집니다."}[key]
+                       "patents": "출원인이 이 회사로 확인된 특허를 검색에서 찾지 못했습니다. 검색에 걸리지 않은 특허는 빠집니다."}[key]
                 err = sec_error("no_data", msg)
                 if key == "news":
                     paid = {**paid, "model": 0}
@@ -755,7 +755,7 @@ def health(ctx: Ctx):
 def notice_company():
     return {"name": COMPANY, "region": "서울", "biz": "venture", "founded": "2020-09", "industry": "전자집적회로 제조업",
             "employees": "약 120명 (2026-06 기준)", "revenue": "56.7억원 (2024 사업연도, 별도)", "need": "운전자금 3억 원",
-            "notes": "확인된 국내 특허 11건(출원인 확인, 등록 8건), 국민연금 가입자 118명(2026-10, 직원 수와 다름)"}
+            "notes": "검색으로 확인한 특허 11건(출원인 확인, 등록 8건), 국민연금 가입자 118명(2026-10, 직원 수와 다름)"}
 
 
 def notice_analysis():

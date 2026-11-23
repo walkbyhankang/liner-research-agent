@@ -5,7 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { DEFAULT_ESTIMATES, type AnalysisJob, type Article, type NewsCategory, type NewsPage, type Paper } from "@/lib/contract";
 import { api } from "@/lib/api";
 import { elapsedText, fmtDay, fmtMonthDayTime, num, todayKST } from "@/lib/format";
-import { PATENT_LABEL, phaseOf, retryState, summaryLine } from "@/lib/view";
+import { PATENT_LABEL, PATENT_SCOPE, phaseOf, retryState, summaryLine } from "@/lib/view";
 import { DetailRow, Disclosure, ExtLink, MoreButton, Placeholder, SourceLine, StatusWord, useMore } from "@/components/kit";
 import { PatentLine } from "@/components/charts";
 import { useCompany } from "@/components/company/context";
@@ -307,7 +307,7 @@ export function Tech() {
               <PatentLine series={[{ name: job.company.name, byYear: r?.summary.byYear ?? {}, mine: true }]} endYear={endYear} />
             </div>
             <p className="mt-1 text-xs text-sub">공개 전 기간이라 적게 보일 수 있습니다.</p>
-            <SourceLine word="confirmed" label="특허 공개 원문 (Google Patents)" detail={`${fmtDay(r?.queriedAt)} 조회, 출원인이 이 회사인 국내 특허만`} />
+            <SourceLine word="confirmed" label="특허 공개 원문 (Google Patents)" detail={`${fmtDay(r?.queriedAt)} 조회, ${PATENT_SCOPE}`} />
           </figure>
           <p className="mt-5 text-sm font-semibold">주요 특허</p>
           <ul className="divide-y divide-rule border-y border-rule">

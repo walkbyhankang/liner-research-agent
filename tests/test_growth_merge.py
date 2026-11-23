@@ -43,6 +43,23 @@ def base():
     return copy.deepcopy(JOBS["F-FULL#0"])
 
 
+def test_patents_none_uses_same_words_in_sentence_and_short_reason():
+    """특허를 찾지 못한 같은 상태(2026-11-23 새 이름 "검색으로 확인한 특허"): 단락 no_data 문장(sections.run_patents, 기술 단락)과
+    합친 값 짧은 사유(merge 기본값, 핵심 값 칸·"지금 확인할 것"·비교 표)가 같은 말이고, 옛 이름 "국내 특허"를 쓰지 않는다(계약 7.6·8.7)."""
+    import inspect
+
+    from growth import sections
+
+    r = JOBS["F-EMPTY#0"]
+    msg = r["sections"]["patents"]["error"]["message"]
+    assert msg == "출원인이 이 회사로 확인된 특허를 검색에서 찾지 못했습니다. 검색에 걸리지 않은 특허는 빠집니다."
+    assert f'"{msg}"' in inspect.getsource(sections.run_patents)  # 가짜 응답의 문장 = 서버가 쓰는 문장
+    reason = remerge(r)["patentCount"]["reason"]
+    assert reason == "출원인이 확인된 특허를 검색에서 찾지 못함"
+    assert all(w in msg and w in reason for w in ("출원인이", "확인된 특허를 검색에서 찾지 못"))
+    assert "국내 특허" not in msg + reason
+
+
 def remerge(r, running=False):
     return merge.merged(r["sections"], query=r["query"], crno=r["company"]["crno"], job_running=running)
 

@@ -409,7 +409,7 @@
 | `web_snippet` | Liner | 웹 검색 | 검색 결과 발췌 | "{조회일} 조회" | `facts`의 `reported`·`inferred`·`conflicting` 값, 웹 보완 라운드 |
 | `liner_profile` | Liner | 웹 검색 자료 {n}건 | 모델 정리 | "{조회일} 조회" | 투자 분야, 업종(웹, `facts` 전), 경쟁사 후보 |
 | `news_article` | {매체} | 기사 | 검색 결과 발췌 | "{기사 날짜}" | (중요 사건 근거, 화면이 만들 때) |
-| `patents` | (빈 글) | 특허 공개 원문 | Google Patents | "{조회일} 조회" | 국내 특허 수 |
+| `patents` | (빈 글) | 특허 공개 원문 | Google Patents | "{조회일} 조회" | 검색으로 확인한 특허 수(`patentCount`) |
 | `openalex` | OpenAlex | 논문 DB | 공개 API | "{조회일} 조회" | 논문 |
 | `liner_scholar` | Liner | 학술 검색 | 검색 결과 발췌 | "{조회일} 조회" | 논문(학술 검색) |
 | `g2b` | 조달청 | 나라장터 입찰공고 | 공공 API | "{기간} 조회" | 판로 |
@@ -459,7 +459,7 @@
 ### 7.6 국민연금·특허 (`npsLatest`, `patentCount`)
 
 - `npsLatest`: 가입자 수가 있는 마지막 달. `display` "{n}명", `raw` 정수, 상태 `reference`, 출처 `nps`(`asOf` 그 달), `note` "국민연금 가입자 수는 상시근로자 수와 다릅니다." 없으면 `unavailable`("국민연금 사업장을 찾지 못함").
-- `patentCount`: `patents.result.summary.total`. `display` "{n}건", `raw` 정수, `confirmed`, 출처 `patents`. 0건이면 `unavailable`("출원인이 확인된 특허를 찾지 못함").
+- `patentCount`: `patents.result.summary.total`. `display` "{n}건", `raw` 정수, `confirmed`, 출처 `patents`. 0건이면 `unavailable`("출원인이 확인된 특허를 검색에서 찾지 못함". 2026-11-23 전 "출원인이 확인된 특허를 찾지 못함". 8.7 미확보 문장과 같은 말의 짧은 꼴이고, 화면 핵심 값 칸·"지금 확인할 것"·비교 표 우리 회사 칸에 "미확보: {사유}"로 보인다. `patents` 단락이 `no_data`로 끝나도 사유는 이 글이다. `why()`는 오류 코드만 짧은 글로 바꾸고 `no_data`는 이 기본값을 쓴다).
 
 ### 7.7 낱말과 투자 분야
 
@@ -636,7 +636,9 @@
 - 분류 10종(이 순서): 기술개발, 해외 진출, 사업제휴, 수주·계약, 경영진·인터뷰, 정부 관련, 투자유치, 제품 출시, 매출·실적, 기타 동향.
 - 상태: 기사가 1건 이상이면 `done`(요약 모델이 실패하면 `partial`, `upstream_error` — 기사 목록은 있고 사건·흐름은 빈 목록). 0건이면 `unavailable`(`no_data`, "최근 12개월 기사를 찾지 못했습니다."). NAVER 일부 실패는 `partial`.
 
-### 8.7 `patents` — 국내 특허 (검색 2, 특허 원문 최대 30쪽)
+### 8.7 `patents` — 검색으로 확인한 특허 (검색 2, 특허 원문 최대 30쪽)
+
+> 화면 이름(2026-11-23 사용자 지시): 이 단락의 건수는 회사가 가진 전체 특허 수가 아니라 Liner 웹 검색으로 찾은 Google Patents 한국 특허 문서 가운데 원문에서 출원인이 이 회사로 확인된 건수라, 모든 화면에서 "검색으로 확인한 특허"라고 부른다(`docs/ux/screens.md` 4.0.2).
 
 원본은 `companies[]` 중 `self: true` 한 곳이다.
 
@@ -654,7 +656,7 @@
 | `errors` | `errors` | 짧은 글 |
 | (뺌) | `searches`, `sec`, `company`, `self`, `patents[].pub_no`·`filed_by`·`application_no_raw`·`company` | |
 
-- 상태: 1건 이상 `done`. 0건 `unavailable`(`no_data`, "출원인이 이 회사로 확인된 국내 특허를 찾지 못했습니다. 검색에 걸리지 않은 특허는 빠집니다.", 언급 문서가 있으면 `mentions`에 둔다).
+- 상태: 1건 이상 `done`. 0건 `unavailable`(`no_data`, "출원인이 이 회사로 확인된 특허를 검색에서 찾지 못했습니다. 검색에 걸리지 않은 특허는 빠집니다.", 언급 문서가 있으면 `mentions`에 둔다). 2026-11-23 전 문장 "출원인이 이 회사로 확인된 국내 특허를 찾지 못했습니다. 검색에 걸리지 않은 특허는 빠집니다.". 화면은 이 문장을 기술 단락 미확보 자리에 그대로 쓰고, 미팅 근거 묶음 특허 줄은 같은 앞 문장("미확보: 출원인이 이 회사로 확인된 특허를 검색에서 찾지 못했습니다")을 쓴다.
 
 ### 8.8 `papers` — 논문 동향 (열 때, 학술 검색 최대 12, 모델 1, OpenAlex)
 
@@ -690,9 +692,9 @@
 
 - 상태: 경쟁사마다 일부가 비어도 `done`(칸마다 사유). 모든 경쟁사가 실패하면 `unavailable`(`upstream_error`).
 
-**원문 링크 기록**(2026-11-23에 더함). 화면: `patents.items`는 경쟁사 분석 "나란히 비교" 표의 경쟁사 국내 특허 칸 원문 링크로 보인다(`docs/ux/screens.md` 4B.2 "칸의 원문 링크"). `summary.inputArticles`는 기록만 하고 아직 화면에 보이지 않는다. 서버가 받은 주소만 적고 만들어 내지 않는다. `http://`·`https://`가 아닌 주소는 `null`(1.3). 설립·재무·국민연금은 공공 API 원자료라 원문 주소가 없고 칸도 두지 않는다. 투자 라운드는 이미 `funding.rounds[].sources[].url`(8.5, Premium은 `null`)에 있다.
+**원문 링크 기록**(2026-11-23에 더함). 화면: `patents.items`는 경쟁사 분석 "나란히 비교" 표의 경쟁사 검색으로 확인한 특허 칸 원문 링크로 보인다(`docs/ux/screens.md` 4B.2 "칸의 원문 링크"). `summary.inputArticles`는 기록만 하고 아직 화면에 보이지 않는다. 서버가 받은 주소만 적고 만들어 내지 않는다. `http://`·`https://`가 아닌 주소는 `null`(1.3). 설립·재무·국민연금은 공공 API 원자료라 원문 주소가 없고 칸도 두지 않는다. 투자 라운드는 이미 `funding.rounds[].sources[].url`(8.5, Premium은 `null`)에 있다.
 
-- `patents.items: RivalPatent[]?` — 출원인이 원문(Google Patents 공개 문서)에서 그 경쟁사로 확인된 특허 낱건. 출원일 최근순. `RivalPatent = {id, title, assignee?, applicationNo?, filingDate?, publicationNo?, registrationNo?, url?}`이고 칸의 뜻은 8.7 `Patent`의 같은 이름 칸과 같다(`url`은 출원인을 확인하려고 연 원문 주소). 등록 여부는 `registrationNo` 유무(8.7과 같은 규칙)라서 `registered` = `registrationNo`가 있는 낱건 수다. 상한 30건(`limits.PATENT_PAGES_PER_COMPANY`): 원문 확인 상한(경쟁사 한 곳 30쪽)과 같아서 확인된 특허는 잘리지 않고, 언제나 `items` 수 = `total`이다. 출원인이 다른 언급 문서(8.7 `mentions`)는 넣지 않는다. 화면은 이 칸 주소를 국내 특허 칸의 "원문 열기"(1건)·"원문 {n}건"(여러 건)으로 단다(이 칸이 없거나 `null`이면 그 칸에 링크가 없다).
+- `patents.items: RivalPatent[]?` — 출원인이 원문(Google Patents 공개 문서)에서 그 경쟁사로 확인된 특허 낱건. 출원일 최근순. `RivalPatent = {id, title, assignee?, applicationNo?, filingDate?, publicationNo?, registrationNo?, url?}`이고 칸의 뜻은 8.7 `Patent`의 같은 이름 칸과 같다(`url`은 출원인을 확인하려고 연 원문 주소). 등록 여부는 `registrationNo` 유무(8.7과 같은 규칙)라서 `registered` = `registrationNo`가 있는 낱건 수다. 상한 30건(`limits.PATENT_PAGES_PER_COMPANY`): 원문 확인 상한(경쟁사 한 곳 30쪽)과 같아서 확인된 특허는 잘리지 않고, 언제나 `items` 수 = `total`이다. 출원인이 다른 언급 문서(8.7 `mentions`)는 넣지 않는다. 화면은 이 칸 주소를 검색으로 확인한 특허 칸의 "원문 열기"(1건)·"원문 {n}건"(여러 건)으로 단다(이 칸이 없거나 `null`이면 그 칸에 링크가 없다).
 - `summary.inputArticles: RivalSummaryInput[]?` — **요약 모델에 넘긴 기사 목록**이다. 모델이 그중 무엇을 근거로 썼는지는 받지 않으므로 알 수 없다(나중에 화면에 쓸 때도 근거 표시가 아니라 "요약에 넘긴 자료"로 보여야 한다). 지금은 기록만 하고 화면에 보이지 않는다. 그 경쟁사 뉴스(최근 12개월, 중복 정리 뒤 날짜 최신순)의 앞 15건(`sections.RIVAL_SUMMARY_ARTICLES`)이고 모델에 넘긴 순서 그대로다. `RivalSummaryInput = {title, url?, naverUrl?, date?, outlet?}`(8.6 `Article`의 같은 이름 칸, 발췌 글은 넣지 않는다). `[]`이면 그 경쟁사 기사 없이 쓴 요약이다(모델 지시: 뉴스가 없으면 일반적으로 알려진 사업 개요만 쓴다). 요약이 없으면(`summary: null`) 이 칸도 없다.
 - 뒤로 호환: 두 칸이 생기기 전 스냅샷은 읽을 때 `null`로 채운다(12.1). `null` = 기록 없음. 새 결과는 언제나 목록이다. 화면은 브라우저에 저장된 옛 응답(12.3)에 키 자체가 없을 수 있다고 보고 읽는다(`contract.ts`에서 선택 칸 `?:`). 키를 더하기만 했으므로 `contractVersion`은 1 그대로다(버전을 올리면 브라우저에 저장된 옛 응답을 화면이 계약 모양이 아니라고 버린다).
 
@@ -720,7 +722,7 @@
 
 - 단락 순서는 언제나 개요, 재무·고용, 투자, 최근 동향, 기술, 경쟁사다. 주된 서버 단락: 개요 = `profile`, 재무·고용 = `official`, 투자 = `funding_history`, 최근 동향 = `news`, 기술 = `patents`, 경쟁사 = `profile`(screens 4.0.1).
 - 개요의 대표·설립·본사는 `merged.ceo`·`founded`·`headquarters`, 직원 수는 `merged.employees`(`null`이면 "확인 중").
-- 핵심 값 4칸: 매출 = `merged.revenue.official`(없으면 `.web`), 국민연금 가입자 = `merged.npsLatest` + `official.result.nps.summary.change`, 누적 투자 = `funding_history.result.summary.cumulative.byCurrency`(통화마다 따로) + `roundCount`·`latest`, 국내 특허 = `merged.patentCount` + `patents.result.summary.registered`.
+- 핵심 값 4칸: 매출 = `merged.revenue.official`(없으면 `.web`), 국민연금 가입자 = `merged.npsLatest` + `official.result.nps.summary.change`, 누적 투자 = `funding_history.result.summary.cumulative.byCurrency`(통화마다 따로) + `roundCount`·`latest`, 검색으로 확인한 특허 = `merged.patentCount` + `patents.result.summary.registered`.
 - 회사 표시줄 칩: 지역 = `merged.region`, 업력 = `merged.founded.raw`(엇갈림이면 `values[usedIndex].raw`, `usedIndex`가 null이면 "업력 엇갈림"), 기업 유형 = 사용자 고르기(`merged.bizType`는 늘 미확보) + `bizTypeHint`.
 - 자금·판로 조건: 지역 = `merged.region.raw`(`confirmed`·`reported`일 때만), 관심 투자 분야 = `merged.fundField.raw`, 회사 사업과 관련 = `merged.programKeywords`, 이미 투자함 = `merged.investors`, 경쟁사에 투자 = `rivals_deep.result.rivalInvestors`.
 - 저장된 분석과 진행 중 작업이 동시에 있으면(새로 분석 중) 저장된 분석을 보이고, 새 작업의 단락이 끝 상태가 되면 그 단락만 바꾼다. 새 작업의 단락이 `unavailable`이면 이전 결과를 두고 사유를 단락 바닥에 쓴다(screens 1.7). 합친 값(`merged`)도 같은 규칙이다: 새 값이 `null`(확인 중)이거나 `unavailable`인데 이전 값이 `unavailable`이 아니면 이전 값을 쓴다(`industry`·`revenue`는 `official`·`web` 하나씩). 이전 결과를 둔 단락이 채우는 목록(`funding_history`·`facts` → `investors`, `profile`·`facts` → `rivals`, `profile` → `techKeywords`·`programKeywords`·`bidKeywords`)은 이전 목록을 쓴다.
@@ -787,7 +789,7 @@
 | `employees` | `merged.employees.display` | `confirmed`·`reported`가 아님, 30자 넘음. **국민연금 값은 넣지 않는다** |
 | `revenue` | `"{revenue.official.display} ({source.asOf}, {source.basis})"`(예 "56.7억원 (2024 사업연도, 별도)"), 없으면 `revenue.web.display` | 60자 넘음, `confirmed`·`reported`가 아님 |
 | `need` | `""` | |
-| `notes` | 고친 "그 밖의 사항" + 자동 메모를 ", "로 이음: `"확인된 국내 특허 {n}건(출원인 확인, 등록 {r}건)"`(특허 1건 이상), `"국민연금 가입자 {n}명({YYYY-MM}, 직원 수와 다름)"`(국민연금 있을 때) | 400자를 넘으면 자동 메모부터 뺀다 |
+| `notes` | 고친 "그 밖의 사항" + 자동 메모를 ", "로 이음: `"검색으로 확인한 특허 {n}건(출원인 확인, 등록 {r}건)"`(특허 1건 이상. 2026-11-23 전 "확인된 국내 특허 {n}건(…)"), `"국민연금 가입자 {n}명({YYYY-MM}, 직원 수와 다름)"`(국민연금 있을 때) | 400자를 넘으면 자동 메모부터 뺀다 |
 
 **경쟁사 조건이라면?**(확정한 국내 경쟁사 한 곳, R-13): 지역·기업 유형·필요한 자금은 우리 회사 값을 그대로 두고, 나머지만 경쟁사 값으로 바꾼다.
 

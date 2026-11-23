@@ -645,7 +645,7 @@ class RivalPatents(TypedDict):
     total: int
     registered: int
     byYear: dict[str, int]
-    items: list[RivalPatent] | None  # 출원일 최근순, 최대 30(원문 확인 상한과 같아 len == total). None = 기록 없음(이 칸 전 스냅샷). 화면: 비교 표 국내 특허 칸의 원문 링크
+    items: list[RivalPatent] | None  # 출원일 최근순, 최대 30(원문 확인 상한과 같아 len == total). None = 기록 없음(이 칸 전 스냅샷). 화면: 비교 표 검색으로 확인한 특허 칸의 원문 링크
 
 
 @_strict

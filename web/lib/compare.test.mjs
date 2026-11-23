@@ -51,7 +51,7 @@ test("자료가 없는 경쟁사 칸은 미확보와 사유이고 빈칸·0·- �
   }
   assert.equal(h.founded.reason, "법인이 확인되지 않음");
   assert.equal(h.revenue.reason, "금융위원회 재무 자료 없음");
-  assert.equal(h.patents.reason, "출원인이 확인된 특허를 찾지 못함");
+  assert.equal(h.patents.reason, "출원인이 확인된 특허를 검색에서 찾지 못함");
 });
 
 test("경쟁사에 투자 라운드는 있는데 투자기관 이름이 없으면 그 사유를 정확히 쓴다", () => {
@@ -184,10 +184,10 @@ test("특허 줄은 전체 보유 수로 읽히지 않게 '검색으로 확인�
   assert.equal(cellText(cols[0].cells.patents), "11건, 출원인 확인, 등록 8건");
   assert.match(cellText(cols[1].cells.patents), /^6건, 출원인 확인, 등록 \d+건$/);
   // 0건(찾지 못함)은 0건이 아니라 미확보
-  assert.equal(cellText(cols[2].cells.patents), "미확보: 출원인이 확인된 특허를 찾지 못함");
+  assert.equal(cellText(cols[2].cells.patents), "미확보: 출원인이 확인된 특허를 검색에서 찾지 못함");
   const r = structuredClone(job("F-RIVALS").sections.rivals_deep.result.rivals[0]);
   r.patents = { ...r.patents, total: 0, registered: 0, items: [] };
-  assert.deepEqual(rivalColumn(r).cells.patents, { kind: "missing", reason: "출원인이 확인된 특허를 찾지 못함" });
+  assert.deepEqual(rivalColumn(r).cells.patents, { kind: "missing", reason: "출원인이 확인된 특허를 검색에서 찾지 못함" });
   // 우리 회사 등록 수를 모르면(patents 결과 없음) 기준은 "출원인 확인"만
   const j = job("F-RIVALS");
   j.sections.patents.result = null;

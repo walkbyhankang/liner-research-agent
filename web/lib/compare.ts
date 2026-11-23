@@ -5,7 +5,7 @@
 import type { AnalysisJob, FhSummary, MergedInvestor, Patent, RivalDeep, RivalPatent, Round, Value } from "./contract.ts";
 import type { Edits } from "./company-values.ts";
 import { byCurrencyTexts, moneyText, num, safeUrl, stageKo, wonDisplay } from "./format.ts";
-import { PATENT_LABEL, isTerminal, type Word } from "./view.ts";
+import { PATENT_LABEL, PATENT_NONE, isTerminal, type Word } from "./view.ts";
 
 export type CompareItem = "founded" | "revenue" | "nps" | "funding" | "latest" | "patents" | "investors";
 /**
@@ -234,7 +234,7 @@ export function myColumn(job: AnalysisJob, edits?: Edits): CompareColumn {
   const reg = s.patents.result?.summary.registered;
   // 검색으로 확인한 특허 칸의 원문은 patents 단락 낱건(출원인 원문 확인 특허)의 주소. 합친 값 자체의 출처 주소는 쓰지 않는다.
   // 기준 글은 핵심 값 칸(view.ts)과 같은 "출원인 확인, 등록 {r}건"(복사·화면 읽기 한 줄 글에도 무엇을 센 수인지 남게)
-  const patents = fromValue(m.patentCount, () => patentBasis(reg), "출원인이 확인된 특허를 찾지 못함", patentLinks(s.patents.result?.patents ?? []));
+  const patents = fromValue(m.patentCount, () => patentBasis(reg), PATENT_NONE, patentLinks(s.patents.result?.patents ?? []));
   return {
     key: "mine",
     name: job.company.name,
@@ -281,7 +281,7 @@ export function rivalColumn(r: RivalDeep): CompareColumn {
         ? missing(r.patentsReason, "특허 자료를 확인하지 못함")
         : r.patents.total > 0
           ? withLinks({ kind: "value", lines: [`${r.patents.total}건`], basis: patentBasis(r.patents.registered), word: "confirmed", source: "Google Patents" }, patentLinks(r.patents.items ?? []))
-          : missing(null, "출원인이 확인된 특허를 찾지 못함"),
+          : missing(null, PATENT_NONE),
       // 라운드는 있는데 투자기관 이름이 없으면 그 사유를 정확히 쓴다(우리 회사 열과 같은 문구). 출처 글과 원문은 칸에 보인 앞 3곳이 든 라운드에서(roundsSourced)
       investors:
         f && f.investors.length

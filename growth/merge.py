@@ -197,7 +197,7 @@ def merged(sections: dict, *, query: str, crno: str | None, job_running: bool) -
         p = v.result("patents")
         total = ((p or {}).get("summary") or {}).get("total") or 0
         m["patentCount"] = (value(f"{total}건", total, "confirmed", make_source("patents", as_of=v.asof("patents")))
-                            if total else missing(v.why("patents", "출원인이 확인된 특허를 찾지 못함")))
+                            if total else missing(v.why("patents", "출원인이 확인된 특허를 검색에서 찾지 못함")))
 
     # 낱말·투자 분야(7.7)
     if prof:

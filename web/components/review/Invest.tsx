@@ -11,7 +11,7 @@ import { elapsedText, fmtTime, isStale, stageKo, todayKST } from "@/lib/format";
 import { rivalBackers } from "@/lib/funding";
 import { putBrief, setPrep, toggleSaved, type SavedItem } from "@/lib/local";
 import { DD_GROUPS, DD_ITEMS, QUESTIONS, QUESTION_GROUPS, groupCounts, relatedHref, type PrepContext, type Related } from "@/lib/prep";
-import { pickedRivals } from "@/lib/view";
+import { PATENT_SCOPE, pickedRivals } from "@/lib/view";
 import { PATENT_MISSING, evidenceFinance, evidenceFunding, evidenceNews, evidencePatents, openValues } from "@/lib/review";
 import { runTask } from "@/lib/tasks";
 import { useTask } from "@/lib/useTask";
@@ -284,7 +284,7 @@ function EvidenceBody({ job, which }: { job: AnalysisJob; which: "finance" | "fu
             </li>
           ))}
         </ul>
-        <SourceLine word="confirmed" label="특허 공개 원문 (Google Patents)" detail={`${r.queriedAt.slice(0, 10)} 조회, 출원인이 이 회사인 국내 특허만`} />
+        <SourceLine word="confirmed" label="특허 공개 원문 (Google Patents)" detail={`${r.queriedAt.slice(0, 10)} 조회, ${PATENT_SCOPE}`} />
       </div>
     );
   }

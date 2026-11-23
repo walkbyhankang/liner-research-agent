@@ -395,7 +395,7 @@ export type RivalDeep = {
     total: number;
     registered: number;
     byYear: Record<string, number>;
-    /** 출원일 최근순, 최대 30(items 수 = total). null = 기록 없음(옛 스냅샷). 브라우저에 저장된 옛 응답에는 키가 없을 수 있다. 화면: 비교 표 국내 특허 칸의 원문 링크(compare.ts) */
+    /** 출원일 최근순, 최대 30(items 수 = total). null = 기록 없음(옛 스냅샷). 브라우저에 저장된 옛 응답에는 키가 없을 수 있다. 화면: 비교 표 검색으로 확인한 특허 칸의 원문 링크(compare.ts) */
     items?: RivalPatent[] | null;
   } | null;
   patentsReason: string | null;

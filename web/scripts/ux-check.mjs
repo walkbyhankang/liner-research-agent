@@ -792,6 +792,8 @@ await run("main", async () => {
   const fdates = (te.match(/출원 (\d{4}-\d{2}-\d{2})/g) ?? []).slice(0, 3);
   check("TE-02", fdates.length === 3 && [...fdates].sort().reverse().join() === fdates.join() && te.includes("특허 11건 모두 보기"), fdates.join(","));
   check("TE-03", te.includes("특허 문서 30건까지 원문을 확인했습니다."));
+  // TE-08(출처 범위): 묶음 출처 줄 기준은 값 이름과 헷갈리지 않는 범위 글이고, 기술 단락에 옛 이름 "국내 특허"가 없다(2026-11-23)
+  check("TE-08 (출처 범위)", te.includes("조회, 검색으로 찾은 문서 중 출원인이 이 회사인 한국 특허만") && !te.includes("국내 특허"), te.match(/조회, [^\n]*특허만/)?.[0] ?? "");
   const menClosed = (await disclosure(page, "회사 이름이 나오지만 출원인이 다른 문서 1건")) === "false";
   await openDisclosure(page, "회사 이름이 나오지만 출원인이 다른 문서 1건");
   check("TE-04", menClosed && (await text(page, "#tech")).includes("건수에 넣지 않았습니다."));
@@ -1606,7 +1608,14 @@ await run("variants", async () => {
   const in08 = await waitText(page, "투자 라운드 자료를 찾지 못했습니다. 투자 이력이 없다는 뜻은 아닙니다.");
   const t = await text(page);
   check("IN-08", in08);
-  check("TE-08", t.includes("출원인이 이 회사로 확인된 국내 특허를 찾지 못했습니다."));
+  // TE-08: 같은 미확보 상태가 화면마다 같은 말: 기술 단락은 서버 no_data 문장, 핵심 값 칸은 같은 말의 짧은 꼴(2026-11-23 새 이름 기준)
+  const te08tile = await page.evaluate(() => [...document.querySelectorAll("ul[aria-label='핵심 값'] li")].find((l) => l.innerText.startsWith("검색으로 확인한 특허"))?.innerText.replace(/\s+/g, " ") ?? "");
+  check(
+    "TE-08",
+    (await text(page, "#tech")).includes("출원인이 이 회사로 확인된 특허를 검색에서 찾지 못했습니다. 검색에 걸리지 않은 특허는 빠집니다.") &&
+      te08tile.includes("미확보: 출원인이 확인된 특허를 검색에서 찾지 못함") && !t.includes("국내 특허"),
+    te08tile,
+  );
   check("NE-08", !/중요 사건 \d+개 더 보기/.test(t));
   const tiles = await page.$$eval("ul[aria-label='핵심 값'] li", (l) => l.map((x) => x.innerText));
   check("C-06", tiles.filter((x) => x.includes("미확보:")).length >= 2 && !tiles.some((x) => /\n(0|-)\n/.test(`\n${x}\n`)));
@@ -2094,7 +2103,7 @@ await run("variants", async () => {
     check(
       "RI-30",
       row30.head === "검색으로 확인한 특허" && row30.mine.includes("11건") && row30.mine.includes("출원인 확인, 등록 8건") && row30.rival.includes("6건") && /출원인 확인, 등록 \d+건/.test(row30.rival) &&
-        row30.third.includes("출원인이 확인된 특허를 찾지 못함") && !/\b0건/.test(row30.third) && listHead.startsWith("주식회사 가나다테크 검색으로 확인한 특허 원문 11건") &&
+        row30.third.includes("출원인이 확인된 특허를 검색에서 찾지 못함") && !/\b0건/.test(row30.third) && listHead.startsWith("주식회사 가나다테크 검색으로 확인한 특허 원문 11건") &&
         all30.includes("검색으로 확인한 특허: 특허 공개 원문 (Google Patents)") && all30.includes("출원연도별 검색으로 확인한 특허") && !all30.includes("국내 특허"),
       `${JSON.stringify(row30).replace(/\\n/g, " ")} | ${listHead}`,
     );

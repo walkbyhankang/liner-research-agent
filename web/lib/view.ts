@@ -105,6 +105,10 @@ export const firmStatus = (v: Value | null | undefined) => Boolean(v && (v.statu
  * 자격 대조에 함께 보내는 값(Grants.tsx, 회사 정보 수정 창, company-values.ts 자동 메모). 문장 안에서는 "검색으로 확인한 특허 {n}건"
  */
 export const PATENT_LABEL = "검색으로 확인한 특허";
+/** 찾지 못했을 때 칸 자리(핵심 값 칸·비교 표)의 짧은 사유. 서버 merge.py 의 patentCount 기본값·sections.py no_data 문장과 같은 말(계약 7.6·8.7) */
+export const PATENT_NONE = "출원인이 확인된 특허를 검색에서 찾지 못함";
+/** 특허 묶음 출처 줄의 기준(범위): 값 이름과 헷갈리지 않게 무엇을 셌는지 그대로 쓴다(기술 단락, 미팅 근거 묶음) */
+export const PATENT_SCOPE = "검색으로 찾은 문서 중 출원인이 이 회사인 한국 특허만";
 
 export type Tile = {
   key: "revenue" | "nps" | "invest" | "patents";
@@ -182,7 +186,7 @@ export function keyTiles(job: AnalysisJob): Tile[] {
   // 검색으로 확인한 특허(PATENT_LABEL)
   const pc = m.patentCount;
   if (!pc) tiles.push(blank("patents", PATENT_LABEL, "tech", true));
-  else if (pc.status === "unavailable") tiles.push({ ...blank("patents", PATENT_LABEL, "tech", false), missing: `미확보: ${pc.reason ?? "출원인이 확인된 특허를 찾지 못함"}` });
+  else if (pc.status === "unavailable") tiles.push({ ...blank("patents", PATENT_LABEL, "tech", false), missing: `미확보: ${pc.reason ?? PATENT_NONE}` });
   else {
     const reg = s.patents.result?.summary.registered;
     tiles.push({ key: "patents", label: PATENT_LABEL, anchor: "tech", loading: false, big: [pc.display ?? ""], basis: [`출원인 확인${typeof reg === "number" ? `, 등록 ${reg}건` : ""}`], word: pc.status, missing: null, extra: null });

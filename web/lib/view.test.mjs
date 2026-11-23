@@ -37,7 +37,7 @@ test("누적 투자는 통화마다 따로 보이고 더하지 않는다(IN-06, 
 test("값이 없으면 미확보와 사유를 쓰고, 단락이 끝나기 전에는 확인 중이다(C-06, A-01)", () => {
   const empty = keyTiles(job("F-EMPTY"));
   assert.equal(empty[2].missing, "미확보: 투자 라운드 자료 없음");
-  assert.equal(empty[3].missing, "미확보: 출원인이 확인된 특허를 찾지 못함");
+  assert.equal(empty[3].missing, "미확보: 출원인이 확인된 특허를 검색에서 찾지 못함");
   assert.ok(keyTiles(staged[0]).every((t) => t.loading));
   const t1 = keyTiles(staged[1]);
   assert.deepEqual(t1.map((t) => t.loading), [false, false, true, true]);
