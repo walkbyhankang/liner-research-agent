@@ -133,11 +133,11 @@ scripts/run_local.sh        # 성장노트 화면 + 분석 서버
 ## 6. 테스트
 
 ```bash
-.venv/bin/python -m pytest -q tests   # Python 422개
-npm --prefix web test                 # 화면 규칙 73개
+.venv/bin/python -m pytest -q tests   # Python 434개
+npm --prefix web test                 # 화면 규칙 83개
 ```
 
-화면 완료 기준(`docs/ux/acceptance.md`)은 가짜 분석 서버와 빌드한 화면, 설치된 Chrome으로 자동 점검합니다(237건, 사람 확인 기준의 자동 보조 점검 포함). 실제 서버로 처음부터 끝까지 쓴 검증 기록은 `docs/verification.md`입니다.
+화면 완료 기준(`docs/ux/acceptance.md`)은 가짜 분석 서버와 빌드한 화면, 설치된 Chrome으로 자동 점검합니다(265건, 사람 확인 기준의 자동 보조 점검 포함, 2026-11-23). 실제 서버로 처음부터 끝까지 쓴 검증 기록은 `docs/verification.md`입니다.
 
 ```bash
 cd web && npm run build              # web/node_modules 가 없으면 먼저 npm ci

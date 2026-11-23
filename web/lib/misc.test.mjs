@@ -76,7 +76,7 @@ test("회사 확정: 이름이 같은 후보만 사업자번호·전체 주소·
   assert.equal(sameNameIds(cands("F-CORP-7")).size, 0);
   assert.equal(sameNameIds(cands("F-CORP-1")).size, 0);
   assert.deepEqual([...sameNameIds([{ companyId: "a", name: "(주)라마바" }, { companyId: "b", name: "라마바 주식회사" }, { companyId: "c", name: "라마바랩" }])], ["a", "b"]);
-  assert.equal(fmtBzno("1234567890"), "123-45-67890");
+  assert.equal(fmtBzno("1234567890"), "123-45-67890"); // 가상 번호(실제 회사 번호는 저장소에 넣지 않는다)
   assert.equal(fmtBzno("123-45-67890"), "123-45-67890");
   assert.equal(fmtBzno("12345"), "12345");
   assert.equal(fmtBzno(null), null);
