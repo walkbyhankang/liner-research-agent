@@ -207,7 +207,9 @@ b{font-weight:700}
 .oc .tm b{font-size:17px;letter-spacing:-.03em;color:var(--g);white-space:nowrap}
 .oc .tm span{font-size:9.4px;color:var(--sub);line-height:1.38}
 .g3{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.g3 .card{padding:9px 11px}
+.g3>div{display:flex;flex-direction:column}
+.g3 .vf{margin-top:0}
+.g3 .card{flex:1;padding:12px;display:flex;flex-direction:column;justify-content:center}
 .vf{display:flex;align-items:center;gap:3px;margin-top:6px}
 .vf .s{flex:1;text-align:center;border-radius:9px;padding:5px 2px;font-size:9.8px;font-weight:700;line-height:1.3;border:1.4px solid #aacbc4;background:#fff;color:var(--gd)}
 .vf .s small{display:block;font-size:8.8px;color:var(--mute);font-weight:500}
@@ -409,7 +411,7 @@ b{font-weight:700}
   <section class="blk g3">
     <div>
       <div class="sec"><span class="n">3</span><span class="t">AI 모델도 모두 Liner로</span></div>
-      <div class="card"><svg id="models" width="346" height="120"></svg>
+      <div class="card"><svg id="models" width="340" height="118" viewBox="0 0 346 120"></svg>
         <div class="note" style="color:var(--sub);margin-top:3px">모든 호출이 같은 Liner 클라이언트를 거치므로, <b style="color:var(--g)">모델 이름만 고치면 다른 모델로 바꿀 수 있습니다.</b></div></div>
     </div>
     <div>
@@ -495,13 +497,13 @@ function radial(){
   T(s,0,9,'지원 분야',{a:'start',s:8.4,c:C.sub,w:700}); T(s,0,20,'접수 공고 수',{a:'start',s:7.8,c:C.mute,w:500}); T(s,0,146,'쓰는 사람',{a:'start',s:8.4,c:C.sub,w:700}); T(s,0,157,'직무',{a:'start',s:7.8,c:C.mute,w:500});
 }
 function sankey(){
-  const W=482,H=196, s=d3.select('#sankey');
+  const s=d3.select('#sankey'), W=+s.attr('width'), H=+s.attr('height');
   const N=[['웹 검색',C.web],['Premium 검색',C.pre],['모델 게이트웨이',C.gw],['Responses',C.rsp],
            ['회사 개요',C.ink],['원문 확인 사실',C.ink],['투자 이력',C.ink],['최근 동향',C.ink],['기술·특허',C.ink]].map(([id,c])=>({id,c}));
   const L=[['웹 검색','회사 개요',3],['모델 게이트웨이','회사 개요',1],['웹 검색','원문 확인 사실',4],['Responses','원문 확인 사실',4],
            ['Premium 검색','투자 이력',2],['웹 검색','최근 동향',2],['모델 게이트웨이','최근 동향',1],['웹 검색','기술·특허',2]]
            .map(([a,b,v])=>({source:a,target:b,value:v}));
-  const g=d3.sankey().nodeId(d=>d.id).nodeWidth(11).nodePadding(9).nodeSort(null).linkSort(null).extent([[104,24],[W-150,H-16]])({nodes:N,links:L});
+  const g=d3.sankey().nodeId(d=>d.id).nodeWidth(11).nodePadding(9).nodeSort(null).linkSort(null).extent([[104,24],[W-150,H-4]])({nodes:N,links:L});
   s.append('g').selectAll('path').data(g.links).join('path').attr('d',d3.sankeyLinkHorizontal()).attr('fill','none')
    .attr('stroke',d=>d.source.c).attr('stroke-opacity',.30).attr('stroke-width',d=>Math.max(1.5,d.width-1.2));
   s.append('g').selectAll('rect').data(g.nodes).join('rect').attr('x',d=>d.x0).attr('y',d=>d.y0).attr('width',d=>d.x1-d.x0).attr('height',d=>d.y1-d.y0).attr('rx',3).attr('fill',d=>d.c);
@@ -516,9 +518,9 @@ function sankey(){
     }});
   T(s,115,10,'부른 Liner API · 호출 수',{a:'end',s:9.6,w:700,c:C.g});
   T(s,W-150,10,'결과를 쓴 분석 항목',{a:'start',s:9.6,w:700,c:C.g});
-  T(s,(115+W-150)/2,10,'→  선의 굵기 = 호출 수  →',{s:8.6,w:500,c:C.mute});
+  T(s,(115+W-150)/2,10,'띠가 굵을수록 호출이 많음',{s:8.6,w:500,c:C.mute});
   s.append('line').attr('x1',0).attr('x2',W).attr('y1',16).attr('y2',16).attr('stroke','#e1e6e4').attr('stroke-dasharray','3 3');
-  T(s,(115+W-150)/2,H-2,'다섯 항목은 동시에 조사합니다 · 실측 약 2~3분',{s:8.6,w:500,c:C.mute});
+  T(s,0,H-14,'오른쪽 다섯 항목은',{a:'start',s:8.6,w:500,c:C.mute}); T(s,0,H-2,'동시에 조사(실측 약 2~3분)',{a:'start',s:8.6,w:500,c:C.mute});
 }
 function models(){
   const s=d3.select('#models');
