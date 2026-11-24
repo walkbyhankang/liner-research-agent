@@ -607,9 +607,11 @@ async function hero(){
     const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineDashedMaterial({color:c,dashSize:4,gapSize:3}));l.computeLineDistances();sc.add(l);
     pos.push([t,c,p]);});
   r.render(sc,cam);await bake(r,host,W,H);r.dispose();
-  pos.forEach(([t,c,p])=>{const d=label(host,cam,W,H,p.clone().add(new THREE.Vector3(0,3,0)),'',0);d.style.transform='translate(-50%,-50%)';
+  const tops=[];
+  pos.forEach(([t,c,p])=>{const d=label(host,cam,W,H,p.clone().add(new THREE.Vector3(0,3,0)),'',0);tops.push(parseFloat(d.style.top));d.style.transform='translate(-50%,-50%)';
     d.innerHTML=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#fff;background:${hex(c)};border-radius:6px;padding:0 6px;line-height:16px">${t}</span>`;});
   const n=label(host,cam,W,H,new THREE.Vector3(0,26,0),'',0);n.style.transform='translate(-50%,-50%)';
+  n.style.top=((Math.min(...tops)+Math.max(...tops))/2)+'px';  // 둘레 이름표들의 세로 가운데
   n.innerHTML='<span style="display:inline-block;font-size:11px;font-weight:700;color:#fff;background:#0c6b58;border-radius:7px;padding:1px 8px">노트 한 장으로 정리</span>';
 }
 // 2쪽: 실측 19회 / 상한 21회
