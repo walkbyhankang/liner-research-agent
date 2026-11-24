@@ -27,7 +27,7 @@ b{font-weight:700}
 .title{display:flex;align-items:center;gap:11px;margin-top:9px}
 .bars{display:flex;align-items:flex-end;gap:4px;height:36px}
 .bars i{display:block;width:10px;border-radius:2.5px;background:var(--g)}
-.bars i:nth-child(1){height:15px;opacity:.55}.bars i:nth-child(2){height:24px;opacity:.78}.bars i:nth-child(3){height:36px}
+.bars i:nth-child(1){height:15px;background:#6fa79b}.bars i:nth-child(2){height:24px;background:#3d8879}.bars i:nth-child(3){height:36px}
 .title b{font-size:46px;line-height:1;letter-spacing:-.045em}
 .hlt{display:inline;font-size:17.5px;font-weight:700;letter-spacing:-.02em;color:var(--gd)}
 .lead{font-size:11.4px;line-height:1.6;color:var(--sub);margin-top:6px}
@@ -41,10 +41,10 @@ b{font-weight:700}
 .crit .cap span{font-size:10px;color:var(--mute)}
 .cb{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .cbk{position:relative;height:62px;border-radius:12px;color:#fff;padding:7px 10px 0 44px;overflow:hidden}
-.cbk .nn{position:absolute;left:7px;top:-5px;font-size:64px;font-weight:700;line-height:1;letter-spacing:-.06em;color:rgba(255,255,255,.22)}
+.cbk .nn{position:absolute;left:7px;top:-5px;font-size:64px;font-weight:700;line-height:1;letter-spacing:-.06em;color:var(--nn)}
 .cbk .nm{font-size:13px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:6px}
-.cbk .pt{font-size:10px;font-weight:700;background:rgba(255,255,255,.2);border-radius:6px;padding:0 5px}
-.cbk .ds{font-size:9.8px;line-height:1.38;margin-top:2px;color:rgba(255,255,255,.88)}
+.cbk .pt{font-size:10px;font-weight:700;background:var(--pt);border-radius:6px;padding:0 5px}
+.cbk .ds{font-size:9.8px;line-height:1.38;margin-top:2px;color:#e6f1ee}
 .cbk .go{position:absolute;right:8px;bottom:6px;font-size:9.6px;font-weight:700;background:#fff;color:var(--gd);border-radius:6px;padding:1px 7px}
 
 /* 번호 머리(원 + 테두리 상자) */
@@ -53,8 +53,8 @@ b{font-weight:700}
 .sec .t{height:30px;display:flex;align-items:center;margin-left:-15px;padding:0 14px 0 23px;background:#fff;border:2px solid var(--g);border-left:0;border-radius:0 9px 9px 0;font-size:15px;line-height:1;font-weight:700;letter-spacing:-.02em}
 .sec .tag{margin-left:8px;font-size:10px;font-weight:700;color:var(--g);background:var(--gs);border-radius:6px;padding:2px 7px}
 .sec .s{margin-left:8px;font-size:10.2px;color:var(--sub)}
-.sec.inv .n{border-color:#fff;color:var(--g)} .sec.inv .t{background:transparent;color:#fff;border-color:rgba(255,255,255,.7)} .sec.inv .tag{background:rgba(255,255,255,.18);color:#fff}
-.card{background:#fff;border-radius:12px;box-shadow:0 10px 22px -18px rgba(16,60,48,.55),0 0 0 1px rgba(12,107,88,.10)}
+.sec.inv .n{border-color:#fff;color:var(--g)} .sec.inv .t{background:var(--g);color:#fff;border-color:#b6d3cd} .sec.inv .tag{background:#388676;color:#fff}
+.card{background:#fff;border-radius:12px;box-shadow:0 0 0 1px #d6e2dc,0 2px 0 1px #e2e9e5}
 .k{font-size:11px;font-weight:700;color:var(--g)}
 .note{font-size:9.6px;color:var(--mute);line-height:1.45}
 
@@ -145,16 +145,16 @@ b{font-weight:700}
 .h2row h1{margin:8px 0 0;font-size:36px;letter-spacing:-.045em;line-height:1.05}
 .h2row .hlt{font-size:15px}
 .bign{display:flex;align-items:stretch}
-.bign .c{padding:0 14px;border-left:1.5px solid rgba(12,107,88,.25);text-align:left}
+.bign .c{padding:0 14px;border-left:1.5px solid #b5d1c8;text-align:left}
 .bign .c:first-child{border-left:0}
 .bign .v{font-size:46px;font-weight:700;letter-spacing:-.05em;line-height:.95;color:var(--g)}
 .bign .v small{font-size:15px;color:var(--ink);margin-left:2px;letter-spacing:-.02em}
 .bign .l{font-size:10.2px;font-weight:700;margin-top:3px;white-space:nowrap}
 .roles{display:grid;grid-template-columns:1fr 14px 1fr 14px 1fr;margin:12px 28px 0}
-.role{display:flex;border-radius:12px;overflow:hidden;box-shadow:0 10px 22px -18px rgba(16,60,48,.55),0 0 0 1px rgba(12,107,88,.10);background:#fff}
+.role{display:flex;border-radius:12px;overflow:hidden;box-shadow:0 0 0 1px #d6e2dc,0 2px 0 1px #e2e9e5;background:#fff}
 .role .lt{flex:none;width:72px;color:#fff;padding:9px 8px;display:flex;flex-direction:column;justify-content:space-between}
 .role .lt svg{width:20px;height:20px}
-.role .lt .a{font-size:9.6px;opacity:.85;font-weight:600}
+.role .lt .a{font-size:9.6px;color:#e3f1ec;font-weight:600}
 .role .lt .b{font-size:14px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
 .role .rt{padding:8px 10px;flex:1}
 .role .rt .chs{display:flex;flex-wrap:wrap;gap:3px}
@@ -198,7 +198,7 @@ b{font-weight:700}
 .g3{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .g3 .card{padding:9px 11px}
 .vf{display:flex;align-items:center;gap:3px;margin-top:6px}
-.vf .s{flex:1;text-align:center;border-radius:9px;padding:5px 2px;font-size:9.8px;font-weight:700;line-height:1.3;border:1.4px solid rgba(12,107,88,.35);background:#fff;color:var(--gd)}
+.vf .s{flex:1;text-align:center;border-radius:9px;padding:5px 2px;font-size:9.8px;font-weight:700;line-height:1.3;border:1.4px solid #aacbc4;background:#fff;color:var(--gd)}
 .vf .s small{display:block;font-size:8.8px;color:var(--mute);font-weight:500}
 .vf .s.f{background:var(--g);color:#fff;border-color:var(--g)} .vf .s.f small{color:#bfe9d9}
 .vf .a{color:var(--g);flex:none;display:flex} .vf .a svg{width:12px;height:12px}
@@ -240,10 +240,10 @@ b{font-weight:700}
   <div class="crit">
     <div class="cap"><b>심사 기준</b><span>이 기획서는 심사 기준의 순서를 따릅니다</span></div>
     <div class="cb">
-      <div class="cbk" style="background:#0a5a4a"><span class="nn">1</span><div class="nm">문제 정의<span class="pt">30</span></div><div class="ds">누가, 어떤 문제로,<br>얼마나 불편한지</div><span class="go">1쪽 ①</span></div>
-      <div class="cbk" style="background:#0c6b58"><span class="nn">2</span><div class="nm">완성도<span class="pt">30</span></div><div class="ds">에이전트의 해결 방식과<br>실제로 동작하는지</div><span class="go">1쪽 ②</span></div>
-      <div class="cbk" style="background:#26806a"><span class="nn">3</span><div class="nm">Liner API 활용<span class="pt">20</span></div><div class="ds">어느 기능에서<br>어떻게 쓰는지</div><span class="go">2쪽 전체</span></div>
-      <div class="cbk" style="background:#3f9478"><span class="nn">4</span><div class="nm">확장성·임팩트<span class="pt">20</span></div><div class="ds">다른 조직·직무로<br>넓힐 수 있는지</div><span class="go">1쪽 ④</span></div>
+      <div class="cbk" style="background:#0a5a4a;--nn:#407e72;--pt:#3b7b6e"><span class="nn">1</span><div class="nm">문제 정의<span class="pt">30</span></div><div class="ds">누가, 어떤 문제로,<br>얼마나 불편한지</div><span class="go">1쪽 ①</span></div>
+      <div class="cbk" style="background:#0c6b58;--nn:#418c7d;--pt:#3d8979"><span class="nn">2</span><div class="nm">완성도<span class="pt">30</span></div><div class="ds">에이전트의 해결 방식과<br>실제로 동작하는지</div><span class="go">1쪽 ②</span></div>
+      <div class="cbk" style="background:#26806a;--nn:#569c8b;--pt:#519988"><span class="nn">3</span><div class="nm">Liner API 활용<span class="pt">20</span></div><div class="ds">어느 기능에서<br>어떻게 쓰는지</div><span class="go">2쪽 전체</span></div>
+      <div class="cbk" style="background:#3f9478;--nn:#69ac96;--pt:#65a993"><span class="nn">4</span><div class="nm">확장성·임팩트<span class="pt">20</span></div><div class="ds">다른 조직·직무로<br>넓힐 수 있는지</div><span class="go">1쪽 ④</span></div>
     </div>
   </div>
 
@@ -473,7 +473,7 @@ function radial(){
   const sp=[{a:-150,t:'기술',v:'222건',c:C.gw},{a:-90,t:'수출',v:'138건',c:C.pre},{a:-30,t:'인력',v:'155건',c:C.sch},
             {a:30,t:'투자 심사',v:'미팅 준비',c:C.rsp},{a:90,t:'여신 담당',v:'현황 확인',c:C.rsp},{a:150,t:'지원기관',v:'사전 검토',c:C.rsp}];
   sp.forEach(d=>{const r=d.a*Math.PI/180, x=cx+Math.cos(r)*R, y=cy+Math.sin(r)*R;
-    s.append('line').attr('x1',cx+Math.cos(r)*25).attr('y1',cy+Math.sin(r)*25).attr('x2',cx+Math.cos(r)*(R-22)).attr('y2',cy+Math.sin(r)*(R-22)).attr('stroke',d.c).attr('stroke-width',1.6).attr('opacity',.6);
+    s.append('line').attr('x1',cx+Math.cos(r)*25).attr('y1',cy+Math.sin(r)*25).attr('x2',cx+Math.cos(r)*(R-22)).attr('y2',cy+Math.sin(r)*(R-22)).attr('stroke',d.c).attr('stroke-width',1.6).attr('stroke-opacity',.6);
     s.append('circle').attr('cx',x).attr('cy',y).attr('r',20.5).attr('fill','#fff').attr('stroke',d.c).attr('stroke-width',1.8);
     T(s,x,y-1.5,d.t,{s:d.t.length>3?8.4:9.8,w:700}); T(s,x,y+9.5,d.v,{s:7.8,c:d.c,w:700});
   });
@@ -510,7 +510,7 @@ function sankey(){
 function models(){
   const s=d3.select('#models');
   const box=(x,y,w,h,f,st,r=8)=>s.append('rect').attr('x',x).attr('y',y).attr('width',w).attr('height',h).attr('rx',r).attr('fill',f).attr('stroke',st||'none').attr('stroke-width',1.5);
-  const ln=(x1,y1,x2,y2,c)=>s.append('path').attr('d',`M${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`).attr('fill','none').attr('stroke',c).attr('stroke-width',1.8).attr('opacity',.7);
+  const ln=(x1,y1,x2,y2,c)=>s.append('path').attr('d',`M${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`).attr('fill','none').attr('stroke',c).attr('stroke-width',1.8).attr('stroke-opacity',.7);
   box(2,38,78,46,C.ink,null,10); T(s,41,57,'성장노트',{c:'#fff',w:700,s:10.6}); T(s,41,72,'Liner 클라이언트',{c:'#bfe9d9',s:8.2,w:500});
   box(104,6,98,42,'#fff',C.gw); T(s,153,23,'모델 게이트웨이',{w:700,c:C.gw,s:10}); T(s,153,38,'/chat/completions',{s:7.8,c:C.sub,m:1,w:500});
   box(104,74,98,42,'#fff',C.rsp); T(s,153,91,'Responses',{w:700,c:C.rsp,s:10}); T(s,153,106,'/responses',{s:7.8,c:C.sub,m:1,w:500});
@@ -551,9 +551,9 @@ async function hero(){
     pos.push([t,c,p]);});
   r.render(sc,cam);await bake(r,host,W,H);r.dispose();
   pos.forEach(([t,c,p])=>{const d=label(host,cam,W,H,p.clone().add(new THREE.Vector3(0,3,0)),'',0);d.style.transform='translate(-50%,-50%)';
-    d.innerHTML=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#fff;background:${hex(c)};border-radius:6px;padding:0 6px;line-height:16px;box-shadow:0 2px 6px rgba(0,0,0,.15)">${t}</span>`;});
+    d.innerHTML=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#fff;background:${hex(c)};border-radius:6px;padding:0 6px;line-height:16px">${t}</span>`;});
   const n=label(host,cam,W,H,new THREE.Vector3(0,26,0),'',0);n.style.transform='translate(-50%,-50%)';
-  n.innerHTML='<span style="display:inline-block;font-size:11px;font-weight:700;color:#fff;background:#0c6b58;border-radius:7px;padding:1px 8px;box-shadow:0 2px 6px rgba(0,0,0,.18)">노트 한 장</span>';
+  n.innerHTML='<span style="display:inline-block;font-size:11px;font-weight:700;color:#fff;background:#0c6b58;border-radius:7px;padding:1px 8px">노트 한 장</span>';
 }
 // 2쪽: 실측 19회 / 상한 21회
 async function tower(){
