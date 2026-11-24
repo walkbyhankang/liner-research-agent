@@ -36,7 +36,7 @@
 
 ## 4. Liner API를 사용한 기능
 
-Liner API 5종(웹 검색, Premium 검색, 학술 검색, 모델 게이트웨이, Responses)과 모델 3종(`openai/gpt-6.2-sol`, `anthropic/claude-opus-5.5`, `liner-gpt-router`)을 9개 기능에서 사용합니다. 기본 분석은 7개 단락(그중 Liner를 쓰는 단락 5개)을 앞뒤 관계가 허락하는 범위에서 동시에 실행하며, 실측에서 **Liner 19회(웹 검색 11 · Premium 2 · 모델 6)**를 보냈습니다(단락별 상한 합계 21회, 재시도 제외). 실측(저장된 결과 없이 1회씩, 실제 회사 2곳): 약 178초·팀 공유 크레딧 잔액 차이 $0.26(2026-11-22, `docs/submission/proposal-draft.md`), 116초(2026-11-23, `docs/verification.md`). 실행할 때마다 시간과 비용이 달라질 수 있습니다.
+Liner API 5종(웹 검색, Premium 검색, 학술 검색, 모델 게이트웨이, Responses)과 모델 3종(`openai/gpt-6.2-sol`, `anthropic/claude-opus-5.5`, `liner-gpt-router`)을 9개 기능에서 사용합니다. 기본 분석은 7개 단락(그중 Liner를 쓰는 단락 5개)을 가능한 범위에서 동시에 실행하며, 실측 1회에 **Liner 19회(웹 검색 11 · Premium 2 · 모델 6), 약 2~3분**이 걸렸습니다(단락별 상한 합계 21회, 재시도 제외). 시간과 비용은 실행할 때마다 달라질 수 있습니다(`docs/verification.md`).
 
 | 기능 | Liner API · 요청 수 | 하는 일 | 실측 |
 |---|---|---|---|
