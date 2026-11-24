@@ -8,7 +8,6 @@
 - **검색은 Liner Search API, 판단·작성은 게이트웨이로 부른 프런티어 모델**로 나눈다.
 - 게이트웨이는 모델의 서버 측 웹 검색 도구(`web_search`)를 **무시**한다. 따라서 어떤 모델을 쓰든 웹 검색 경로는 Liner Search뿐이고, 이것이 대회 요건(Search 또는 Model을 핵심 기능에 사용)을 자연스럽게 채운다.
 - 대회 공고는 Model API를 "같은 키로 500여 종의 모델을 호출"하는 것으로 설명하므로 게이트웨이로 Claude를 부르는 것도 Model API 사용에 해당한다. 다만 심사 문구가 "Liner Model과 Liner Search를 핵심 기능에 알맞게"이므로 Search 비중을 낮추지 않는다.
-- "Liner 자체 모델 성능이 낮다"는 평가는 문서로 확인할 수 없다. 키를 받은 뒤 같은 입력으로 비교 측정한다(아래 실측 항목).
 
 ## 쓸 것
 
@@ -29,7 +28,7 @@
 | Deep Research Agent | $200/1,000건, 수 분 소요. 사용하지 않는다 |
 | Visual Answer / Visualization | $150·$10/1,000건. 화면은 직접 그린다 |
 | Premium Data(`include_knowledge`) | 제공처가 해외 중심이라 한국 비상장사 데이터 깊이가 확인되지 않음 |
-| `liner-mark`, 라우터 | 품질 미검증. 비교 측정 후 가벼운 작업(검색어 생성 등)에 쓸지 결정 |
+| 라우터(`liner-claude-router` 등) | 요청마다 모델을 자동으로 골라 결과를 재현하기 어렵다. 새로 만드는 추출 단계에는 쓰지 않는다(기업분석 엔진의 `liner-gpt-router`는 그대로 쓴다) |
 
 ## 설계에 반영할 제약(문서 기재)
 
@@ -43,7 +42,7 @@
 ## 키를 받은 뒤 먼저 측정할 것(소액 유료 호출)
 
 1. `anthropic/claude-opus-5.5`를 Chat Completions + `json_schema`로 호출했을 때 스키마 준수 여부와 지연.
-2. 같은 추출 과제(라이너 시리즈 B 보도 → 기관별 역할)를 `liner-mark`, `liner-claude-router`, `anthropic/claude-opus-5.5`, `openai/gpt-6.2-sol`로 돌려 정확도·지연·비용 비교.
+2. 같은 추출 과제를 `anthropic/claude-opus-5.5`, `openai/gpt-6.2-sol` 등으로 돌려 정확도·지연·비용 비교(결과: `docs/notice-analysis-results.md`).
 3. Liner Search의 한국어 질의 품질: 은행 상품·보증 제도·운용사 포트폴리오 질의 10개에서 공식 원문이 상위 10건에 들어오는 비율.
 4. `GET /api/v1/models`가 게이트웨이 ID를 반환하는지.
 
