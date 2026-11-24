@@ -18,9 +18,9 @@
 
 예
   python docs/submission/tts/synthesize.py samples --line L01
-  python docs/submission/tts/synthesize.py lines --voice Kore
-  python docs/submission/tts/synthesize.py lines --voice Kore --only L06,P02
-  python docs/submission/tts/synthesize.py report --voice Kore
+  python docs/submission/tts/synthesize.py lines --voice ko-kr-storyteller-4
+  python docs/submission/tts/synthesize.py lines --voice ko-kr-storyteller-4 --only L06,P02
+  python docs/submission/tts/synthesize.py report --voice ko-kr-storyteller-4
   python docs/submission/tts/synthesize.py lines --dry-run      # 보낼 내용만 출력
 """
 import argparse
@@ -58,7 +58,8 @@ def convert(text, backend):
 def synth_gemini(text, style, voice, model):
     from google import genai
 
-    client = genai.Client()  # GEMINI_API_KEY
+    # GEMINI_API_KEY. TTS 모델은 v1beta에만 있다(v1에서는 404).
+    client = genai.Client(http_options={"api_version": "v1beta"})
     interaction = client.interactions.create(
         model=model,
         input=[{
@@ -123,6 +124,13 @@ def synth(line, voice, args, defaults):
     return synth_chirp(text, voice, defaults["language_code"], args.rate)
 
 
+def default_voice(args, defaults):
+    # 한국어 전용 음성(ko-kr-...)은 Gemini API에만 있다. cloud·chirp는 기본 음성 이름(Kore 등)을 쓴다.
+    if args.voice:
+        return args.voice
+    return defaults["voice"] if args.backend == "gemini" else defaults["cloud_voice"]
+
+
 def seconds(path):
     with wave.open(str(path), "rb") as w:
         return w.getnframes() / float(w.getframerate())
@@ -139,6 +147,8 @@ def write(path, audio):
 def cmd_samples(args, defaults, lines):
     line = next(l for l in lines if l["id"] == args.line)
     voices = args.voices.split(",") if args.voices else defaults["sample_voices"]
+    if not args.voices and args.backend != "gemini":
+        voices = [v for v in voices if not v.startswith("ko-kr-")]  # Gemini API 전용 음성
     for voice in voices:
         audio = synth(line, voice, args, defaults)
         if audio is None:
@@ -149,7 +159,7 @@ def cmd_samples(args, defaults, lines):
 
 
 def cmd_lines(args, defaults, lines):
-    voice = args.voice or defaults["voice"]
+    voice = default_voice(args, defaults)
     only = set(args.only.split(",")) if args.only else None
     for line in lines:
         if only and line["id"] not in only:
@@ -166,7 +176,7 @@ def cmd_lines(args, defaults, lines):
 
 
 def cmd_report(args, defaults, lines):
-    voice = args.voice or defaults["voice"]
+    voice = default_voice(args, defaults)
     folder = OUT / args.backend / voice
     rows, over = [], []
     for line in lines:
@@ -196,7 +206,7 @@ def main():
     p.add_argument("command", choices=["samples", "lines", "report"])
     p.add_argument("--backend", choices=["gemini", "cloud", "chirp"], default="gemini")
     p.add_argument("--model", help="모델 ID를 바꿀 때")
-    p.add_argument("--voice", help="lines/report에 쓸 음성 (기본: Kore)")
+    p.add_argument("--voice", help="lines/report에 쓸 음성 (기본: gemini는 defaults.voice, cloud·chirp는 defaults.cloud_voice)")
     p.add_argument("--voices", help="samples에 쓸 음성 목록, 쉼표로 구분")
     p.add_argument("--line", default="L01", help="samples에 쓸 줄 번호 (기본: L01)")
     p.add_argument("--only", help="lines에서 만들 줄 번호, 쉼표로 구분")
