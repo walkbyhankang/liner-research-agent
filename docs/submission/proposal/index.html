@@ -522,10 +522,13 @@ function sankey(){
       d.targetLinks.forEach((l,i)=>{ t.append('tspan').attr('fill',l.source.c).text((i?' + ':'')+short[l.source.id]+' '+l.value); });
     }});
   T(s,115,10,'부른 Liner API · 호출 수',{a:'end',s:9.6,w:700,c:C.g});
-  T(s,W-150,10,'결과를 쓴 분석 항목',{a:'start',s:9.6,w:700,c:C.g});
+  { const t=s.append('text').attr('x',W-150).attr('y',10).attr('font-family',F);
+    t.append('tspan').attr('font-size',9.6).attr('font-weight',700).attr('fill',C.g).text('결과를 쓴 분석 항목 ');
+    t.append('tspan').attr('font-size',8.4).attr('font-weight',500).attr('fill',C.mute).text('(실측 약 2~3분)');
+    const w=t.node().getComputedTextLength(); if(W-150+w>W) t.attr('x',W-w); }
   T(s,(115+W-150)/2,10,'띠가 굵을수록 호출이 많음',{s:8.6,w:500,c:C.mute});
   s.append('line').attr('x1',0).attr('x2',W).attr('y1',16).attr('y2',16).attr('stroke','#e1e6e4').attr('stroke-dasharray','3 3');
-  T(s,0,H-14,'오른쪽 다섯 항목은',{a:'start',s:8.6,w:500,c:C.mute}); T(s,0,H-2,'동시에 조사(실측 약 2~3분)',{a:'start',s:8.6,w:500,c:C.mute});
+ 
 }
 function models(){
   const s=d3.select('#models');
