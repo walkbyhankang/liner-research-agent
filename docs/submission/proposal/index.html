@@ -69,6 +69,12 @@ b{font-weight:700}
 .join{position:relative;height:8px}
 .join::before,.join::after{content:"";position:absolute;top:-3px;width:7px;height:14px;border-radius:4px;background:var(--pill)}
 .join::before{left:60px}.join::after{right:60px}
+.join3{display:grid;grid-template-columns:188px 1fr 1fr;gap:8px;height:8px;position:relative}
+.join3 i{display:block;position:relative}
+.join3 i::before{content:"";position:absolute;left:50%;margin-left:-3.5px;top:-3px;width:7px;height:14px;border-radius:4px;background:var(--pill)}
+.s1g>div:first-child{display:flex;flex-direction:column}
+.s1g .steps{flex:1;display:flex;flex-direction:column}
+.s1g .steps .st{flex:1}
 .steps{padding:7px 11px 8px}
 .steps .k{margin-bottom:2px}
 .st{display:flex;gap:7px;align-items:center;padding:2.5px 0;border-bottom:1px dashed #e1e6e4}
@@ -85,7 +91,7 @@ b{font-weight:700}
 .stat .lb{font-size:10.8px;font-weight:700;margin-top:4px}
 .stat svg{display:block;margin-top:6px}
 .stat .ds{font-size:9.6px;color:var(--sub);line-height:1.42;margin-top:5px}
-.band{position:relative;margin-top:7px;display:flex;align-items:center;gap:10px;background:#fcefd7;border-radius:12px;padding:8px 12px;border:1.4px solid #ecc983}
+.band{position:relative;margin-top:0;display:flex;align-items:center;gap:10px;background:#fcefd7;border-radius:12px;padding:8px 12px;border:1.4px solid #ecc983}
 .band .pl{flex:none;width:26px;height:26px;color:var(--amber);display:flex;align-items:center;justify-content:center}
 .band .pl svg{width:24px;height:24px;stroke-width:2.1}
 .band .q{font-size:13px;font-weight:700;letter-spacing:-.02em;line-height:1.35}
@@ -265,12 +271,13 @@ b{font-weight:700}
         </div>
       </div>
       <div>
+        <div class="band"><span class="pl"><i data-lucide="search-x"></i></span><div class="q">공고 목록만 봐서는 <em>우리 회사가 신청할 수 있는지</em> 알 수 없습니다.<br><span style="font-size:10.6px;font-weight:500;color:#5a4a2a">자격은 공고문을 직접 읽고 회사 자료와 맞춰 봐야 확인됩니다.</span></div><span class="asof">* 2026.11.21. 기업마당 조회 기준</span></div>
+        <div class="join3"><i></i><i></i><i></i></div>
         <div class="stats">
           <div class="card stat"><div class="big">1,303<small>건</small></div><div class="lb">접수 중인 지원사업 공고</div><svg id="dots" width="166" height="50"></svg><div class="ds">자금이 필요해 지원사업 공고를 찾으면 이만큼 나옵니다. 이들 공고 중에서 <b style="color:var(--g)">■ 금융 지원</b>은 226건뿐인데, 이것도 우리 회사가 받을 수 있는지는 일일이 열어 봐야 압니다.</div></div>
-          <div class="card stat"><div class="big">71<small>%</small></div><div class="lb">마감일이 없는 공고</div><svg id="donut" width="120" height="50"></svg><div class="ds">"예산&nbsp;소진시까지"·<wbr>"상시&nbsp;접수"로만 적혀 있어, 지금 신청할 수 있는지 공고마다 알아봐야 합니다.</div></div>
+          <div class="card stat"><div class="big">71<small>%</small></div><div class="lb">목록에 마감일 안 적힘</div><svg id="donut" width="120" height="50"></svg><div class="ds">"예산&nbsp;소진시까지"·<wbr>"상시&nbsp;접수"로만 적혀 있어, 지금 신청할 수 있는지 공고마다 알아봐야 합니다.</div></div>
           <div class="card stat"><div class="big">47<small>쪽</small></div><div class="lb">공고문 한 건, 41,165자</div><svg id="pages" width="120" height="50"></svg><div class="ds">힘들게 열어도 업력·업종 같은 자격은 4만여&nbsp;자 중 몇&nbsp;줄뿐이라, 정확히 찾아내기 어렵습니다.</div></div>
         </div>
-        <div class="band"><span class="pl"><i data-lucide="search-x"></i></span><div class="q">공고 목록만 봐서는 <em>우리 회사가 신청할 수 있는지</em> 알 수 없습니다.<br><span style="font-size:10.6px;font-weight:500;color:#5a4a2a">자격은 공고문을 직접 읽고 회사 자료와 맞춰 봐야 확인됩니다.</span></div><span class="asof">* 2026.11.21. 기업마당 조회 기준</span></div>
       </div>
     </div>
   </section>
@@ -310,7 +317,7 @@ b{font-weight:700}
       <div class="sec"><span class="n"><i data-lucide="check" style="width:16px;height:16px;stroke-width:3"></i></span><span class="t">실제로 동작합니다</span><span class="tag">완성도</span></div>
       <div class="kpis">
         <div class="card kp"><div class="v">524</div><div class="l">자동 테스트</div><div class="s">Python 412 · 화면 규칙 112<br>모두 통과</div></div>
-        <div class="card kp"><div class="v">370</div><div class="l">화면 자동 점검</div><div class="s">실제 브라우저로 점검<br>폭 390~1280, 넘침·대비</div></div>
+        <div class="card kp"><div class="v">370</div><div class="l">화면 자동 점검</div><div class="s">실제 브라우저로 점검<br>폭 390~1280px, 넘침·대비</div></div>
         <div class="card kp"><div class="v">4<small>종</small></div><div class="l">실제 호출 확인</div><div class="s">기본 분석, 같은 이름 법인,<br>공고문 대조, 운용사 요약</div></div>
         <div class="card kp"><div class="v">28</div><div class="l">리뷰로 고친 것</div><div class="s">별도 리뷰어의 검토를<br>통과해야 커밋</div></div>
       </div>
@@ -448,9 +455,9 @@ const F='IBM Plex Sans KR';
 function T(s,x,y,t,o={}){return s.append('text').attr('x',x).attr('y',y).attr('text-anchor',o.a||'middle').attr('dy',o.dy||null)
   .attr('font-size',o.s||9.6).attr('font-weight',o.w||600).attr('fill',o.c||C.ink).attr('font-family',o.m?'IBM Plex Mono':F).text(t);}
 function dots(){ // 1,303건, 금융 226건 강조
-  const s=d3.select('#dots'), cols=60, gap=2.78;
+  const s=d3.select('#dots'), cols=66, gap=2.5;
   s.selectAll('circle').data(d3.range(1303)).join('circle')
-   .attr('cx',i=>1.5+(i%cols)*gap).attr('cy',i=>1.5+Math.floor(i/cols)*gap).attr('r',1.02)
+   .attr('cx',i=>1.2+(i%cols)*gap).attr('cy',i=>1.2+Math.floor(i/cols)*gap).attr('r',0.95)
    .attr('fill',i=>i<226?C.g:'#bfcac5');
 }
 function donut(){
@@ -459,7 +466,7 @@ function donut(){
   g.append('path').attr('d',arc({startAngle:Math.PI*2*0.708+0.03,endAngle:Math.PI*2-0.03})).attr('fill','#cfd8d4');
   g.append('path').attr('d',arc({startAngle:0.0,endAngle:Math.PI*2*0.708})).attr('fill',C.pre);
   T(g,0,0,'923',{dy:'0.35em',s:10.5,w:700});
-  [['마감일 없음',C.pre],['마감일 있음','#cfd8d4']].forEach(([k,c],i)=>{s.append('rect').attr('x',60).attr('y',13+i*15).attr('width',8).attr('height',8).attr('rx',2).attr('fill',c);T(s,71,20.5+i*15,k,{a:'start',s:8.6,c:C.sub,w:500});});
+  [['안 적힘',C.pre],['적힘','#cfd8d4']].forEach(([k,c],i)=>{s.append('rect').attr('x',60).attr('y',13+i*15).attr('width',8).attr('height',8).attr('rx',2).attr('fill',c);T(s,71,20.5+i*15,k,{a:'start',s:8.6,c:C.sub,w:500});});
 }
 function pages(){
   const s=d3.select('#pages');
