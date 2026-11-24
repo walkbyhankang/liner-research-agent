@@ -221,8 +221,13 @@ b{font-weight:700}
 .big48{display:flex;align-items:center;gap:10px;margin-top:6px;background:var(--g);color:#fff;border-radius:10px;padding:6px 11px}
 .big48 .v{font-size:28px;font-weight:700;letter-spacing:-.04em;line-height:1}
 .big48 .l{font-size:9.8px;color:#d4f0e5;line-height:1.4}
-.g5{display:grid;grid-template-columns:1.22fr 1fr;gap:10px}
-.g5 .card{padding:9px 11px}
+.g5{display:grid;grid-template-columns:1fr 1fr;padding:10px 0}
+.g5 .half{padding:0 12px}
+.g5 .lay .nm{width:62px}
+.g5 .pc{padding:0 4px;font-size:9px}
+.g5 .lays{gap:5px;margin-top:6px}
+.g5 .sv{gap:5px;margin-top:6px}
+.g5 .half+.half{border-left:1px dashed #cfdad5}
 .lays{display:flex;flex-direction:column;gap:5px;margin-top:6px}
 .lay{display:flex;align-items:center;gap:7px}
 .lay .n{flex:none;width:20px;height:20px;border-radius:6px;background:var(--g);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
@@ -435,14 +440,14 @@ b{font-weight:700}
 
   <section class="blk">
     <div class="sec"><span class="n">5</span><span class="t">호출 수를 묶어 두고, 결과는 다시 씀</span></div>
-    <div class="g5">
-      <div class="card"><div class="k">세 겹의 호출 한도</div>
+    <div class="card g5">
+      <div class="half"><div class="k">세 겹의 호출 한도</div>
         <div class="lays">
           <div class="lay"><span class="n">1</span><span class="nm">단락별 상한</span><div class="bs"><span class="pc">기본 분석 합계 21회</span><span class="pc">넘으면 그 단락만 멈춤</span></div></div>
-          <div class="lay"><span class="n">2</span><span class="nm">API별 하루 상한</span><div class="bs"><span class="pc"><i style="background:var(--web)"></i>웹 500</span><span class="pc"><i style="background:var(--pre)"></i>Premium 100</span><span class="pc"><i style="background:var(--gw)"></i>모델 200</span><span class="pc"><i style="background:var(--sch)"></i>학술 200</span></div></div>
-          <div class="lay"><span class="n">3</span><span class="nm">동시 요청 상한</span><div class="bs"><span class="pc"><i style="background:var(--web)"></i>웹 4</span><span class="pc"><i style="background:var(--pre)"></i>Premium 3</span><span class="pc"><i style="background:var(--gw)"></i>모델 3</span><span class="pc"><i style="background:var(--sch)"></i>학술 4</span></div></div>
+          <div class="lay"><span class="n">2</span><span class="nm">하루 상한</span><div class="bs"><span class="pc"><i style="background:var(--web)"></i>웹 500</span><span class="pc"><i style="background:var(--pre)"></i>Premium 100</span><span class="pc"><i style="background:var(--gw)"></i>모델 200</span><span class="pc"><i style="background:var(--sch)"></i>학술 200</span></div></div>
+          <div class="lay"><span class="n">3</span><span class="nm">동시 요청</span><div class="bs"><span class="pc"><i style="background:var(--web)"></i>웹 4</span><span class="pc"><i style="background:var(--pre)"></i>Premium 3</span><span class="pc"><i style="background:var(--gw)"></i>모델 3</span><span class="pc"><i style="background:var(--sch)"></i>학술 4</span></div></div>
         </div></div>
-      <div class="card"><div class="k">필요한 만큼만 부름</div>
+      <div class="half"><div class="k">필요한 만큼만 부름</div>
         <div class="sv">
           <div class="r"><span class="ic"><i data-lucide="history"></i></span><span>같은 요청은 24시간 동안 저장한 결과를 다시 씀</span></div>
           <div class="r"><span class="ic"><i data-lucide="archive"></i></span><span>끝난 회사 분석은 서버에 저장해 다시 부르지 않음</span></div>
