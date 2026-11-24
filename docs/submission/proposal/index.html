@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<title>성장노트 기획서 · Liner .EXE-THON</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=block">
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.2/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@1.79.0/dist/umd/lucide.min.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js"}}</script>
+<style>
+@page{size:A4;margin:0}
+:root{--ink:#1e2a3f;--sub:#5a6577;--mute:#7a8494;--g:#0c6b58;--gd:#0a5a4a;--gs:#e5f1ed;--line:#d5dbe3;--amber:#b86e00;
+  --web:#0b8466;--pre:#d17a1f;--gw:#3d6fc4;--rsp:#6b4e8a;--sch:#2a8f9e;--cream:#f7f5ee;--pill:#cdd5d1}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#c9cfcb}
+body{font-family:"IBM Plex Sans KR",sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;-webkit-print-color-adjust:exact;print-color-adjust:exact;word-break:keep-all;overflow-wrap:break-word;font-size:10.5px;line-height:1.45}
+.page{width:794px;height:1123px;position:relative;overflow:hidden;background:var(--cream);break-after:page;page-break-after:always;margin:0 auto}
+.page:last-child{break-after:auto;page-break-after:auto}
+.mono{font-family:"IBM Plex Mono",monospace;font-weight:500;letter-spacing:-.01em}
+svg.lucide{width:14px;height:14px;stroke-width:2.1;flex:none}
+b{font-weight:700}
+
+/* 모눈 머리 */
+.head{position:relative;padding:20px 28px 14px;background-color:#f9f8f2;
+  background-image:linear-gradient(rgba(12,107,88,.075) 1px,transparent 1px),linear-gradient(90deg,rgba(12,107,88,.075) 1px,transparent 1px),
+  linear-gradient(rgba(12,107,88,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(12,107,88,.11) 1px,transparent 1px);
+  background-size:14px 14px,14px 14px,70px 70px,70px 70px;background-position:-1px -1px}
+.head::after{content:"";position:absolute;left:28px;right:28px;bottom:0;height:3px;background:repeating-linear-gradient(90deg,var(--g) 0 7px,transparent 7px 11px)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;color:var(--g);background:#fff;border:1.5px solid var(--g);border-radius:999px;padding:3px 11px}
+.chip svg{width:12px;height:12px}
+.title{display:flex;align-items:center;gap:11px;margin-top:9px}
+.bars{display:flex;align-items:flex-end;gap:4px;height:36px}
+.bars i{display:block;width:10px;border-radius:2.5px;background:var(--g)}
+.bars i:nth-child(1){height:15px;opacity:.55}.bars i:nth-child(2){height:24px;opacity:.78}.bars i:nth-child(3){height:36px}
+.title b{font-size:46px;line-height:1;letter-spacing:-.045em}
+.hlt{display:inline;font-size:17.5px;font-weight:700;letter-spacing:-.02em;background:linear-gradient(transparent 56%,#bfe9d9 56%,#bfe9d9 92%,transparent 92%);padding:0 3px}
+.lead{font-size:11.4px;line-height:1.6;color:var(--sub);margin-top:6px}
+.repo{display:inline-flex;align-items:center;gap:6px;margin-left:6px;vertical-align:top;font-size:10.4px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:7px;padding:3px 9px}
+.repo svg{width:12px;height:12px;color:var(--g)}
+
+/* 심사 기준 띠 */
+.crit{margin:12px 28px 0}
+.crit .cap{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+.crit .cap b{font-size:12px;color:var(--gd)}
+.crit .cap span{font-size:10px;color:var(--mute)}
+.cb{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.cbk{position:relative;height:62px;border-radius:12px;color:#fff;padding:7px 10px 0 44px;overflow:hidden}
+.cbk .nn{position:absolute;left:7px;top:-5px;font-size:64px;font-weight:700;line-height:1;letter-spacing:-.06em;color:rgba(255,255,255,.22)}
+.cbk .nm{font-size:13px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:6px}
+.cbk .pt{font-size:10px;font-weight:700;background:rgba(255,255,255,.2);border-radius:6px;padding:0 5px}
+.cbk .ds{font-size:9.8px;line-height:1.38;margin-top:2px;color:rgba(255,255,255,.88)}
+.cbk .go{position:absolute;right:8px;bottom:6px;font-size:9.6px;font-weight:700;background:#fff;color:var(--gd);border-radius:6px;padding:1px 7px}
+
+/* 번호 머리(원 + 테두리 상자) */
+.sec{display:flex;align-items:center;margin:0 0 7px}
+.sec .n{position:relative;z-index:2;flex:none;width:30px;height:30px;border-radius:50%;background:#fff;border:2.6px solid var(--g);color:var(--g);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.sec .t{margin-left:-10px;padding:3px 14px 3px 18px;background:#fff;border:1.6px solid var(--g);border-left:0;border-radius:0 10px 10px 0;font-size:15px;font-weight:700;letter-spacing:-.02em}
+.sec .tag{margin-left:8px;font-size:10px;font-weight:700;color:var(--g);background:var(--gs);border-radius:6px;padding:2px 7px}
+.sec .s{margin-left:8px;font-size:10.2px;color:var(--sub)}
+.sec.inv .n{border-color:#fff;color:var(--g)} .sec.inv .t{background:transparent;color:#fff;border-color:rgba(255,255,255,.7)} .sec.inv .tag{background:rgba(255,255,255,.18);color:#fff}
+.card{background:#fff;border-radius:12px;box-shadow:0 10px 22px -18px rgba(16,60,48,.55),0 0 0 1px rgba(12,107,88,.10)}
+.k{font-size:11px;font-weight:700;color:var(--g)}
+.note{font-size:9.6px;color:var(--mute);line-height:1.45}
+
+/* ① */
+.s1{margin:12px 28px 0}
+.s1g{display:grid;grid-template-columns:262px 1fr;gap:10px}
+.who{background:var(--gd);color:#fff;border-radius:12px;padding:8px 12px 9px}
+.who .a{font-size:9.6px;font-weight:700;color:#9fe0c6;letter-spacing:.03em}
+.who .b{font-size:12.8px;font-weight:700;line-height:1.36;margin-top:2px;letter-spacing:-.02em}
+.who .c{font-size:10px;color:#cdeee2;margin-top:3px;line-height:1.45}
+.join{position:relative;height:8px}
+.join::before,.join::after{content:"";position:absolute;top:-3px;width:7px;height:14px;border-radius:4px;background:var(--pill)}
+.join::before{left:60px}.join::after{right:60px}
+.steps{padding:7px 11px 8px}
+.steps .k{margin-bottom:2px}
+.st{display:flex;gap:7px;align-items:center;padding:2.5px 0;border-bottom:1px dashed #e1e6e4}
+.st:last-of-type{border-bottom:0}
+.st .d{flex:none;width:19px;height:19px;border-radius:50%;background:var(--g);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.st .tx{flex:1;font-size:10.2px;line-height:1.35}
+.st .ic{display:flex;gap:2px;color:#8a95a5}
+.st .ic svg{width:12px;height:12px}
+.steps .note{margin-top:5px;color:var(--sub)}
+.stats{display:grid;grid-template-columns:188px 1fr 1fr;gap:8px}
+.stat{padding:9px 10px 8px;display:flex;flex-direction:column}
+.big{font-size:38px;font-weight:700;letter-spacing:-.05em;line-height:.95}
+.big small{font-size:16px;letter-spacing:-.02em;margin-left:2px}
+.stat .lb{font-size:10.8px;font-weight:700;margin-top:4px}
+.stat svg{display:block;margin-top:6px}
+.stat .ds{font-size:9.6px;color:var(--sub);line-height:1.42;margin-top:5px}
+.band{margin-top:7px;display:flex;align-items:center;gap:10px;background:#fcefd7;border-radius:12px;padding:8px 12px;border:1.4px solid #ecc983}
+.band .pl{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--amber);color:var(--amber);display:flex;align-items:center;justify-content:center}
+.band .pl svg{width:13px;height:13px}
+.band .q{font-size:13px;font-weight:700;letter-spacing:-.02em;line-height:1.35}
+.band .q em{font-style:normal;color:var(--amber)}
+.band .src{margin-left:auto;font-size:9.4px;color:#7a5a20;text-align:right;line-height:1.4}
+
+/* ② 초록 판 */
+.s2{margin:12px 28px 0;background:var(--g);border-radius:18px;padding:11px 14px 13px;position:relative;overflow:hidden}
+.s2::before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.09) 1px,transparent 1.3px);background-size:14px 14px}
+.s2>*{position:relative}
+.flow{display:flex;align-items:stretch}
+.nd{flex:1;background:#fff;border-radius:11px;padding:7px 4px 7px;text-align:center}
+.nd .i{width:28px;height:28px;margin:0 auto;border-radius:50%;background:var(--gs);color:var(--g);display:flex;align-items:center;justify-content:center}
+.nd .i svg{width:16px;height:16px}
+.nd.first .i{background:var(--ink);color:#fff} .nd.last .i{background:var(--g);color:#fff}
+.nd .nm{font-size:11.2px;font-weight:700;margin-top:4px;letter-spacing:-.02em}
+.nd .dt{font-size:9.5px;color:var(--sub);line-height:1.38;margin-top:2px}
+.cn{flex:none;width:12px;display:flex;flex-direction:column;justify-content:center;gap:16px;align-items:center}
+.cn i{display:block;width:12px;height:6px;border-radius:3px;background:#9fd3bf}
+.prin{display:grid;grid-template-columns:1.34fr 1fr 1fr;gap:8px;margin-top:8px}
+.pr{padding:8px 10px}
+.pr .k{display:flex;align-items:center;gap:5px;font-size:11.2px;color:var(--ink)}
+.pr .k svg{color:var(--g);width:14px;height:14px}
+.pr .bd{margin-top:6px;display:flex;flex-wrap:wrap;gap:3px 4px;align-items:center}
+.pr .ex{margin-top:5px;font-size:9.8px;color:var(--sub);line-height:1.42}
+.tg{display:inline-block;border-radius:6px;padding:0 5px;font-size:9.4px;font-weight:600;border:1.3px solid;white-space:nowrap;line-height:16px}
+.b-ok{color:var(--g);border-color:var(--g);background:#eaf6f1}
+.b-rep{color:#3a52a0;border-color:#8ea0d8;background:#eef1fb}
+.b-est{color:#6b4e8a;border-color:#b39cd0;background:#f5f0fb}
+.b-con{color:#7a4b00;border-color:#e0a84a;background:#fcefd7}
+.b-mis{color:#515c70;border-color:#8a95a5;border-style:dashed;background:#f3f5f8}
+.b-ref{color:#515c70;border-color:#8a95a5;border-style:dashed;background:#fff}
+.cf{font-size:10.2px;display:flex;align-items:baseline;gap:5px;flex-wrap:wrap}
+.cf .v{font-weight:700;font-size:11px}.cf .s{color:var(--mute);font-size:9.2px}
+.jd{display:inline-flex;align-items:center;gap:4px;font-size:10.2px;font-weight:700;margin-right:5px}
+.jd i{display:inline-block;width:9px;height:9px;border-radius:50%}
+
+/* 아래 두 칸 */
+.s34{display:grid;grid-template-columns:270px 1fr;gap:12px;margin:12px 28px 0}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.kp{padding:8px 10px 7px}
+.kp .v{font-size:28px;font-weight:700;letter-spacing:-.05em;line-height:1;color:var(--g)}
+.kp .v small{font-size:13px;margin-left:1px}
+.kp .l{font-size:10.6px;font-weight:700;margin-top:4px}
+.kp .s{font-size:9.2px;color:var(--mute);line-height:1.38;margin-top:2px}
+.ex4{padding:6px 10px 6px 2px;display:grid;grid-template-columns:176px 1fr;gap:6px;align-items:center}
+.ex4 .rw{display:flex;gap:7px;align-items:flex-start;margin:0 0 5px;font-size:9.9px;line-height:1.42}
+.ex4 .rw:last-child{margin-bottom:0}
+.ex4 .rw .ic{flex:none;width:22px;height:22px;border-radius:7px;background:var(--gs);color:var(--g);display:flex;align-items:center;justify-content:center}
+.ex4 .rw .ic svg{width:13px;height:13px}
+.ex4 .rw b{color:var(--gd)}
+.foot{position:absolute;left:28px;right:28px;bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:9px;color:var(--mute);border-top:1px solid #dcdfd6;padding-top:6px}
+.foot .r{white-space:nowrap;display:flex;align-items:center;gap:6px}
+.foot .pg{font-weight:700;color:var(--g)}
+
+/* 2쪽 */
+.h2row{display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:2px}
+.h2row h1{margin:8px 0 0;font-size:36px;letter-spacing:-.045em;line-height:1.05}
+.h2row .hlt{font-size:15px}
+.bign{display:flex;align-items:stretch}
+.bign .c{padding:0 14px;border-left:1.5px solid rgba(12,107,88,.25);text-align:left}
+.bign .c:first-child{border-left:0}
+.bign .v{font-size:46px;font-weight:700;letter-spacing:-.05em;line-height:.95;color:var(--g)}
+.bign .v small{font-size:15px;color:var(--ink);margin-left:2px;letter-spacing:-.02em}
+.bign .l{font-size:10.2px;font-weight:700;margin-top:3px}
+.roles{display:grid;grid-template-columns:1fr 14px 1fr 14px 1fr;margin:12px 28px 0}
+.role{display:flex;border-radius:12px;overflow:hidden;box-shadow:0 10px 22px -18px rgba(16,60,48,.55),0 0 0 1px rgba(12,107,88,.10);background:#fff}
+.role .lt{flex:none;width:72px;color:#fff;padding:9px 8px;display:flex;flex-direction:column;justify-content:space-between}
+.role .lt svg{width:20px;height:20px}
+.role .lt .a{font-size:9.6px;opacity:.85;font-weight:600}
+.role .lt .b{font-size:14px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.role .rt{padding:8px 10px;flex:1}
+.role .rt .chs{display:flex;flex-wrap:wrap;gap:3px}
+.role .rt .ds{font-size:9.8px;color:var(--sub);line-height:1.42;margin-top:5px}
+.chp{display:inline-flex;align-items:center;font-size:9.6px;font-weight:600;border-radius:6px;padding:0 6px;line-height:17px;color:#fff;white-space:nowrap}
+.chp.o{background:#fff;border:1.3px solid;line-height:15px}
+.rj{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:18px}
+.rj i{display:block;width:14px;height:6px;border-radius:3px;background:var(--pill)}
+.blk{margin:11px 28px 0}
+.g1{display:grid;grid-template-columns:1fr 222px;gap:10px}
+.skc{padding:8px 10px 9px}
+.qrow{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px;padding-top:7px;border-top:1px dashed #e1e6e4}
+.qrow .t{font-size:9.8px;font-weight:700;color:var(--gd);margin-right:2px}
+.qy{display:inline-flex;align-items:center;gap:4px;font-size:9.2px;background:#f6f8f7;border:1px solid #e1e6e4;border-radius:6px;padding:1px 6px}
+.qy i{display:inline-block;width:6px;height:6px;border-radius:50%}
+.tw{padding:9px 8px 8px;display:flex;flex-direction:column}
+.tw .hd{font-size:11px;font-weight:700;text-align:center;line-height:1.2}
+.tw .hd .v{font-size:30px;font-weight:700;letter-spacing:-.05em;color:var(--g)}
+.tw .hd .v small{font-size:14px;color:var(--mute);letter-spacing:-.02em}
+.stage{position:relative;width:206px;height:134px;margin:4px auto 34px}
+.stage img{display:block}
+.twl{position:absolute;transform:translateX(-50%);text-align:center;white-space:nowrap}
+.twl .v{font-size:13.5px;font-weight:700;line-height:1}
+.twl .v small{font-size:9.6px;color:var(--mute);font-weight:600}
+.twl .l{font-size:9px;color:var(--sub);font-weight:600;margin-top:1px}
+.tw .note{text-align:center;margin-top:auto}
+.odg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.oc{padding:7px 9px 7px}
+.oc .nm{font-size:11.2px;font-weight:700;display:flex;align-items:center;gap:5px}
+.oc .nm svg{color:var(--g)}
+.oc .fl{display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin-top:6px}
+.oc .fl .to{color:var(--mute);font-size:10px}
+.oc .tm{display:flex;align-items:center;gap:6px;margin-top:5px}
+.oc .tm b{font-size:17px;letter-spacing:-.03em;color:var(--g);white-space:nowrap}
+.oc .tm span{font-size:9.4px;color:var(--sub);line-height:1.38}
+.g3{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3 .card{padding:9px 11px}
+.vf{display:flex;align-items:center;gap:3px;margin-top:6px}
+.vf .s{flex:1;text-align:center;border-radius:9px;padding:5px 2px;font-size:9.8px;font-weight:700;line-height:1.3;border:1.4px solid rgba(12,107,88,.35);background:#fff;color:var(--gd)}
+.vf .s small{display:block;font-size:8.8px;color:var(--mute);font-weight:500}
+.vf .s.f{background:var(--g);color:#fff;border-color:var(--g)} .vf .s.f small{color:#bfe9d9}
+.vf .a{color:var(--g);flex:none;display:flex} .vf .a svg{width:12px;height:12px}
+.vr{margin-top:7px;display:flex;flex-direction:column;gap:4px}
+.vr .r{display:flex;gap:7px;align-items:center;font-size:9.9px;line-height:1.38}
+.vr .r .bd{flex:none;width:62px;text-align:center;font-size:9.6px;font-weight:700;border-radius:6px;padding:1px 4px;background:var(--gs);color:var(--gd)}
+.big48{display:flex;align-items:center;gap:10px;margin-top:6px;background:var(--g);color:#fff;border-radius:10px;padding:6px 11px}
+.big48 .v{font-size:28px;font-weight:700;letter-spacing:-.04em;line-height:1}
+.big48 .l{font-size:9.8px;color:#d4f0e5;line-height:1.4}
+.g5{display:grid;grid-template-columns:1.22fr 1fr;gap:10px}
+.g5 .card{padding:9px 11px}
+.lays{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.lay{display:flex;align-items:center;gap:7px}
+.lay .n{flex:none;width:20px;height:20px;border-radius:6px;background:var(--g);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.lay .nm{flex:none;width:84px;font-size:10.2px;font-weight:700}
+.lay .bs{flex:1;display:flex;gap:3px;flex-wrap:wrap}
+.pc{display:inline-flex;align-items:center;gap:3px;font-size:9.4px;font-weight:600;border-radius:5px;padding:0 5px;line-height:16px;background:#f1f4f3;white-space:nowrap}
+.pc i{display:inline-block;width:6px;height:6px;border-radius:50%}
+.sv{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.sv .r{display:flex;gap:7px;align-items:flex-start;font-size:9.9px;line-height:1.42}
+.sv .r .ic{flex:none;width:20px;height:20px;border-radius:6px;background:var(--gs);color:var(--g);display:flex;align-items:center;justify-content:center}
+.sv .r .ic svg{width:12px;height:12px}
+</style></head>
+<body>
+<!-- ===================== 1쪽 ===================== -->
+<section class="page" id="p1">
+  <header class="head">
+    <div style="display:flex;gap:14px">
+      <div style="flex:1">
+        <span class="chip"><i data-lucide="file-text"></i>Liner .EXE-THON 기획서</span><span class="repo"><i data-lucide="git-branch"></i><span class="mono">github.com/walkbyhankang/liner-research-agent</span></span>
+        <div class="title"><span class="bars"><i></i><i></i><i></i></span><b>성장노트</b></div>
+        <div style="margin-top:9px"><span class="hlt">회사 이름 하나로, 받을 수 있는 자금과 그 근거까지</span></div>
+        <div class="lead">흩어진 공공 자료와 공개 보도로 회사를 분석하고, 그 결과로 정책자금·투자·판로를 찾아<br>공고문 조건과 하나씩 맞춰 봅니다. 값마다 확인 상태와 출처를 붙이고, 점수나 확률은 만들지 않습니다.</div>
+      </div>
+      <div class="stage" id="hero3d" style="width:250px;height:160px;margin:-8px -8px -6px 0"></div>
+    </div>
+  </header>
+
+  <div class="crit">
+    <div class="cap"><b>심사 기준</b><span>이 기획서는 심사 기준의 순서를 따릅니다</span></div>
+    <div class="cb">
+      <div class="cbk" style="background:#0a5a4a"><span class="nn">1</span><div class="nm">문제 정의<span class="pt">30</span></div><div class="ds">누가, 어떤 문제로,<br>얼마나 불편한지</div><span class="go">1쪽 ①</span></div>
+      <div class="cbk" style="background:#0c6b58"><span class="nn">2</span><div class="nm">완성도<span class="pt">30</span></div><div class="ds">에이전트의 해결 방식과<br>실제로 동작하는지</div><span class="go">1쪽 ②</span></div>
+      <div class="cbk" style="background:#26806a"><span class="nn">3</span><div class="nm">Liner API 활용<span class="pt">20</span></div><div class="ds">어느 기능에서<br>어떻게 쓰는지</div><span class="go">2쪽 전체</span></div>
+      <div class="cbk" style="background:#3f9478"><span class="nn">4</span><div class="nm">확장성·임팩트<span class="pt">20</span></div><div class="ds">다른 조직·직무로<br>넓힐 수 있는지</div><span class="go">1쪽 ④</span></div>
+    </div>
+  </div>
+
+  <section class="s1">
+    <div class="sec"><span class="n">1</span><span class="t">누가, 어떤 문제로, 얼마나 불편한가</span><span class="tag">문제 정의</span></div>
+    <div class="s1g">
+      <div>
+        <div class="who"><div class="a">쓰는 사람</div><div class="b">자금이 필요한 중소·벤처기업의<br>대표와 재무 담당자</div><div class="c">지원기관 담당자와 심사역도 같은 일을 합니다.</div></div>
+        <div class="join"></div>
+        <div class="card steps">
+          <div class="k">지금은 네 단계를 손으로</div>
+          <div class="st"><span class="d">1</span><div class="tx"><b>현황 정리</b> · 기관마다 따로 모음</div><span class="ic"><i data-lucide="landmark"></i><i data-lucide="users"></i><i data-lucide="trending-up"></i><i data-lucide="file-badge"></i><i data-lucide="newspaper"></i></span></div>
+          <div class="st"><span class="d">2</span><div class="tx"><b>자금 찾기</b> · 사이트를 오가며 공고·운용사 탐색</div></div>
+          <div class="st"><span class="d">3</span><div class="tx"><b>자격 확인</b> · PDF·HWP 공고문을 직접 읽음</div></div>
+          <div class="st"><span class="d">4</span><div class="tx"><b>판로 찾기</b> · 입찰공고를 따로 검색</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="stats">
+          <div class="card stat"><div class="big">1,303<small>건</small></div><div class="lb">접수 중인 지원사업 공고</div><svg id="dots" width="166" height="50"></svg><div class="ds"><b style="color:var(--g)">■</b> 그중 금융 226건(융자 163·보증 47). 하나씩 열어 보기엔 너무 많습니다.</div></div>
+          <div class="card stat"><div class="big">71<small>%</small></div><div class="lb">날짜가 아닌 신청기간</div><svg id="donut" width="120" height="50"></svg><div class="ds">923건이 "예산 소진시까지"·"상시 접수"라 목록으로는 모릅니다.</div></div>
+          <div class="card stat"><div class="big">47<small>쪽</small></div><div class="lb">공고문 한 건, 41,165자</div><svg id="pages" width="120" height="50"></svg><div class="ds">업력·업종·한도 같은 세부 자격은 공고문 안에만 있습니다.</div></div>
+        </div>
+        <div class="band"><span class="pl"><i data-lucide="plus"></i></span><div class="q">목록은 이미 있습니다. 없는 것은<br><em>"우리 회사가 대상인가"</em>의 근거입니다.</div><div class="src">기업마당 지원사업정보<br>2026-11-21 수집</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="s2">
+    <div class="sec inv"><span class="n">2</span><span class="t">에이전트의 해결 방식</span><span class="tag">완성도</span><span class="s" style="color:#cdeee2">회사 이름 하나에서 노트까지 한 흐름으로</span></div>
+    <div class="flow">
+      <div class="nd first"><div class="i"><i data-lucide="text-cursor-input"></i></div><div class="nm">회사 이름</div><div class="dt">이름 하나만<br>넣으면 시작</div></div>
+      <div class="cn"><i></i></div>
+      <div class="nd"><div class="i"><i data-lucide="badge-check"></i></div><div class="nm">회사 확정</div><div class="dt">이름이 같은<br>법인을 구분</div></div>
+      <div class="cn"><i></i></div>
+      <div class="nd"><div class="i"><i data-lucide="layers"></i></div><div class="nm">회사 분석</div><div class="dt">다섯 주제를<br>동시에 조사</div></div>
+      <div class="cn"><i></i></div>
+      <div class="nd"><div class="i"><i data-lucide="columns-3"></i></div><div class="nm">경쟁사 비교</div><div class="dt">최대 5곳을<br>같은 항목으로</div></div>
+      <div class="cn"><i></i></div>
+      <div class="nd"><div class="i"><i data-lucide="landmark"></i></div><div class="nm">자금·판로</div><div class="dt">정책자금·운용사<br>·입찰공고</div></div>
+      <div class="cn"><i></i></div>
+      <div class="nd"><div class="i"><i data-lucide="clipboard-check"></i></div><div class="nm">심사 준비</div><div class="dt">공고문 조건 대조<br>예상 질문 19</div></div>
+      <div class="cn"><i></i></div>
+      <div class="nd last"><div class="i"><i data-lucide="notebook-pen"></i></div><div class="nm">노트</div><div class="dt">한 장으로 모아<br>인쇄·공유</div></div>
+    </div>
+    <div class="prin">
+      <div class="card pr"><div class="k"><i data-lucide="tags"></i>값마다 확인 상태와 출처</div>
+        <div class="bd"><span class="tg b-ok">원문 확인</span><span class="tg b-rep">보도</span><span class="tg b-est">추정</span><span class="tg b-con">엇갈림</span><span class="tg b-mis">미확보</span><span class="tg b-ref">참고</span></div>
+        <div class="ex">출처는 기관·자료 이름과 기준일. 못 찾은 값은 "미확보"와 이유를 남깁니다.</div></div>
+      <div class="card pr"><div class="k"><i data-lucide="git-compare"></i>자료끼리 다르면 두 값 모두<span class="tg b-con" style="margin-left:auto">엇갈림</span></div>
+        <div class="bd cf"><span class="s">설립일</span><span class="v">2020-09-15</span><b style="color:var(--amber)">≠</b><span class="v">2021-01</span></div>
+        <div class="ex">하나만 고르지 않고 출처와 함께 둘 다 보여 줍니다. <span style="color:var(--mute)">(시연용 가상 데이터)</span></div></div>
+      <div class="card pr"><div class="k"><i data-lucide="list-checks"></i>점수·확률 대신 근거 문장</div>
+        <div class="bd"><span class="jd" style="color:var(--g)"><i style="background:var(--g)"></i>충족</span><span class="jd" style="color:#3b4658"><i style="border:1.8px solid #3b4658;width:8px;height:8px"></i>미충족</span><span class="jd" style="color:#8a5a00"><i style="background:linear-gradient(90deg,#8a5a00 50%,#fff 50%);border:1.5px solid #8a5a00"></i>확인 필요</span></div>
+        <div class="ex">조건마다 판정하고, 공고문에 글자 그대로 있는 문장을 붙입니다.</div></div>
+    </div>
+  </section>
+
+  <div class="s34">
+    <section>
+      <div class="sec"><span class="n"><i data-lucide="check" style="width:16px;height:16px;stroke-width:3"></i></span><span class="t">실제로 동작합니다</span><span class="tag">완성도</span></div>
+      <div class="kpis">
+        <div class="card kp"><div class="v">524</div><div class="l">자동 테스트</div><div class="s">Python 412 · 화면 규칙 112<br>모두 통과</div></div>
+        <div class="card kp"><div class="v">370</div><div class="l">화면 자동 점검</div><div class="s">실제 브라우저로 점검<br>폭 390~1280, 넘침·대비</div></div>
+        <div class="card kp"><div class="v">4<small>종</small></div><div class="l">실제 호출 확인</div><div class="s">기본 분석, 같은 이름 법인,<br>공고문 대조, 운용사 요약</div></div>
+        <div class="card kp"><div class="v">28</div><div class="l">리뷰로 고친 것</div><div class="s">별도 리뷰어의 검토를<br>통과해야 커밋</div></div>
+      </div>
+    </section>
+    <section style="display:flex;flex-direction:column">
+      <div class="sec"><span class="n">4</span><span class="t">다른 조직·직무로 확장</span><span class="tag">확장성·임팩트</span></div>
+      <div class="card ex4" style="flex:1">
+        <svg id="radial" width="176" height="160"></svg>
+        <div>
+          <div class="rw"><span class="ic"><i data-lucide="database"></i></span><div><b>한 번 분석, 여러 번 활용.</b> 분석과 공고문 조건을 저장해 함께 쓰므로, 비용은 사용자 수보다 회사 수에 좌우됩니다.</div></div>
+          <div class="rw"><span class="ic"><i data-lucide="split"></i></span><div><b>더 많은 지원 분야.</b> 같은 대조 방식을 기술·수출·인력 공고에 씁니다.</div></div>
+          <div class="rw"><span class="ic"><i data-lucide="briefcase"></i></span><div><b>다른 직무.</b> 지원기관·액셀러레이터의 사전 검토, 여신·투자 담당의 현황 확인.</div></div>
+          <div class="rw"><span class="ic"><i data-lucide="bell-ring"></i></span><div><b>다음 과제.</b> 새 공고 알림, 클라우드 배포와 사용자 인증.</div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="foot"><span>수치: 기업마당 지원사업정보(2026-11-21 수집), 저장소 코드와 실측(2026-11-21~24). 분야별 공고 수는 수시·접수 예정 포함. 예시 값은 시연용 가상 데이터.</span><span class="r"><span class="mono">github.com/walkbyhankang/liner-research-agent</span><span class="pg">1 / 2</span></span></div>
+</section>
+
+<!-- ===================== 2쪽 ===================== -->
+<section class="page" id="p2">
+  <header class="head">
+    <div class="h2row">
+      <div>
+        <span class="chip"><i data-lucide="plug-zap"></i>심사 기준 3 · Liner API 활용 20</span>
+        <h1>Liner API 활용 방식</h1>
+        <div style="margin-top:8px"><span class="hlt">검색은 Liner, 판단은 Liner로 부르는 AI 모델, 확인은 코드</span></div>
+      </div>
+      <div class="bign">
+        <div class="c"><div class="v">5<small>가지</small></div><div class="l">쓰는 Liner API</div></div>
+        <div class="c"><div class="v">9<small>개</small></div><div class="l">Liner를 쓰는 기능</div></div>
+        <div class="c"><div class="v">19<small>회</small></div><div class="l">기본 분석 1회 호출</div></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="roles">
+    <div class="role"><div class="lt" style="background:var(--web)"><i data-lucide="search"></i><div><div class="a">검색은</div><div class="b">Liner</div></div></div>
+      <div class="rt"><div class="chs"><span class="chp" style="background:var(--web)">웹 검색</span><span class="chp" style="background:var(--pre)">Premium 검색</span><span class="chp" style="background:var(--sch)">학술 검색</span></div><div class="ds">코드가 Liner로 검색하고, 그 결과만 모델에 넘깁니다.</div></div></div>
+    <div class="rj"><i></i><i></i></div>
+    <div class="role"><div class="lt" style="background:var(--gw)"><i data-lucide="brain-circuit"></i><div><div class="a">판단은</div><div class="b">AI 모델</div></div></div>
+      <div class="rt"><div class="chs"><span class="chp" style="background:var(--gw)">모델 게이트웨이</span><span class="chp" style="background:var(--rsp)">Responses</span></div><div class="ds">모델도 Liner로 부릅니다. 검색 도구는 주지 않고, 결과는 JSON 스키마로 받습니다.</div></div></div>
+    <div class="rj"><i></i><i></i></div>
+    <div class="role"><div class="lt" style="background:var(--ink)"><i data-lucide="shield-check"></i><div><div class="a">확인은</div><div class="b">코드</div></div></div>
+      <div class="rt"><div class="chs"><span class="chp o" style="border-color:var(--g);color:var(--g)">원래 문서와 대조</span><span class="chp o" style="border-color:#8a95a5;color:#515c70">없으면 버림</span></div><div class="ds">모델이 든 근거 문장을 원래 문서에서 다시 찾습니다.</div></div></div>
+  </div>
+
+  <section class="blk">
+    <div class="sec"><span class="n">1</span><span class="t">기본 분석 1회에 Liner 19회</span><span class="s">7개 단락 중 Liner를 쓰는 5개를 가능한 범위에서 동시에 실행, 실측 약 2~3분</span></div>
+    <div class="g1">
+      <div class="card skc">
+        <svg id="sankey" width="482" height="196"></svg>
+        <div class="qrow"><span class="t">실제 검색어 형식</span>
+          <span class="qy"><i style="background:var(--web)"></i>"{회사} 기업 개요 설립 대표 주요 사업"</span>
+          <span class="qy"><i style="background:var(--web)"></i><span class="mono">site:patents.google.com</span> "주식회사 {등록명}"</span>
+        </div>
+      </div>
+      <div class="card tw">
+        <div class="hd">실측 <span class="v">19<small> / 21</small></span> 상한</div>
+        <div class="stage" id="tower3d"></div>
+        <div class="note">채운 칸은 실측, 빈 칸은 남은 상한입니다.<br>단락별 상한을 넘으면 그 단락만 멈춥니다.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="blk">
+    <div class="sec"><span class="n">2</span><span class="t">비용이 큰 호출은 사용자가 누를 때만</span><span class="s">시간은 실측</span></div>
+    <div class="odg">
+      <div class="card oc"><div class="nm"><i data-lucide="file-search"></i>공고문 자격 대조</div>
+        <div class="fl"><span class="chp" style="background:var(--gw)">추출 gpt-6.2-sol</span><span class="to">→</span><span class="chp" style="background:var(--gw)">대조 claude-opus-5.5</span></div>
+        <div class="tm"><b>26~30초</b><span>추출은 공고마다 저장해 모든 회사가 다시 씀</span></div></div>
+      <div class="card oc"><div class="nm"><i data-lucide="columns-3"></i>경쟁사 깊이 비교</div>
+        <div class="fl"><span class="chp" style="background:var(--web)">웹 2~3</span><span class="chp" style="background:var(--pre)">Premium 1~2</span><span class="to">/곳 →</span><span class="chp" style="background:var(--gw)">모델 1~2</span></div>
+        <div class="tm"><b>31.6초</b><span>2곳 11회. 경쟁사 특허·투자를 Liner로 수집</span></div></div>
+      <div class="card oc"><div class="nm"><i data-lucide="building-2"></i>운용사 요약</div>
+        <div class="fl"><span class="chp" style="background:var(--web)">웹 검색 1</span><span class="to">→</span><span class="chp" style="background:var(--gw)">모델 1</span></div>
+        <div class="tm"><b>5~7초</b><span>투자 분야·단계·사례를 검색 결과에 적힌 사실로만 정리</span></div></div>
+      <div class="card oc"><div class="nm"><i data-lucide="book-open"></i>논문 동향</div>
+        <div class="fl"><span class="chp" style="background:var(--sch)">학술 검색 최대 6</span><span class="to">→</span><span class="chp" style="background:var(--gw)">모델 1</span></div>
+        <div class="tm"><b>26.5초</b><span>OpenAlex와 함께 연도별 발표량·주요 기관 정리</span></div></div>
+    </div>
+  </section>
+
+  <section class="blk g3">
+    <div>
+      <div class="sec"><span class="n">3</span><span class="t">AI 모델도 모두 Liner로</span></div>
+      <div class="card"><svg id="models" width="346" height="120"></svg>
+        <div class="note" style="color:var(--sub);margin-top:3px">모든 호출이 같은 Liner 클라이언트를 거치므로, <b style="color:var(--g)">모델 이름만 고치면 다른 모델로 바꿀 수 있습니다.</b></div></div>
+    </div>
+    <div>
+      <div class="sec"><span class="n">4</span><span class="t">원래 문서에 없는 근거는 버림</span></div>
+      <div class="card">
+        <div class="vf">
+          <div class="s">Liner 검색<small>결과·원문</small></div><span class="a"><i data-lucide="arrow-right"></i></span>
+          <div class="s">AI 모델<small>검색 도구 없음</small></div><span class="a"><i data-lucide="arrow-right"></i></span>
+          <div class="s">근거 문장<small>값마다</small></div><span class="a"><i data-lucide="arrow-right"></i></span>
+          <div class="s f">원래 문서와 대조<small>없으면 버림</small></div>
+        </div>
+        <div class="vr">
+          <div class="r"><span class="bd">공고문 조건</span><span>6자 이상, 공고문에 글자 그대로 있는 근거만 남김</span></div>
+          <div class="r"><span class="bd">특허</span><span>Google Patents 원문에서 출원인이 그 회사인 것만 셈</span></div>
+          <div class="r"><span class="bd">투자·운용사</span><span>검색 결과 발췌에 적힌 값만 남김</span></div>
+        </div>
+        <div class="big48"><span class="v">48/48</span><span class="l">공고 3건 조건 추출에서 근거 문장 48개가<br>모두 공고문 원문에서 확인됨(gpt-6.2-sol)</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="blk">
+    <div class="sec"><span class="n">5</span><span class="t">호출 수를 묶어 두고, 결과는 다시 씀</span></div>
+    <div class="g5">
+      <div class="card"><div class="k">세 겹의 호출 한도</div>
+        <div class="lays">
+          <div class="lay"><span class="n">1</span><span class="nm">단락별 상한</span><div class="bs"><span class="pc">기본 분석 합계 21회</span><span class="pc">넘으면 그 단락만 멈춤</span></div></div>
+          <div class="lay"><span class="n">2</span><span class="nm">API별 하루 상한</span><div class="bs"><span class="pc"><i style="background:var(--web)"></i>웹 500</span><span class="pc"><i style="background:var(--pre)"></i>Premium 100</span><span class="pc"><i style="background:var(--gw)"></i>모델 200</span><span class="pc"><i style="background:var(--sch)"></i>학술 200</span></div></div>
+          <div class="lay"><span class="n">3</span><span class="nm">동시 요청 상한</span><div class="bs"><span class="pc"><i style="background:var(--web)"></i>웹 4</span><span class="pc"><i style="background:var(--pre)"></i>Premium 3</span><span class="pc"><i style="background:var(--gw)"></i>모델 3</span><span class="pc"><i style="background:var(--sch)"></i>학술 4</span></div></div>
+        </div></div>
+      <div class="card"><div class="k">필요한 만큼만 부름</div>
+        <div class="sv">
+          <div class="r"><span class="ic"><i data-lucide="history"></i></span><span>같은 요청은 24시간 동안 저장한 결과를 다시 씀</span></div>
+          <div class="r"><span class="ic"><i data-lucide="archive"></i></span><span>끝난 회사 분석은 서버에 저장해 다시 부르지 않음</span></div>
+          <div class="r"><span class="ic"><i data-lucide="sliders-horizontal"></i></span><span>웹 검색은 <span class="mono">include_knowledge=false</span> 명시, 투자 카드만 Premium</span></div>
+        </div></div>
+    </div>
+  </section>
+  <div class="foot"><span>기준: 저장소 코드(<span class="mono">liner_client.py</span> 외)와 실측 2026-11-21~24. 호출 수는 재시도 제외, 시간은 실행마다 달라질 수 있음.</span><span class="r"><span class="mono">github.com/walkbyhankang/liner-research-agent</span><span class="pg">2 / 2</span></span></div>
+</section>
+
+<script>
+const C={web:'#0b8466',pre:'#d17a1f',gw:'#3d6fc4',rsp:'#6b4e8a',sch:'#2a8f9e',g:'#0c6b58',gd:'#0a5a4a',ink:'#1e2a3f',sub:'#5a6577',mute:'#7a8494',amber:'#b86e00'};
+const F='IBM Plex Sans KR';
+function T(s,x,y,t,o={}){return s.append('text').attr('x',x).attr('y',y).attr('text-anchor',o.a||'middle').attr('dy',o.dy||null)
+  .attr('font-size',o.s||9.6).attr('font-weight',o.w||600).attr('fill',o.c||C.ink).attr('font-family',o.m?'IBM Plex Mono':F).text(t);}
+function dots(){ // 1,303건, 금융 226건 강조
+  const s=d3.select('#dots'), cols=60, gap=2.78;
+  s.selectAll('circle').data(d3.range(1303)).join('circle')
+   .attr('cx',i=>1.5+(i%cols)*gap).attr('cy',i=>1.5+Math.floor(i/cols)*gap).attr('r',1.02)
+   .attr('fill',i=>i<226?C.g:'#bfcac5');
+}
+function donut(){
+  const s=d3.select('#donut'), g=s.append('g').attr('transform','translate(27,25)');
+  const arc=d3.arc().innerRadius(16).outerRadius(25).cornerRadius(1.5);
+  g.append('path').attr('d',arc({startAngle:Math.PI*2*0.708+0.03,endAngle:Math.PI*2-0.03})).attr('fill','#cfd8d4');
+  g.append('path').attr('d',arc({startAngle:0.0,endAngle:Math.PI*2*0.708})).attr('fill',C.pre);
+  T(g,0,0,'923',{dy:'0.35em',s:10.5,w:700});
+  [['날짜 아님',C.pre],['날짜 있음','#cfd8d4']].forEach(([k,c],i)=>{s.append('rect').attr('x',60).attr('y',13+i*15).attr('width',8).attr('height',8).attr('rx',2).attr('fill',c);T(s,71,20.5+i*15,k,{a:'start',s:8.6,c:C.sub,w:500});});
+}
+function pages(){
+  const s=d3.select('#pages');
+  for(let i=6;i>=0;i--){ const x=4+i*4.4, y=2+i*1.9;
+    s.append('rect').attr('x',x).attr('y',y).attr('width',32).attr('height',38).attr('rx',3).attr('fill','#fff').attr('stroke','#aab6b1');
+    if(i===0) for(let k=0;k<7;k++) s.append('rect').attr('x',x+5).attr('y',y+6+k*4.4).attr('width',k%3===2?12:21).attr('height',2.2).attr('rx',1).attr('fill',k===4?C.pre:'#cfd6d3');
+  }
+  s.append('defs').html(`<marker id="ah" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L6 3L0 6z" fill="${C.pre}"/></marker>`);
+  s.append('path').attr('d','M70 26 L 30 26').attr('stroke',C.pre).attr('stroke-width',1.3).attr('marker-end','url(#ah)');
+  T(s,73,22,'세부 자격',{a:'start',s:8.8,c:C.amber,w:700}); T(s,73,34,'여기에만',{a:'start',s:8.8,c:C.amber,w:700});
+}
+function radial(){
+  const s=d3.select('#radial'), cx=92, cy=80, R=56;
+  s.append('circle').attr('cx',cx).attr('cy',cy).attr('r',R).attr('fill','none').attr('stroke','#d3ddd9').attr('stroke-dasharray','2 3');
+  const sp=[{a:-150,t:'기술',v:'222건',c:C.gw},{a:-90,t:'수출',v:'138건',c:C.pre},{a:-30,t:'인력',v:'155건',c:C.sch},
+            {a:30,t:'투자 심사',v:'미팅 준비',c:C.rsp},{a:90,t:'여신 담당',v:'현황 확인',c:C.rsp},{a:150,t:'지원기관',v:'사전 검토',c:C.rsp}];
+  sp.forEach(d=>{const r=d.a*Math.PI/180, x=cx+Math.cos(r)*R, y=cy+Math.sin(r)*R;
+    s.append('line').attr('x1',cx+Math.cos(r)*25).attr('y1',cy+Math.sin(r)*25).attr('x2',cx+Math.cos(r)*(R-22)).attr('y2',cy+Math.sin(r)*(R-22)).attr('stroke',d.c).attr('stroke-width',1.6).attr('opacity',.6);
+    s.append('circle').attr('cx',x).attr('cy',y).attr('r',20.5).attr('fill','#fff').attr('stroke',d.c).attr('stroke-width',1.8);
+    T(s,x,y-1.5,d.t,{s:d.t.length>3?8.4:9.8,w:700}); T(s,x,y+9.5,d.v,{s:7.8,c:d.c,w:700});
+  });
+  s.append('circle').attr('cx',cx).attr('cy',cy).attr('r',24).attr('fill',C.g);
+  T(s,cx,cy-2,'같은 흐름',{s:9.4,w:700,c:'#fff'}); T(s,cx,cy+9,'지금은 금융',{s:7.6,w:500,c:'#bfe9d9'});
+  T(s,0,9,'지원 분야',{a:'start',s:8.4,c:C.sub,w:700}); T(s,0,20,'접수 공고 수',{a:'start',s:7.8,c:C.mute,w:500}); T(s,0,146,'쓰는 사람',{a:'start',s:8.4,c:C.sub,w:700}); T(s,0,157,'직무',{a:'start',s:7.8,c:C.mute,w:500});
+}
+function sankey(){
+  const W=482,H=196, s=d3.select('#sankey');
+  const N=[['웹 검색',C.web],['Premium 검색',C.pre],['모델 게이트웨이',C.gw],['Responses',C.rsp],
+           ['회사 개요',C.ink],['원문 확인 사실',C.ink],['투자 이력',C.ink],['최근 동향',C.ink],['기술·특허',C.ink]].map(([id,c])=>({id,c}));
+  const L=[['웹 검색','회사 개요',3],['모델 게이트웨이','회사 개요',1],['웹 검색','원문 확인 사실',4],['Responses','원문 확인 사실',4],
+           ['Premium 검색','투자 이력',2],['웹 검색','최근 동향',2],['모델 게이트웨이','최근 동향',1],['웹 검색','기술·특허',2]]
+           .map(([a,b,v])=>({source:a,target:b,value:v}));
+  const g=d3.sankey().nodeId(d=>d.id).nodeWidth(11).nodePadding(9).nodeSort(null).linkSort(null).extent([[104,4],[W-150,H-4]])({nodes:N,links:L});
+  s.append('g').selectAll('path').data(g.links).join('path').attr('d',d3.sankeyLinkHorizontal()).attr('fill','none')
+   .attr('stroke',d=>d.source.c).attr('stroke-opacity',.30).attr('stroke-width',d=>Math.max(1.5,d.width-1.2));
+  s.append('g').selectAll('rect').data(g.nodes).join('rect').attr('x',d=>d.x0).attr('y',d=>d.y0).attr('width',d=>d.x1-d.x0).attr('height',d=>d.y1-d.y0).attr('rx',3).attr('fill',d=>d.c);
+  const short={'웹 검색':'웹','Premium 검색':'Premium','모델 게이트웨이':'게이트웨이','Responses':'Responses'};
+  g.nodes.forEach(d=>{const y=(d.y0+d.y1)/2;
+    if(d.x0<W/2){ T(s,d.x0-7,y-5,d.id,{a:'end',dy:'0.35em',s:10.4,w:700}); T(s,d.x0-7,y+8,d.value+'회',{a:'end',dy:'0.35em',s:10,w:700,c:d.c}); }
+    else { T(s,d.x1+7,y-5,d.id,{a:'start',dy:'0.35em',s:10.4,w:700});
+      const t=s.append('text').attr('x',d.x1+7).attr('y',y+8).attr('dy','0.35em').attr('font-size',9.2).attr('font-family',F).attr('font-weight',600);
+      t.append('tspan').attr('fill',C.ink).attr('font-weight',700).text(d.value+'회  ');
+      d.targetLinks.forEach((l,i)=>{ t.append('tspan').attr('fill',l.source.c).text((i?' + ':'')+short[l.source.id]+' '+l.value); });
+    }});
+  s.append('text').attr('x',W/2-24).attr('y',H-1).attr('text-anchor','middle').attr('font-size',8.4).attr('fill',C.mute).attr('font-family',F).text('API → 기능, 선의 굵기 = 호출 수');
+}
+function models(){
+  const s=d3.select('#models');
+  const box=(x,y,w,h,f,st,r=8)=>s.append('rect').attr('x',x).attr('y',y).attr('width',w).attr('height',h).attr('rx',r).attr('fill',f).attr('stroke',st||'none').attr('stroke-width',1.5);
+  const ln=(x1,y1,x2,y2,c)=>s.append('path').attr('d',`M${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`).attr('fill','none').attr('stroke',c).attr('stroke-width',1.8).attr('opacity',.7);
+  box(2,38,78,46,C.ink,null,10); T(s,41,57,'성장노트',{c:'#fff',w:700,s:10.6}); T(s,41,72,'Liner 클라이언트',{c:'#bfe9d9',s:8.2,w:500});
+  box(104,6,98,42,'#fff',C.gw); T(s,153,23,'모델 게이트웨이',{w:700,c:C.gw,s:10}); T(s,153,38,'/chat/completions',{s:7.8,c:C.sub,m:1,w:500});
+  box(104,74,98,42,'#fff',C.rsp); T(s,153,91,'Responses',{w:700,c:C.rsp,s:10}); T(s,153,106,'/responses',{s:7.8,c:C.sub,m:1,w:500});
+  ln(80,56,104,27,C.gw); ln(80,66,104,95,C.rsp);
+  const m=[[2,'openai','gpt-6.2-sol','조건 추출·정리',C.gw,27],[40,'anthropic','claude-opus-5.5','공고문 대조',C.gw,27],[82,'liner','liner-gpt-router','원문 확인 사실',C.rsp,95]];
+  m.forEach(([y,pv,nm,use,c,fy])=>{ ln(202,fy,226,y+16,c); box(226,y,118,32,c,null,7);
+    T(s,285,y+13.5,nm,{s:9.4,c:'#fff',m:1,w:600}); T(s,285,y+26,pv+' · '+use,{s:7.8,c:'#e6ecfb',w:500}); });
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+const hex=c=>'#'+c.toString(16).padStart(6,'0');
+async function bake(r,host,W,H){const im=new Image();im.src=r.domElement.toDataURL('image/png');im.style.width=W+'px';im.style.height=H+'px';host.innerHTML='';host.appendChild(im);await im.decode().catch(()=>{});}
+function label(host,cam,W,H,p,html,dy=0){const v=p.clone().project(cam);const d=document.createElement('div');d.className='twl';d.style.left=((v.x+1)/2*W)+'px';d.style.top=((1-v.y)/2*H+dy)+'px';d.innerHTML=html;host.appendChild(d);return d;}
+function setup(W,H,PR=4){const r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});r.setPixelRatio(PR);r.setSize(W,H);r.outputColorSpace=THREE.SRGBColorSpace;r.shadowMap.enabled=true;r.shadowMap.type=THREE.PCFSoftShadowMap;return r;}
+function lights(sc){sc.add(new THREE.HemisphereLight(0xffffff,0xdfe8e4,1.7));const d=new THREE.DirectionalLight(0xffffff,2.0);d.position.set(120,320,160);d.castShadow=true;d.shadow.mapSize.set(2048,2048);
+  Object.assign(d.shadow.camera,{left:-260,right:260,top:260,bottom:-260,near:1,far:900});d.shadow.radius=6;sc.add(d);
+  const g=new THREE.Mesh(new THREE.PlaneGeometry(1200,1200),new THREE.ShadowMaterial({opacity:.16}));g.rotation.x=-Math.PI/2;g.receiveShadow=true;sc.add(g);}
+const M=(c,o={})=>new THREE.MeshStandardMaterial({color:c,roughness:.6,metalness:0,...o});
+
+// 1쪽: 흩어진 자료 여섯 가지가 노트 한 장으로 모임
+async function hero(){
+  const host=document.getElementById('hero3d'),W=250,H=160,r=setup(W,H),sc=new THREE.Scene();
+  const cam=new THREE.OrthographicCamera(-W/2,W/2,H/2,-H/2,-2000,2000);cam.position.set(300,250,330);cam.lookAt(0,26,0);cam.zoom=0.76;cam.updateProjectionMatrix();
+  lights(sc);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(132,133.5,128),new THREE.MeshBasicMaterial({color:0x0c6b58,transparent:true,opacity:.28}));ring.rotation.x=-Math.PI/2;ring.position.y=0.5;sc.add(ring);
+  for(let k=0;k<4;k++){const p=new THREE.Mesh(new THREE.BoxGeometry(84,5,104),[M(0xffffff),M(0xffffff),M(0xf6f8f7),M(0xffffff),M(0xe7ecea),M(0xe7ecea)]);p.position.set(k*0.9,2.5+k*5.4,-k*0.7);p.castShadow=true;p.receiveShadow=true;sc.add(p);}
+  const spine=new THREE.Mesh(new THREE.BoxGeometry(9,23,104),M(0x0c6b58));spine.position.set(-44,11.5,0);spine.castShadow=true;sc.add(spine);
+  for(let k=0;k<5;k++){const ln=new THREE.Mesh(new THREE.BoxGeometry(k===4?30:56,0.6,4.5),M(k===1?0x0c6b58:0xc7d2ce));ln.position.set(k===4?-11:2,24.9,-34+k*15);sc.add(ln);}
+  const items=[['재무',0x3d6fc4],['고용',0x2a8f9e],['투자',0xd17a1f],['특허',0x6b4e8a],['기사',0x5a6577],['공고',0x0b8466]];
+  const pos=[];
+  items.forEach(([t,c],i)=>{const a=0.83+0.5236+i*Math.PI/3,R=132,y=46;
+    const p=new THREE.Vector3(Math.cos(a)*R,y,Math.sin(a)*R);
+    const m=new THREE.Mesh(new THREE.BoxGeometry(40,5,28),M(c));m.position.copy(p);m.rotation.y=-a;sc.add(m);
+    const sh=new THREE.Mesh(new THREE.CircleGeometry(15,32),new THREE.MeshBasicMaterial({color:0x0c6b58,transparent:true,opacity:.10}));sh.rotation.x=-Math.PI/2;sh.position.set(p.x,0.6,p.z);sc.add(sh);
+    const pts=[];for(let k=0;k<=36;k++){const u=k/36;pts.push(new THREE.Vector3(p.x*(1-u)*(1-0.42*u),(p.y-2)*(1-u)+28*u+Math.sin(Math.PI*u)*10,p.z*(1-u)*(1-0.42*u)));}
+    const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineDashedMaterial({color:c,dashSize:4,gapSize:3}));l.computeLineDistances();sc.add(l);
+    pos.push([t,c,p]);});
+  r.render(sc,cam);await bake(r,host,W,H);r.dispose();
+  pos.forEach(([t,c,p])=>{const d=label(host,cam,W,H,p.clone().add(new THREE.Vector3(0,3,0)),'',0);d.style.transform='translate(-50%,-50%)';
+    d.innerHTML=`<span style="display:inline-block;font-size:10px;font-weight:700;color:#fff;background:${hex(c)};border-radius:6px;padding:0 6px;line-height:16px;box-shadow:0 2px 6px rgba(0,0,0,.15)">${t}</span>`;});
+  const n=label(host,cam,W,H,new THREE.Vector3(0,26,0),'',0);n.style.transform='translate(-50%,-50%)';
+  n.innerHTML='<span style="display:inline-block;font-size:11px;font-weight:700;color:#fff;background:#0c6b58;border-radius:7px;padding:1px 8px;box-shadow:0 2px 6px rgba(0,0,0,.18)">노트 한 장</span>';
+}
+// 2쪽: 실측 19회 / 상한 21회
+async function tower(){
+  const host=document.getElementById('tower3d'),W=206,H=134,r=setup(W,H),sc=new THREE.Scene();
+  const cam=new THREE.OrthographicCamera(-W/2,W/2,H/2,-H/2,-2000,2000);cam.position.set(170,190,330);const tgt=new THREE.Vector3(0,64,0);cam.lookAt(tgt);cam.zoom=0.96;cam.updateProjectionMatrix();
+  lights(sc);
+  const right=new THREE.Vector3(1,0,0).applyQuaternion(cam.quaternion);right.y=0;right.normalize();
+  const S=10.2,cols=[{n:11,cap:12,c:0x0b8466,o:-62,t:'웹 검색'},{n:2,cap:2,c:0xd17a1f,o:0,t:'Premium'},{n:6,cap:7,c:0x3d6fc4,o:62,t:'모델'}];
+  const geo=new THREE.BoxGeometry(26,S-1.6,26);
+  cols.forEach(col=>{const base=right.clone().multiplyScalar(col.o);col.base=base;
+    for(let k=0;k<col.cap;k++){const y=k*S+S/2;
+      if(k<col.n){const m=new THREE.Mesh(geo,M(col.c));m.position.set(base.x,y,base.z);m.castShadow=true;m.receiveShadow=true;sc.add(m);}
+      else{const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineDashedMaterial({color:col.c,dashSize:2.4,gapSize:1.8}));e.computeLineDistances();e.position.set(base.x,y,base.z);sc.add(e);
+        const gm=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:col.c,transparent:true,opacity:.08}));gm.position.copy(e.position);sc.add(gm);}}});
+  r.render(sc,cam);await bake(r,host,W,H);r.dispose();
+  cols.forEach(col=>{const top=new THREE.Vector3(col.base.x,col.cap*S+4,col.base.z);
+    label(host,cam,W,H,new THREE.Vector3(col.base.x,0,col.base.z+13),`<div class="v" style="color:${hex(col.c)}">${col.n}<small>/${col.cap}</small></div><div class="l">${col.t}</div>`,4);});
+}
+await document.fonts.ready;
+lucide.createIcons();
+dots();donut();pages();radial();sankey();models();
+await hero();await tower();
+window.__ready=true;
+</script>
+</body></html>
