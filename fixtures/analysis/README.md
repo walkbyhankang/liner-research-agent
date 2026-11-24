@@ -51,6 +51,8 @@
 
 ## 다시 만들기
 
+같은 스크립트가 예시 회사 저장 분석(`fixtures/example/`, 분석 서버가 처음 뜰 때 `results/analysis/`로 복사해 "예시 회사로 보기"에 쓴다)도 만든다.
+
 ```bash
 .venv/bin/python scripts/build_growth_fixtures.py
 .venv/bin/python -m pytest -q tests/test_growth_contract.py

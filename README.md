@@ -68,6 +68,8 @@ scripts/run_local.sh        # 화면 빌드 후 분석 서버(8000)와 화면(31
 
 브라우저에서 `http://127.0.0.1:3100`을 열고 회사 이름을 입력합니다. 종료는 `Ctrl+C`입니다. 처음 실행할 때 `web/node_modules`가 없으면 `npm install`과 화면 빌드를 함께 진행합니다.
 
+키가 하나도 없어도 시작 화면의 "예시 회사로 보기"로 가상 회사 '가나다테크'의 분석을 회사 분석부터 노트까지 모든 화면에서 볼 수 있습니다. 저장소에 든 합성 데이터(`fixtures/example/`)를 분석 서버가 처음 뜰 때 불러오며, 예시 회사는 다시 분석할 수 없습니다.
+
 | `.env` 키 | 필요 | 발급처 | 없을 때 |
 |---|---|---|---|
 | `LINER_API_KEY` | 필수 | [Liner Platform](https://platform.liner.com) | Liner를 쓰는 분석·공고문 대조·운용사 요약을 사용할 수 없습니다 |
@@ -75,7 +77,6 @@ scripts/run_local.sh        # 화면 빌드 후 분석 서버(8000)와 화면(31
 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 권장 | [NAVER Developers](https://developers.naver.com) 애플리케이션 등록(검색 API) | 최근 동향 단락이 "미확보"로 표시됩니다(Liner 웹 검색은 NAVER 뉴스를 보완하는 용도입니다) |
 | `OPENALEX_API_KEY` | 선택 | [OpenAlex](https://openalex.org) | 키 없이 공개 API로 동작합니다 |
 | `BIZINFO_API_KEY`, `KVIC_API_KEY` | 선택 | [기업마당](https://www.bizinfo.go.kr), [한국벤처투자](https://www.kvic.or.kr) | 실행에는 필요 없습니다. 기업마당 지원사업·한국벤처투자 펀드 목록은 저장소의 스냅샷(`web/public/data/`)을 쓰며, 스냅샷을 새로 받을 때([`scripts/fetch_public_data.py`](scripts/fetch_public_data.py), `.venv/bin/python scripts/fetch_public_data.py`로 실행)만 필요합니다 |
-| `GROWTH_EXAMPLE_COMPANY_ID` | 선택 | 발급 없음(키가 아니라 이 서비스에서 분석을 마친 회사의 id. 회사 분석 주소 `/c/<id>`의 값 그대로이며, 법인등록번호 13자리 또는 법인 없이 분석한 회사는 `n-`과 16자) | 시작 화면에 "예시 회사로 보기"가 나오지 않습니다. 값을 넣으려면 그 회사의 분석 결과가 서버(`results/analysis/`)에 저장돼 있어야 합니다. 지정한 회사는 신규 분석이 제한됩니다 |
 
 키가 비어 있으면 해당 API를 쓰는 단락만 "미확보"로 표시하고 나머지 분석은 계속합니다. 키는 서버에만 두며 화면·로그·결과 파일에 남기지 않습니다. 회사 없이 공고와 운용사만 보려면 시작 화면의 "회사 없이 자금만 둘러보기"를 사용합니다(키가 필요 없습니다).
 

@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from growth.contract import NewsCategory, SectionKey
-from growth.jobs import ApiFailure, Manager
+from growth.jobs import EXAMPLE_DIR, ApiFailure, Manager
 
 router = APIRouter(prefix="/api")
 log = logging.getLogger("growth")
@@ -24,7 +24,7 @@ CRNO = r"^\d{13}$"
 JobId = Annotated[str, Path(pattern=JOB_ID)]
 CompanyId = Annotated[str, Path(pattern=COMPANY_ID)]
 
-manager = Manager()
+manager = Manager(example_dir=EXAMPLE_DIR)  # 예시 회사는 저장소의 가상 회사(fixtures/example/)
 
 
 def running_count() -> int:

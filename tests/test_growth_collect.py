@@ -278,13 +278,13 @@ def test_domestic_only_drops_foreign_branch_self_and_duplicates():
     comps = [{"name": "퓨리오사AI", "is_korean": True, "country": "한국"},
              {"name": "엔비디아", "is_korean": False, "country": "미국"},
              {"name": "AWS코리아", "is_korean": True, "country": "한국", "reason": "아마존의 한국 법인"},
-             {"name": "기준 기업", "is_korean": True, "country": "대한민국"},
+             {"name": "가나다테크", "is_korean": True, "country": "대한민국"},
              {"name": "퓨리오사 AI", "is_korean": True, "country": "South Korea"},
              {"name": "딥엑스", "is_korean": True, "country": "Korea"},
              {"name": "현대코리아", "is_korean": True, "country": "한국"}]  # '코리아' 이름만으로는 빼지 않는다
-    keep, drop = company.domestic_only(comps, "기준 기업", "ReferenceCo")
+    keep, drop = company.domestic_only(comps, "가나다테크", "Ganada Tech")
     assert [c["name"] for c in keep] == ["퓨리오사AI", "딥엑스", "현대코리아"]
-    assert {d["name"] for d in drop} == {"엔비디아", "AWS코리아", "기준 기업", "퓨리오사 AI"}
+    assert {d["name"] for d in drop} == {"엔비디아", "AWS코리아", "가나다테크", "퓨리오사 AI"}
     assert len(company.domestic_only([{"name": f"국내{i}", "is_korean": True, "country": "한국"} for i in range(8)], "x")[0]) == 5
 
 

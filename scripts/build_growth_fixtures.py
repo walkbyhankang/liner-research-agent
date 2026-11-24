@@ -1,13 +1,17 @@
-"""성장노트 가짜 응답(fixtures/analysis/*.json)을 만든다. 실제 회사·기사·투자자 자료는 쓰지 않는다(가상의 회사 "가나다테크").
+"""성장노트 가짜 응답(fixtures/analysis/*.json)과 예시 회사 저장 분석(fixtures/example/)을 만든다.
+실제 회사·기사·투자자 자료는 쓰지 않는다(가상의 회사 "가나다테크").
 
 실행: .venv/bin/python scripts/build_growth_fixtures.py
 - 난수 씨앗을 고정해 같은 파일이 나온다. 기준일은 2026-11-22(한국 시간)이다.
 - 만든 뒤 growth/contract.py 타입으로 모두 검사하고, 하나라도 맞지 않으면 파일을 쓰지 않는다.
 - 주소는 모두 https://example.com/… 이다(실제 페이지로 가지 않게).
+- fixtures/example/<회사 id>/ 는 분석 서버가 처음 뜰 때 results/analysis/ 로 복사해 "예시 회사로 보기"에 쓰는 저장 분석이다
+  (계약 12.1절 스냅샷 모양, growth/jobs.py seed_example).
 """
 import copy
 import json
 import random
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -19,8 +23,10 @@ from pydantic import TypeAdapter  # noqa: E402
 
 from growth import contract as C  # noqa: E402
 from growth import limits as L  # noqa: E402
+from growth.store import SCHEMA  # noqa: E402
 
 OUT = ROOT / "fixtures" / "analysis"
+EXAMPLE_OUT = ROOT / "fixtures" / "example"
 T0 = datetime(2026, 11, 22, 20, 44, 0, tzinfo=L.KST)
 JOB_ID = "5a1c0e7b9d3f4a2e8b6c1d0f9e8a7b6c"
 CRNO = "0000000000001"
@@ -908,6 +914,18 @@ def validate(files: dict[str, dict]) -> None:
             ADAPTERS[kind].validate_python(ex["response"], strict=True)
 
 
+def build_example() -> dict[str, dict]:
+    """예시 회사 저장 분석(분석 서버가 읽는 스냅샷 파일과 latest.json). 기본 7개 단락과 경쟁사 비교·판로까지 끝난 상태이고,
+    스냅샷이라 기사 목록은 전체를 넣는다. 돌려주는 열쇠는 fixtures/example/ 아래 상대 경로다."""
+    job, articles = make_job(example=True, rivals=True, sales="done")
+    job["sections"]["news"]["result"]["articles"] = articles
+    ADAPTERS["job"].validate_python(job, strict=True)
+    stamp = re.sub(r"\D", "", job["startedAt"][:19])
+    name = f"{stamp[:8]}-{stamp[8:14]}.json"
+    return {f"{job['companyId']}/{name}": {"schema": SCHEMA, **job},
+            f"{job['companyId']}/latest.json": {"file": name, "jobId": job["jobId"], "analyzedAt": job["analyzedAt"]}}
+
+
 READABLE = {"F-FULL", "F-BRIEF", "F-NOTICE", "F-DOWN", "F-CORP-0", "F-CORP-1", "F-CORP-2", "F-CORP-7"}
 
 
@@ -921,6 +939,11 @@ def main() -> None:
         text = json.dumps(data, ensure_ascii=False, indent=None if compact else 1, separators=(",", ":") if compact else None)
         (OUT / f"{name}.json").write_text(text + "\n", encoding="utf-8")
     print(f"{len(files)}개 파일 → {OUT}")
+    for rel, data in build_example().items():
+        path = EXAMPLE_OUT / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    print(f"예시 회사 저장 분석 → {EXAMPLE_OUT}")
 
 
 if __name__ == "__main__":

@@ -134,10 +134,14 @@ def test_no_score_or_probability_fields():
     assert bad_keys == [] and bad_text == []
 
 
+# 가짜 데이터에 섞이면 안 되는 실제 회사 이름(실측·시연에 쓴 회사와 같은 분야 회사)과 실제 응답에만 있는 문구
+REAL_NAMES = ("퓨리오사", "Furiosa", "딥엑스", "DeepX", "모빌린트", "Mobilint", "NVIDIA", "엔비디아",
+              "Qualcomm", "Groq", "뤼튼", "Wrtn", "업스테이지", "Upstage", "People Data Labs 회사 카드 (Liner Premium) ·")
+
+
 def test_no_real_company_data():
     text = "\n".join(p.read_text(encoding="utf-8") for p in FILES)
-    for real in ("기준 기업", "ReferenceCo", "합병 전 법인", "FormerCo", "퓨리오사", "Furiosa", "딥엑스", "DeepX", "모빌린트", "Mobilint", "NVIDIA", "엔비디아",
-                 "Qualcomm", "Groq", "뤼튼", "Wrtn", "업스테이지", "Upstage", "People Data Labs 회사 카드 (Liner Premium) ·"):
+    for real in REAL_NAMES:
         assert real not in text, real
     urls = [v for _, f in DATA.items() for _, k, v in walk(f) if isinstance(v, str) and re.search(r"(?i)url$", k) and v]
     assert urls and all(u.startswith("https://example.com/") for u in urls)
@@ -152,6 +156,28 @@ def gp_key(name: str) -> str:
     s = re.sub(r"주식회사|유한회사|유한책임회사|\(주\)|\(유\)|㈜", "", name)
     s = re.sub(r"[\s·.,&()\-]", "", s)
     return re.sub(r"[A-Z]", lambda m: LETTERS[m.group(0)], s).lower()
+
+
+def test_bundled_example_matches_builder_and_contract():
+    """fixtures/example/ 은 build_growth_fixtures.py 가 만든 그대로이고, 스냅샷(계약 12.1절)으로 읽히며 실제 자료가 없다."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("build_growth_fixtures", ROOT / "scripts" / "build_growth_fixtures.py")
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+    want = builder.build_example()
+    ex_dir = ROOT / "fixtures" / "example"
+    have = {p.relative_to(ex_dir).as_posix(): json.loads(p.read_text(encoding="utf-8")) for p in ex_dir.rglob("*.json")}
+    assert have == want
+    from growth.store import Store
+    snap = next(k for k in have if not k.endswith("latest.json"))
+    job = Store.read(ex_dir / snap)
+    A["job"].validate_python(job, strict=True)
+    assert job["status"] == "done" and job["sections"]["news"]["result"]["articleTotal"] == len(job["sections"]["news"]["result"]["articles"])
+    text = "\n".join(p.read_text(encoding="utf-8") for p in ex_dir.rglob("*.json"))
+    for real in REAL_NAMES:
+        assert real not in text, real
+    urls = [v for _, k, v in walk(job) if isinstance(v, str) and re.search(r"(?i)url$", k) and v]
+    assert urls and all(u.startswith("https://example.com/") for u in urls)
 
 
 def test_fake_investors_do_not_match_real_fund_managers():

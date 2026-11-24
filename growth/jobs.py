@@ -5,26 +5,30 @@
 - 열 때 실행 단락(papers, rivals_deep, sales)과 단락 다시 실행은 POST /api/analysis/{jobId}/sections/{key} 로 같은 작업 안에서 한다.
 - 단락마다 growth.limits 예산을 잡는다. 하루 상한이 모자라면 그 단락만 unavailable(daily_limit).
 - 작업 상태는 메모리 + 파일(results/analysis/…)이다. 상태가 바뀔 때마다 파일 전체를 원자적으로 다시 쓴다.
+- 예시 회사: 저장소에 든 가상 회사(fixtures/example/, 합성 데이터)를 처음 뜰 때 results/analysis/ 로 복사해 쓴다(seed_example).
 """
 from __future__ import annotations
 
 import copy
 import logging
-import os
+import shutil
 import threading
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 import analysis
+import config
 from growth import common, limits, merge, public_data, sections
 from growth.contract import BASIC_SECTIONS, CONTRACT_VERSION, DEPENDS_ON, ESTIMATES, EXPECTED_SECONDS, NEWS_CATEGORIES, \
-    ON_DEMAND_SECTIONS, SECTION_KEYS, TERMINAL_SECTION_STATUSES, company_id_for
+    ON_DEMAND_SECTIONS, SECTION_KEYS, TERMINAL_SECTION_STATUSES, COMPANY_ID_RE, company_id_for
 from growth.limits import KST
 from growth.store import LeakError, Store
 
 log = logging.getLogger("growth")
 ZERO = {"search": 0, "premium": 0, "model": 0, "scholar": 0}
-EXAMPLE_ENV = "GROWTH_EXAMPLE_COMPANY_ID"
+# 예시 회사: 저장소에 든 가상 회사 "가나다테크"의 저장 분석(합성 데이터, scripts/build_growth_fixtures.py 가 만든다)
+EXAMPLE_DIR = config.BASE_DIR / "fixtures" / "example"
 RUN_STAGE = {"identity": "법인 찾기", "facts": "보도·공식 자료 검색"}
 NO_RETRY_CODES = ("daily_limit", "no_corp", "missing_config")
 ARTICLES_IN_JOB = 20
@@ -49,9 +53,12 @@ def _secs(start: str | None, end: datetime) -> float | None:
     return round(max(0.0, (end - s).total_seconds()), 1) if s else None
 
 
-def example_id() -> str:
-    """예시 회사 id. 환경변수 → 저장소 루트 .env 순서로 읽는다(실제 회사 id 라 저장소에는 적지 않는다)."""
-    return (os.environ.get(EXAMPLE_ENV) or common.env(EXAMPLE_ENV) or "").strip()
+def example_company_in(src: Path | None) -> str:
+    """예시 폴더에 든 회사 id(회사 id 모양의 하위 폴더 이름 중 첫째). 폴더가 없으면 ""(예시 회사 없음)."""
+    if src is None or not src.is_dir():
+        return ""
+    ids = sorted(p.name for p in src.iterdir() if p.is_dir() and COMPANY_ID_RE.fullmatch(p.name))
+    return ids[0] if ids else ""
 
 
 class Job:
@@ -233,8 +240,10 @@ def retryable(key: str, env: dict, secs: dict, merged: dict, is_example: bool) -
 class Manager:
     """서버 전체 작업 목록. api/analysis.py 가 하나만 만들어 쓴다."""
 
-    def __init__(self, store: Store | None = None):
+    def __init__(self, store: Store | None = None, *, example_dir: Path | None = None):
         self.store = store or Store()
+        self.example_dir = example_dir
+        self.example_company = example_company_in(example_dir)  # "" 이면 예시 회사 없음
         self.lock = threading.RLock()
         self.jobs: dict[str, Job] = {}       # 메모리에 있는 작업(진행 중 + 읽어 온 것)
         self.meta: dict[str, dict] = {}      # jobId → {companyId, status, startedAt, analyzedAt, name}
@@ -247,6 +256,7 @@ class Manager:
             if self._loaded:
                 return
             self._loaded = True
+            self.seed_example()
             for path, d in self.store.scan():
                 changed = _interrupt(d, path)
                 if changed:
@@ -255,6 +265,19 @@ class Manager:
                     except (LeakError, OSError):
                         log.error("되살린 스냅샷을 다시 쓰지 못했습니다(%s)", path.name)
                 self.note(d)
+
+    def seed_example(self) -> None:
+        """예시 회사 저장 분석을 results/analysis/<id>/ 로 복사한다. 그 폴더가 이미 있으면 건드리지 않는다(덮어쓰지 않는다)."""
+        cid = self.example_company
+        if not cid:
+            return
+        dest = self.store.root / cid
+        if dest.exists():
+            return
+        try:
+            shutil.copytree(self.example_dir / cid, dest)
+        except OSError as e:
+            log.error("예시 회사 저장 분석을 복사하지 못했습니다: %s", type(e).__name__)
 
     def note(self, d: dict) -> None:
         with self.lock:
@@ -279,7 +302,7 @@ class Manager:
             return job
 
     def is_example(self, company_id: str) -> bool:
-        return bool(company_id) and company_id == example_id()
+        return bool(company_id) and company_id == self.example_company
 
     def _latest(self, company_id: str, statuses: tuple[str, ...]) -> str | None:
         with self.lock:
@@ -539,7 +562,7 @@ class Manager:
 
     def example(self) -> dict:
         self.ensure_loaded()
-        cid = example_id()
+        cid = self.example_company
         jid = self._latest(cid, ("done",)) if cid else None
         if not jid:
             raise ApiFailure(404, "not_found", "예시 회사가 없습니다")

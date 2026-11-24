@@ -288,7 +288,6 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "_do_search", fake_search)
     monkeypatch.setattr(pipeline, "rebuild_sources", lambda run: run.update(sources=[]))
     monkeypatch.setattr(pipeline, "run_models", fake_models)
-    monkeypatch.delenv("GROWTH_EXAMPLE_COMPANY_ID", raising=False)
     L._reset_for_tests({})
     w.manager = jobs.Manager(Store(tmp_path / "analysis"))
     w.root = tmp_path / "analysis"
@@ -671,7 +670,7 @@ def test_start_rules_running_saved_refresh_and_busy(world):
 
 def test_example_company_is_read_only_except_sales(world, monkeypatch):
     v = run_full(world)
-    monkeypatch.setenv("GROWTH_EXAMPLE_COMPANY_ID", CRNO)
+    world.manager.example_company = CRNO
     ex = world.manager.example()
     assert ex == {"companyId": CRNO, "jobId": v["jobId"], "name": "주식회사 가나다테크", "analyzedAt": v["analyzedAt"]}
     job = world.manager.get(v["jobId"]).view()
@@ -687,10 +686,38 @@ def test_example_company_is_read_only_except_sales(world, monkeypatch):
     assert e.value.code == "example_readonly"
     assert world.manager.run_section(v["jobId"], "sales", None, ["AI 서버"])["started"]
     wait_idle(world.manager, v["jobId"])
-    monkeypatch.delenv("GROWTH_EXAMPLE_COMPANY_ID")
+    world.manager.example_company = ""
     with pytest.raises(jobs.ApiFailure) as e:
         world.manager.example()
     assert e.value.status == 404
+
+
+def test_bundled_example_company_is_seeded_once(tmp_path):
+    """저장소의 가상 회사(fixtures/example/)를 처음 뜰 때 복사해 예시 회사로 쓴다. 키 없이도 열 수 있다."""
+    root = tmp_path / "analysis"
+    m = jobs.Manager(Store(root), example_dir=jobs.EXAMPLE_DIR)
+    ex = m.example()
+    assert ex["companyId"] == "0000000000001" and ex["name"] == "주식회사 가나다테크"
+    assert sorted(p.name for p in (root / ex["companyId"]).iterdir()) == sorted(p.name for p in (jobs.EXAMPLE_DIR / ex["companyId"]).iterdir())
+    job = m.get(ex["jobId"]).view()
+    check_contract(job)
+    assert job["status"] == "done" and job["isExample"] and job["refresh"]["remainingToday"] == 0
+    assert all(job["sections"][k]["status"] == "done" for k in (*jobs.BASIC_SECTIONS, "rivals_deep", "sales"))
+    assert [k for k, s in job["sections"].items() if s["retryable"]] == ["sales"]
+    with pytest.raises(jobs.ApiFailure) as e:
+        m.start("가나다테크", ex["companyId"], None, True)
+    assert e.value.code == "example_readonly"
+    # 이미 있는 폴더는 덮어쓰지 않는다
+    other = tmp_path / "other"
+    (other / "0000000000001").mkdir(parents=True)
+    (other / "0000000000001" / "keep.txt").write_text("x", encoding="utf-8")
+    m2 = jobs.Manager(Store(other), example_dir=jobs.EXAMPLE_DIR)
+    with pytest.raises(jobs.ApiFailure) as e:
+        m2.example()
+    assert e.value.status == 404
+    assert [p.name for p in (other / "0000000000001").iterdir()] == ["keep.txt"]
+    # 예시 폴더를 주지 않으면 예시 회사가 없다(시험의 가나다테크 분석은 보통 회사로 다룬다)
+    assert jobs.Manager(Store(tmp_path / "none")).example_company == ""
 
 
 def test_daily_limit_marks_only_that_section(world):

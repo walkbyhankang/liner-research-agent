@@ -175,8 +175,8 @@
 
 ### 2.8 `GET /api/example`
 
-- 환경변수 `GROWTH_EXAMPLE_COMPANY_ID`의 회사 id로 저장된 `done` 분석이 있으면 `{companyId, jobId, name, analyzedAt}`, 변수가 없거나 분석이 없으면 404 `not_found`(시작 화면에서 링크를 숨긴다).
-- 예시 회사는 서버에 저장된 실제 분석이다. `fixtures/analysis`는 예시로 쓰지 않는다.
+- 예시 회사(11절)의 저장된 `done` 분석이 있으면 `{companyId, jobId, name, analyzedAt}`, 없으면 404 `not_found`(시작 화면에서 링크를 숨긴다).
+- 예시 회사는 저장소에 든 가상 회사 "가나다테크"의 저장 분석(`fixtures/example/`, 합성 데이터)이다. `fixtures/analysis`의 가짜 응답과 같은 만들기 스크립트(`scripts/build_growth_fixtures.py`)로 만든다.
 
 ### 2.9 `POST /api/notice/analyze` (유지)
 
@@ -749,7 +749,7 @@
 
 ## 11. 예시 회사
 
-- 환경변수 `GROWTH_EXAMPLE_COMPANY_ID`의 회사(기준 기업 실제 분석을 서버 파일로만 둔다, 저장소에 넣지 않는다).
+- 저장소에 든 가상 회사 "가나다테크"(`fixtures/example/<회사 id>/`, 합성 데이터). 분석 서버가 처음 뜰 때 `results/analysis/<회사 id>/`로 복사한다(그 폴더가 이미 있으면 건드리지 않는다). 설정은 따로 없다.
 - 그 회사의 모든 작업 응답은 `isExample: true`, `refresh.remainingToday: 0`. 새로 분석은 409 `example_readonly`. 유료 단락(`papers`, `rivals_deep`, 기본 단락 다시 실행)은 `retryable: false`이고 요청하면 409 `example_readonly`. `sales`(무료)만 실행할 수 있다.
 - 화면: "예시 회사" 표시, "새로 분석" 숨김, 실행할 수 없는 열 때 실행 블록은 숨긴다.
 
