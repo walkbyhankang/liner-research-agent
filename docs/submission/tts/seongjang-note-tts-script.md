@@ -11,7 +11,7 @@
 | 어조 | 줄마다 `speech_metadata.style`로 보냅니다. 모든 줄 앞부분은 같은 기본 어조이고, 뒤에 그 줄의 변화만 붙입니다 |
 | 기본 어조 | `calm, clear Korean product-demo narrator, warm and professional` (차분하고 또렷한 제품 시연 내레이터, 따뜻하고 단정하게) |
 | 쉼 | 대본 안의 `<short pause>`(약 0.25초), `<long pause>`(1초 이상). 나머지는 문장부호로 쉽니다 |
-| 음성 | 기본 `Kore`. 비교 후보: Kore, Charon, Sulafat, Achernar, Iapetus, Sadaltager |
+| 음성 | 기본 `ko-kr-storyteller-4`(확장 음성 목록의 한국어 전용 음성, 서울말·여성·중간 음높이). 목록은 `GET /v1beta/voices?language_code=ko-KR`로 받습니다. 샘플 비교 목록(`sample_voices`)은 이 음성과 기본 음성 Kore, Charon, Sulafat, Achernar, Iapetus, Sadaltager입니다. 다른 음성을 골랐다면 2)·3)의 `--voice`에 같은 이름을 넣습니다 |
 | 최대 길이 | 다음 내레이션이나 장 제목이 시작되기 0.2초 전까지입니다. 마지막 줄은 로고를 3초 이상 보여 주도록 잡았습니다 |
 
 - 어조와 태그는 영어로 적었습니다. Google 안내에서 태그는 영어로 쓰라고 하고, 어조 예시도 모두 영어이기 때문입니다.
@@ -86,14 +86,14 @@ Google 계정의 API 키나 인증이 있어야 음성을 만들 수 있습니�
 pip install "google-genai>=2.25.0"
 export GEMINI_API_KEY=...   # Google AI Studio에서 발급
 
-# 1) 샘플: L01을 후보 음성 6개로 만들어 비교
+# 1) 샘플: L01을 기본 음성 ko-kr-storyteller-4와 후보 6개로 만들어 비교
 python docs/submission/tts/synthesize.py samples --line L01
 
 # 2) 고른 음성으로 29줄 전체 생성 → 줄별 길이 판정표(report.csv)
-python docs/submission/tts/synthesize.py lines --voice Kore
+python docs/submission/tts/synthesize.py lines --voice ko-kr-storyteller-4
 
 # 3) 넘친 줄만 다시 생성
-python docs/submission/tts/synthesize.py lines --voice Kore --only L06
+python docs/submission/tts/synthesize.py lines --voice ko-kr-storyteller-4 --only L06
 ```
 
 - `--dry-run`을 붙이면 API를 부르지 않고 보낼 어조와 대본만 출력합니다.

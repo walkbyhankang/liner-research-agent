@@ -5,8 +5,10 @@
   "model": "gemini-3.8-flash-tts",
   "cloud_model": "gemini-3.1-flash-tts-preview",
   "language_code": "ko-KR",
-  "voice": "Kore",
+  "voice": "ko-kr-storyteller-4",
+  "cloud_voice": "Kore",
   "sample_voices": [
+   "ko-kr-storyteller-4",
    "Kore",
    "Charon",
    "Sulafat",
