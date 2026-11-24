@@ -74,7 +74,7 @@ scripts/run_local.sh        # 화면 빌드 후 분석 서버(8000)와 화면(31
 | `DATA_GO_KR_SERVICE_KEY` | 권장 | [공공데이터포털](https://www.data.go.kr) 일반 인증키. 키 하나로 함께 쓰며 API마다 활용신청이 필요합니다: 금융위원회 기업기본정보(`GetCorpBasicInfoService_V2`)·기업재무정보(`GetFinaStatInfoService_V2`), 국민연금 사업장 가입자(`NpsBplcInfoInqireServiceV2`), 조달청 나라장터 입찰공고(`BidPublicInfoService02`) | 법인 조회를 할 수 없어 공식 재무·고용·나라장터가 "미확보"로 표시됩니다. 시작 화면의 "공개 자료만으로 분석"으로 나머지 분석을 진행합니다 |
 | `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 권장 | [NAVER Developers](https://developers.naver.com) 애플리케이션 등록(검색 API) | 최근 동향 단락이 "미확보"로 표시됩니다(Liner 웹 검색은 NAVER 뉴스를 보완하는 용도입니다) |
 | `OPENALEX_API_KEY` | 선택 | [OpenAlex](https://openalex.org) | 키 없이 공개 API로 동작합니다 |
-| `BIZINFO_API_KEY`, `KVIC_API_KEY` | 선택 | [기업마당](https://www.bizinfo.go.kr), [한국벤처투자](https://www.kvic.or.kr) | 실행에는 필요 없습니다. 기업마당 지원사업·한국벤처투자 펀드 목록은 저장소의 스냅샷(`web/public/data/`)을 쓰며, 스냅샷을 새로 받을 때(`scripts/fetch_public_data.py`)만 필요합니다 |
+| `BIZINFO_API_KEY`, `KVIC_API_KEY` | 선택 | [기업마당](https://www.bizinfo.go.kr), [한국벤처투자](https://www.kvic.or.kr) | 실행에는 필요 없습니다. 기업마당 지원사업·한국벤처투자 펀드 목록은 저장소의 스냅샷(`web/public/data/`)을 쓰며, 스냅샷을 새로 받을 때([`scripts/fetch_public_data.py`](scripts/fetch_public_data.py), `.venv/bin/python scripts/fetch_public_data.py`로 실행)만 필요합니다 |
 | `GROWTH_EXAMPLE_COMPANY_ID` | 선택 | 발급 없음(키가 아니라 이 서비스에서 분석을 마친 회사의 id. 회사 분석 주소 `/c/<id>`의 값 그대로이며, 법인등록번호 13자리 또는 법인 없이 분석한 회사는 `n-`과 16자) | 시작 화면에 "예시 회사로 보기"가 나오지 않습니다. 값을 넣으려면 그 회사의 분석 결과가 서버(`results/analysis/`)에 저장돼 있어야 합니다 |
 
 키가 비어 있으면 해당 API를 쓰는 단락만 "미확보"로 표시하고 나머지 분석은 계속합니다. 키는 서버에만 두며 화면·로그·결과 파일에 남기지 않습니다. 회사 없이 공고와 운용사만 보려면 시작 화면의 "회사 없이 자금만 둘러보기"를 사용합니다(키가 필요 없습니다).
