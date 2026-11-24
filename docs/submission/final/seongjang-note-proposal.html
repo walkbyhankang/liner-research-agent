@@ -132,7 +132,7 @@ b{font-weight:700}
 .jd i{display:inline-block;width:9px;height:9px;border-radius:50%}
 
 /* 아래 두 칸 */
-.s34{display:grid;grid-template-columns:262px 1fr;gap:26px;margin:24px 28px 0}
+.s34{display:grid;grid-template-columns:1fr 262px;gap:26px;margin:24px 28px 0}
 .kpis{display:grid;grid-template-columns:1fr 1fr;column-gap:7px}
 .kpis .kp{position:relative}
 .vhead{position:relative;z-index:2;height:30px;display:flex;align-items:center;justify-content:center;gap:7px;background:var(--gd);color:#fff;border-radius:999px;font-size:14.5px;font-weight:700;letter-spacing:-.02em;box-shadow:0 2px 0 #c4d8cf}
@@ -333,20 +333,7 @@ b{font-weight:700}
   </section>
 
   <div class="s34">
-    <section>
-      <div class="vhead"><i data-lucide="shield-check"></i>검증으로 완성도를 높였습니다</div>
-      <div class="jn2"><i></i><i></i></div>
-      <div class="kpis">
-        <div class="card kp"><div class="v">524</div><div class="l">자동 테스트</div><div class="s">Python 412<br>화면 규칙 112, 모두 통과</div></div>
-        <div class="card kp"><div class="v">370</div><div class="l">실제 브라우저 점검</div><div class="s">폭 390~1280px에서<br>넘침·글자 대비 확인</div></div>
-      </div>
-      <div class="jn2"><i></i><i></i></div>
-      <div class="kpis">
-        <div class="card kp"><div class="v">4<small>가지</small></div><div class="l">실제 API로 실행</div><div class="s">기본 분석, 같은 이름 법인,<br>공고문 대조, 운용사 요약</div></div>
-        <div class="card kp"><div class="v">28</div><div class="l">리뷰로 고친 문제</div><div class="s">별도 리뷰어의 검토를<br>통과해야 커밋</div></div>
-      </div>
-    </section>
-    <section style="display:flex;flex-direction:column">
+    <section class="exsec" style="display:flex;flex-direction:column">
       <div class="sec"><span class="n">3</span><span class="t">다른 조직·직무로 확장</span><span class="tag">확장성·임팩트</span></div>
       <div class="card ex4" style="flex:1">
         <svg id="radial" width="156" height="160"></svg>
@@ -357,6 +344,19 @@ b{font-weight:700}
           <div class="rw"><span class="ic"><i data-lucide="bell-ring"></i></span><div><b>서비스로 발전시키겠습니다.</b> 맞는 새 공고를 알려 주고, 클라우드 배포와 로그인을 갖춰 누구나 쓰게 하겠습니다.</div></div>
           <div class="asof2">* 공고 수: 2026.11.21. 기업마당 조회 기준</div>
         </div>
+      </div>
+    </section>
+    <section class="kpsec">
+      <div class="vhead"><i data-lucide="shield-check"></i>검증으로 완성도를 높였습니다</div>
+      <div class="jn2"><i></i><i></i></div>
+      <div class="kpis">
+        <div class="card kp"><div class="v">524</div><div class="l">자동 테스트</div><div class="s">Python 412<br>화면 규칙 112, 모두 통과</div></div>
+        <div class="card kp"><div class="v">370</div><div class="l">실제 브라우저 점검</div><div class="s">폭 390~1280px에서<br>넘침·글자 대비 확인</div></div>
+      </div>
+      <div class="jn2"><i></i><i></i></div>
+      <div class="kpis">
+        <div class="card kp"><div class="v">4<small>가지</small></div><div class="l">실제 API로 실행</div><div class="s">기본 분석, 같은 이름 법인,<br>공고문 대조, 운용사 요약</div></div>
+        <div class="card kp"><div class="v">28</div><div class="l">리뷰로 고친 문제</div><div class="s">별도 리뷰어의 검토를<br>통과해야 커밋</div></div>
       </div>
     </section>
   </div>
@@ -482,11 +482,11 @@ function zones(){
   const pg=document.getElementById('p1'), P=pg.getBoundingClientRect();
   const R=sel=>{const r=document.querySelector(sel).getBoundingClientRect();return {l:r.left-P.left,r:r.right-P.left,t:r.top-P.top,b:r.bottom-P.top};};
   const pad=9, X0=16, X1=778, IN=8, rad=16;
-  const s1=R('#p1 .s1'), s2=R('#p1 .s2'), kp=R('#p1 .s34>section:first-child'), ex=R('#p1 .s34>section:last-child');
+  const s1=R('#p1 .s1'), s2=R('#p1 .s2'), kp=R('#p1 .s34>section.kpsec'), ex=R('#p1 .s34>section.exsec');
   const polys=[
     [[X0,s1.t-pad],[X1,s1.t-pad],[X1,s1.b+pad],[X0,s1.b+pad]],
-    [[X0,s2.t-pad],[X1,s2.t-pad],[X1,s2.b+pad],[kp.r+IN,s2.b+pad],[kp.r+IN,kp.b+pad],[X0,kp.b+pad]],
-    [[ex.l-IN,ex.t-pad],[X1,ex.t-pad],[X1,ex.b+pad],[ex.l-IN,ex.b+pad]]];
+    [[X0,s2.t-pad],[X1,s2.t-pad],[X1,kp.b+pad],[kp.l-IN,kp.b+pad],[kp.l-IN,s2.b+pad],[X0,s2.b+pad]],
+    [[X0,ex.t-pad],[ex.r+IN,ex.t-pad],[ex.r+IN,ex.b+pad],[X0,ex.b+pad]]];
   const path=pts=>{let d='';const n=pts.length;
     for(let i=0;i<n;i++){const p=pts[i],a=pts[(i-1+n)%n],b=pts[(i+1)%n];
       const da=Math.hypot(a[0]-p[0],a[1]-p[1]),db=Math.hypot(b[0]-p[0],b[1]-p[1]),k=Math.min(rad,da/2,db/2);
