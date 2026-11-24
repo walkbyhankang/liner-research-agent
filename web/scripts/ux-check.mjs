@@ -230,7 +230,8 @@ const idbPut = (page, rows) =>
             db.close();
             res(rows.length);
           };
-          tx.onerror = () => fail("쓰기", tx.error);
+          // 요청 오류는 트랜잭션이 중단되기 전에 올라와 tx.error 가 아직 비어 있을 수 있다. 실패한 요청 자체의 오류를 쓴다(리뷰 P3)
+          tx.onerror = (ev) => fail("쓰기", ev?.target?.error ?? tx.error);
           tx.onabort = () => {
             db.close();
             fail("쓰기 중단", tx.error);
@@ -622,6 +623,37 @@ await run("confirm", async () => {
   page = await open(`/?name=${encodeURIComponent("없는회사")}`);
   await waitText(page, "법인을 찾지 못했습니다");
   check("K-12 (0곳)", (await text(page)).includes(NOTE) && (await page.$eval("button.btn-primary", (b) => b.textContent.trim())) === "공개 자료만으로 분석");
+  // K-13 (키 없음): 공공데이터 키가 없으면(missing_config) 시작 화면과 회사 확정 화면 모두 "공개 자료만으로 분석"을 보이고,
+  // 시작 화면은 소용없는 "다시 시도"를 숨긴다(Liner 키만 둔 심사용 실행)
+  await ctl({ corp: "off", delayMs: 0 });
+  page = await open("/");
+  await page.waitForSelector("#company-name");
+  await page.type("#company-name", "가나다테크");
+  await click(page, "분석 시작");
+  await waitText(page, "공공데이터 설정이 없어");
+  const offStart = await page.evaluate(() => [...document.querySelectorAll("button")].map((b) => b.textContent.trim()));
+  // 입력을 바꾸면 앞 조회의 대안 단추는 숨는다(다른 이름으로 유료 분석을 시작하지 않게, 리뷰 P2). 원래 이름으로 되돌리면 다시 보인다
+  await page.type("#company-name", "X");
+  const offEdited = await page.evaluate(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "공개 자료만으로 분석"));
+  await page.keyboard.press("Backspace");
+  await wait(100);
+  // 같은 순간에 두 번 눌러도(응답 1.5초 지연) 분석 시작 요청은 1번이고, 요청 중에는 단추가 막힌다(리뷰 P2: 겹친 유료 분석 방지)
+  await ctl({ corp: "off", delayMs: 1500 });
+  const offP0 = count(await getLog(), "POST", /\/analysis$/);
+  await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "공개 자료만으로 분석"); b.click(); b.click(); });
+  await wait(300);
+  const offPending = await page.evaluate(() => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "공개 자료만으로 분석")?.disabled ?? null);
+  await page.evaluate(() => [...document.querySelectorAll("button")].find((x) => x.textContent.trim() === "공개 자료만으로 분석")?.click());
+  await wait(2500);
+  const offPosts = count(await getLog(), "POST", /\/analysis$/) - offP0;
+  await ctl({ corp: "off", delayMs: 0 });
+  page = await open(`/?name=${encodeURIComponent("가나다테크")}`);
+  await waitText(page, "공공데이터 설정이 없어");
+  const offConfirm = await page.evaluate(() => [...document.querySelectorAll("button")].map((b) => b.textContent.trim()));
+  const offConfirmName = (await text(page, "main")).includes("‘가나다테크’ 이름으로 법인을 조회하지 못했습니다.");
+  const offPrimary = await page.$eval("button.btn-primary", (b) => b.textContent.trim()).catch(() => null);
+  await ctl({ corp: null, delayMs: 0 });
+  check("K-13 (키 없음)", offStart.includes("공개 자료만으로 분석") && !offStart.includes("다시 시도") && offConfirm.includes("공개 자료만으로 분석") && !offConfirm.includes("같은 이름으로 다시 조회") && offPrimary === "공개 자료만으로 분석" && offConfirmName && offEdited === false && offPosts === 1 && offPending === true, JSON.stringify({ s: offStart, c: offConfirm, offPrimary, offConfirmName, offEdited, offPosts, offPending }));
   // K-13: 찾는 중에도 넣은 이름이 보이고, 조회 실패는 제목으로 밝히며 같은 이름으로 다시 조회와 이름 다시 넣기를 나눈다
   await ctl({ corp: "F-CORP-2", delayMs: 2500 });
   page = await open(`/?name=${encodeURIComponent("가나다테크")}`);

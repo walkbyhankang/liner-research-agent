@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Corp, CorpSearchResponse, ExampleResponse, HealthResponse, StartAnalysisResponse } from "@/lib/contract";
-import { api, apiOrNull, isUpstreamFailure } from "@/lib/api";
+import { api, apiOrNull, ApiFail, isUpstreamFailure } from "@/lib/api";
 import { fmtBzno, fmtDay, fmtTime, formerNamesText, isStale } from "@/lib/format";
 import { forgetCompany, recentCompanies } from "@/lib/local";
 import { normName, sameNameIds } from "@/lib/names";
@@ -22,7 +22,10 @@ const SHORT_NAME = "회사 이름을 2글자 이상 넣어 주세요.";
 /** 법인 없이 분석할 때 무엇이 빠지는지(목록에 없음, 후보 0곳, 조회 실패에서 같은 문장) */
 const PUBLIC_ONLY_NOTE = "법인 정보 없이 분석합니다. 공식 재무·고용 자료는 포함되지 않습니다.";
 /** 금융위원회 법인 조회가 바깥 연결 문제로 실패했는가(다시 시도하거나 공개 자료만으로 분석할 수 있다). 판단은 lib/api.ts isUpstreamFailure */
-const isUpstream = isUpstreamFailure;
+/** 분석 서버에 공공데이터 키가 없어 법인 조회를 할 수 없는가. 이때도 공개 자료만으로 분석할 수 있게 한다(Liner 키만 둔 실행) */
+const isFscOff = (e: unknown): boolean => e instanceof ApiFail && !e.relay && e.code === "missing_config";
+const isUpstream = (e: unknown): boolean => isUpstreamFailure(e) || isFscOff(e);
+const FSC_OFF_TEXT = "공공데이터 설정이 없어 금융위원회 법인 조회를 할 수 없습니다. 법인 확인 없이 공개 자료만으로 분석할 수 있습니다.";
 
 /**
  * 법인 없이 공개 자료만으로 분석을 시작한다. stillHere: 요청이 끝났을 때 시작한 화면에 아직 있는가.
@@ -113,35 +116,50 @@ function Start() {
   const [busy, setBusy] = useState(false);
   // 오류는 제출한 뒤에만 생긴다. 입력 중에는 새 오류를 만들지 않고, 2글자 조건을 채우면 그 오류만 지운다(HOME-02)
   const [err, setErr] = useState<{ text: string; short: boolean } | null>(null);
-  const [fscDown, setFscDown] = useState(false);
+  // 법인 조회 실패(down: 연결 실패, off: 공공데이터 키 없음)와 그때 조회한 이름. 대안 단추는 이 이름으로만 분석하고, 입력이 바뀌면 숨긴다(리뷰 P2)
+  const [fscDown, setFscDown] = useState<{ mode: "down" | "off"; name: string } | null>(null);
   const [example, setExample] = useState<ExampleResponse | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const errId = useId();
   // 이 시작 화면에 아직 머무는가. 조회·분석 시작 요청 중에 다른 화면으로 떠나기 시작했으면(링크 누름, 뒤로 가기) 분석을 시작하지도, 옮기지도 않는다(리뷰 P2)
   // 떠나면 그때 진행 중이던 요청을 버리고 단추를 바로 푼다. 버려진 요청은 끝나도 단추·오류를 건드리지 않는다(새 제출의 상태를 지키려고)
-  const begin = useLeaveGuard(() => setBusy(false));
+  // 진행 중인 "공개 자료만으로 분석" 요청 표시. 요청마다 새 표시를 쓰고, 화면을 떠나면 풀어 다음 요청을 막지 않는다(리뷰 P2)
+  const publicOnlyPending = useRef<object | null>(null);
+  const begin = useLeaveGuard(() => {
+    publicOnlyPending.current = null;
+    setBusy(false);
+  });
 
   useEffect(() => {
     if (health !== "up") return;
     apiOrNull<ExampleResponse>("example").then(setExample).catch(() => setExample(null));
   }, [health]);
 
-  const onPublicOnly = async () => {
+  // 요청 중에 다시 눌러 유료 분석을 겹쳐 시작하지 않게 한다(같은 순간의 두 번째 클릭은 화면이 바뀌기 전이라 ref 로 막는다, 리뷰 P2)
+  const onPublicOnly = async (target: string) => {
+    if (publicOnlyPending.current) return;
+    const mine = {};
+    publicOnlyPending.current = mine;
     const stillHere = begin();
     setBusy(true);
     try {
-      await startPublicOnly(router, name.trim(), stillHere);
+      await startPublicOnly(router, target, stillHere);
     } catch (e) {
       // 떠난 뒤 끝난 요청은 성공이든 실패든 화면을 건드리지 않는다(단추는 떠날 때 이미 풀었다. 지금 입력과 다른 회사의 오류·대안을 보이지 않게, 리뷰 P2)
       if (!stillHere()) return;
       setBusy(false);
       setErr({ text: e instanceof Error ? e.message : "분석을 시작하지 못했습니다.", short: false });
+    } finally {
+      // 앞선 요청이 늦게 끝나도 더 새 요청의 표시는 지우지 않는다
+      if (publicOnlyPending.current === mine) publicOnlyPending.current = null;
     }
   };
 
   const submit = async () => {
+    // "공개 자료만으로 분석" 요청이 진행 중이면 다시 조회해 분석을 하나 더 시작하지 않는다(리뷰 P2)
+    if (publicOnlyPending.current) return;
     const n = name.trim();
-    setFscDown(false);
+    setFscDown(null);
     if (n.length < 2) {
       setErr({ text: SHORT_NAME, short: true });
       inputRef.current?.focus();
@@ -166,7 +184,7 @@ function Start() {
       // 떠난 뒤 끝난 요청은 화면을 건드리지 않는다(단추는 떠날 때 이미 풀었다)
       if (!stillHere()) return;
       setBusy(false);
-      if (isUpstream(e)) setFscDown(true);
+      if (isUpstream(e)) setFscDown({ mode: isFscOff(e) ? "off" : "down", name: n });
       else setErr({ text: e instanceof Error ? e.message : "법인을 찾지 못했습니다.", short: false });
     }
   };
@@ -218,14 +236,18 @@ function Start() {
           </p>
         )}
         {health === "down" && <p className="mt-2 font-medium text-amber">지금은 분석 서버에 연결할 수 없습니다. 잠시 뒤 다시 시도하세요. 자금 둘러보기는 그대로 쓸 수 있습니다.</p>}
-        {fscDown && (
+        {fscDown && fscDown.name === name.trim() && (
           <div className="mt-2" role="alert">
-            <p className="font-medium text-amber">금융위원회 자료에 연결하지 못했습니다. 다시 시도하거나, 법인 확인 없이 공개 자료만으로 분석할 수 있습니다.</p>
+            <p className="font-medium text-amber">
+              {fscDown.mode === "off" ? FSC_OFF_TEXT : "금융위원회 자료에 연결하지 못했습니다. 다시 시도하거나, 법인 확인 없이 공개 자료만으로 분석할 수 있습니다."}
+            </p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <button type="button" className="btn" onClick={() => void submit()}>
-                다시 시도
-              </button>
-              <button type="button" className="btn" onClick={() => void onPublicOnly()}>
+              {fscDown.mode === "down" && (
+                <button type="button" className="btn" disabled={busy} onClick={() => void submit()}>
+                  다시 시도
+                </button>
+              )}
+              <button type="button" className="btn" disabled={busy} onClick={() => void onPublicOnly(fscDown.name)}>
                 공개 자료만으로 분석
               </button>
             </div>
@@ -363,7 +385,7 @@ function ConfirmHead({ title, titleId, children }: { title: string; titleId?: st
 function Confirm({ query }: { query: string }) {
   const router = useRouter();
   const [res, setRes] = useState<CorpSearchResponse | null>(searchCache.get(query) ?? null);
-  const [err, setErr] = useState<{ text: string; upstream: boolean } | null>(null);
+  const [err, setErr] = useState<{ text: string; upstream: boolean; off: boolean } | null>(null);
   const [tries, setTries] = useState(0);
   const [pickedState, setPicked] = useState<string | null>(null);
   const [all, setAll] = useState(false);
@@ -406,7 +428,7 @@ function Confirm({ query }: { query: string }) {
         setRes(r);
       })
       .catch((e) => {
-        if (current) setErr({ text: e instanceof Error ? e.message : "법인을 찾지 못했습니다.", upstream: isUpstream(e) });
+        if (current) setErr({ text: e instanceof Error ? e.message : "법인을 찾지 못했습니다.", upstream: isUpstream(e), off: isFscOff(e) });
       });
     return () => {
       current = false;
@@ -439,7 +461,13 @@ function Confirm({ query }: { query: string }) {
     return (
       <div className="max-w-[640px]">
         <ConfirmHead title="법인을 조회하지 못했습니다">
-          {err.upstream ? (
+          {err.off ? (
+            <>
+              {/* 공유·저장한 주소로 열어도 어느 회사를 분석할지 보이게 이름을 밝힌다(리뷰 P2) */}
+              <p>{q} 이름으로 법인을 조회하지 못했습니다.</p>
+              <p role="alert">{FSC_OFF_TEXT}</p>
+            </>
+          ) : err.upstream ? (
             <p role="alert">{q} 이름으로 금융위원회 기업기본정보에 연결하지 못했습니다.</p>
           ) : (
             <>
@@ -449,24 +477,27 @@ function Confirm({ query }: { query: string }) {
               </p>
             </>
           )}
-          <p className="text-sm text-sub">이름이 맞으면 잠시 뒤 같은 이름으로 다시 조회하고, 이름을 잘못 넣었으면 이름을 다시 넣으세요.</p>
+          {/* 키가 없으면 다시 조회해도 같은 오류라 다시 조회 안내·단추를 빼고 공개 자료 분석을 주 단추로 둔다 */}
+          {!err.off && <p className="text-sm text-sub">이름이 맞으면 잠시 뒤 같은 이름으로 다시 조회하고, 이름을 잘못 넣었으면 이름을 다시 넣으세요.</p>}
         </ConfirmHead>
         <div className="mt-5 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy}
-            onClick={() => {
-              // 다시 조회할 때 앞서 실패한 분석 시작 오류도 지운다(후보 화면에 옛 오류가 남지 않게)
-              setErr(null);
-              setStartErr(null);
-              setTries((t) => t + 1);
-            }}
-          >
-            같은 이름으로 다시 조회
-          </button>
+          {!err.off && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() => {
+                // 다시 조회할 때 앞서 실패한 분석 시작 오류도 지운다(후보 화면에 옛 오류가 남지 않게)
+                setErr(null);
+                setStartErr(null);
+                setTries((t) => t + 1);
+              }}
+            >
+              같은 이름으로 다시 조회
+            </button>
+          )}
           {err.upstream && (
-            <button type="button" className="btn" disabled={busy} aria-describedby={noteId} onClick={() => void startNone()}>
+            <button type="button" className={err.off ? "btn btn-primary" : "btn"} disabled={busy} aria-describedby={noteId} onClick={() => void startNone()}>
               {busy ? "분석을 시작하는 중" : "공개 자료만으로 분석"}
             </button>
           )}

@@ -134,6 +134,7 @@ async function api(req, res, url, body) {
     if (name.length < 2) return err(res, 400, "bad_request", "이름을 2글자 이상 넣어 주세요");
     const fx = st.corp ?? (name === "없는회사" ? "F-CORP-0" : "F-CORP-1");
     if (fx === "down") return err(res, 502, "upstream_error", "금융위원회 자료에 연결하지 못했습니다");
+    if (fx === "off") return err(res, 503, "missing_config", "공공데이터 설정이 되어 있지 않습니다");
     const body = { ...clone(ex(fx).response), query: name };
     if (st.formerNamesUnknown) for (const c of body.candidates) c.formerNames = null;
     return send(res, 200, body);
