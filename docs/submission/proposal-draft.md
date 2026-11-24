@@ -6,7 +6,7 @@
 
 - 팀: `[확인 필요: 팀 이름, 구성원, 역할]`
 - 저장소: `[확인 필요: 제출할 GitHub 주소]`
-- 데모 영상: `[확인 필요: 영상 주소]` (대본: `docs/submission/demo-video-script.md`)
+- 데모 영상: `[확인 필요: 영상 주소]` (구성표·대본: `docs/submission/seongjang-note-video-storyboard.md`)
 
 ## 1. 한 줄 소개
 
