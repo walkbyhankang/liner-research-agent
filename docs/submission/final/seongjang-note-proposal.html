@@ -595,8 +595,8 @@ async function hero(){
   lights(sc);
   const ring=new THREE.Mesh(new THREE.RingGeometry(132,133.5,128),new THREE.MeshBasicMaterial({color:0x0c6b58,transparent:true,opacity:.28}));ring.rotation.x=-Math.PI/2;ring.position.y=0.5;sc.add(ring);
   for(let k=0;k<4;k++){const p=new THREE.Mesh(new THREE.BoxGeometry(84,5,104),[M(0xffffff),M(0xffffff),M(0xf6f8f7),M(0xffffff),M(0xe7ecea),M(0xe7ecea)]);p.position.set(k*0.9,2.5+k*5.4,-k*0.7);p.castShadow=true;p.receiveShadow=true;sc.add(p);}
-  const spine=new THREE.Mesh(new THREE.BoxGeometry(9,23,104),M(0x0c6b58));spine.position.set(-44,11.5,0);spine.castShadow=true;sc.add(spine);
-  for(let k=0;k<5;k++){const ln=new THREE.Mesh(new THREE.BoxGeometry(k===4?30:56,0.6,4.5),M(k===1?0x0c6b58:0xc7d2ce));ln.position.set(k===4?-11:2,24.9,-34+k*15);sc.add(ln);}
+  const spine=new THREE.Mesh(new THREE.BoxGeometry(9,23,104),M(0x8cc4b2));spine.position.set(-44,11.5,0);spine.castShadow=true;sc.add(spine);
+  for(let k=0;k<5;k++){const ln=new THREE.Mesh(new THREE.BoxGeometry(k===4?30:56,0.6,4.5),M(k===1?0x8cc4b2:0xc7d2ce));ln.position.set(k===4?-11:2,24.9,-34+k*15);sc.add(ln);}
   const items=[['재무',0x3d6fc4],['고용',0xc0434f],['투자',0xd17a1f],['특허',0x6b4e8a],['기사',0x5a6577],['공고',0xa8820f]];
   const pos=[];
   items.forEach(([t,c],i)=>{const a=0.83+0.5236+i*Math.PI/3,R=132,y=46;
