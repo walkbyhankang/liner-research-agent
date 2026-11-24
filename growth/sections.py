@@ -581,7 +581,7 @@ RIVAL_SCHEMA = {
 
 
 def summarize_rivals(target: str, rows: list[dict], liner: Liner) -> dict:
-    """경쟁사별 상위 뉴스 제목·요약을 묶어 모델 1회로 사업·제품·최근 변화를 정리한다(팀원의 통합 분석 프로토타입(커밋 98d8c6c)에서 옮김)."""
+    """경쟁사별 상위 뉴스 제목·요약을 묶어 모델 1회로 사업·제품·최근 변화를 정리한다(팀원의 통합 분석 프로토타입(커밋 97c93ce)에서 옮김)."""
     blocks = []
     for r in rows:
         arts = summary_articles(r)

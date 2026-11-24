@@ -767,7 +767,7 @@ def test_model_failure_then_run_unavailable_section_again(world):
 
 def test_profile_dependents_run_together_and_unexpected_error_stays_in_its_section(world, monkeypatch):
     """profile 뒤 세 단락(funding_history·news·patents)은 함께 돌고, 단락 안의 예상하지 못한 오류는 그 단락만 미확보로 끝낸다.
-    오류 글(예외 내용·키)은 응답과 스냅샷에 넣지 않는다. 팀원의 통합 분석 프로토타입(커밋 98d8c6c)의 병렬 실행·실패 격리 시험을 옮긴 것."""
+    오류 글(예외 내용·키)은 응답과 스냅샷에 넣지 않는다. 팀원의 통합 분석 프로토타입(커밋 97c93ce)의 병렬 실행·실패 격리 시험을 옮긴 것."""
     together = threading.Barrier(3, timeout=10)  # 셋이 동시에 돌지 않으면 시간 초과 → 그 단락이 미확보가 되어 아래 검사에서 걸린다
     orig = dict(sections.RUNNERS)
 
@@ -943,7 +943,7 @@ def test_rivals_deep_records_confirmed_patent_items(world):
 
 def test_rivals_deep_runs_rivals_together_keeps_order_and_isolates_one_failure(world, monkeypatch):
     """경쟁사 여러 곳은 함께 모으고, 결과는 고른 순서대로 두며, 한 곳의 실패는 그 경쟁사에만 남는다(자료가 섞이지 않음).
-    팀원의 통합 분석 프로토타입(커밋 98d8c6c)의 경쟁사 병렬 수집 시험을 옮긴 것."""
+    팀원의 통합 분석 프로토타입(커밋 97c93ce)의 경쟁사 병렬 수집 시험을 옮긴 것."""
     v = run_full(world)
     orig = news.collect
     together = threading.Barrier(2, timeout=10)  # 두 경쟁사의 뉴스 수집이 동시에 돌지 않으면 시간 초과

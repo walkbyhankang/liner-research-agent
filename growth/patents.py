@@ -1,4 +1,4 @@
-"""국내 특허 출원 동향(팀원의 통합 분석 프로토타입(커밋 98d8c6c)에서 옮김): Liner 웹 검색으로 공개 특허(Google Patents KR 문서) 후보를 찾고,
+"""국내 특허 출원 동향(팀원의 통합 분석 프로토타입(커밋 97c93ce)에서 옮김): Liner 웹 검색으로 공개 특허(Google Patents KR 문서) 후보를 찾고,
 공개 원문에서 서지사항을 확인한다.
 
 - Liner 공식 문서(2026-11 확인)에는 특허 전용 API·도메인 필터가 없다. 그래서 Liner Web Search 질의에 'site:patents.google.com'을

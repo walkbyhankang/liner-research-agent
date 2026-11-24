@@ -489,7 +489,7 @@
 
 ## 8. 단락별 결과 (`result`)
 
-표의 "원본"은 계약을 만들 때의 코드(통합 분석 프로토타입(커밋 `98d8c6c`)의 수집 모듈, `funding/*`)가 돌려주는 키다. ③은 이 대응으로 바꾼다(구조 바꾸기는 15절). "안 씀"은 화면이 보이지 않는 칸이다. 타입의 `?`는 null 가능.
+표의 "원본"은 계약을 만들 때의 코드(통합 분석 프로토타입(커밋 `97c93ce`)의 수집 모듈, `funding/*`)가 돌려주는 키다. ③은 이 대응으로 바꾼다(구조 바꾸기는 15절). "안 씀"은 화면이 보이지 않는 칸이다. 타입의 `?`는 null 가능.
 
 ### 8.1 `identity` — 법인 식별 (무료)
 
@@ -912,7 +912,7 @@ finally:
 
 ### 16.1 불러오는 것
 
-- 쓰는 기능은 통합 분석 프로토타입(커밋 `98d8c6c`)에서 `growth/` 안으로 옮겨 왔다(프로토타입은 제출 저장소에서 지웠다): 공공 API 수집(금융위·국민연금·나라장터), 회사 프로필과 `domestic_only`, 뉴스 수집·요약, 특허, 논문(OpenAlex), 투자 이력, Liner 래퍼(파일 캐시·single-flight·동시 요청 제한), 이름 정규화.
+- 쓰는 기능은 통합 분석 프로토타입(커밋 `97c93ce`)에서 `growth/` 안으로 옮겨 왔다(프로토타입은 제출 저장소에서 지웠다): 공공 API 수집(금융위·국민연금·나라장터), 회사 프로필과 `domestic_only`, 뉴스 수집·요약, 특허, 논문(OpenAlex), 투자 이력, Liner 래퍼(파일 캐시·single-flight·동시 요청 제한), 이름 정규화.
 - 불러와도 되는 것: `funding/`(펀딩노트), `pipeline.py`·`fetcher.py`·`planner.py`·`analysis.py` 등 기존 엔진, `liner_client.LinerClient`의 원래 기능(`search_web`, `chat_json`, `responses`, `usage`, `calls`), `config.py`의 원래 값(`LINER_BASE_URL`, `SEARCH_WEB_PATH`, `CHAT_COMPLETIONS_PATH`, `SEARCH_TIMEOUT`, `MODEL_TIMEOUT`, `RESULTS_DIR`, `ENV_FILE`, `resolve_api_key` 등).
 - 쓰지 않는 것: `liner_client.LinerClient.search_scholar`, `config.SEARCH_SCHOLAR_PATH`, `config.MAX_SCHOLAR_CALLS`(`tests/test_growth_contract.py`가 검사). 단락의 Liner 클라이언트는 `budget.liner_client()`로만 만든다(안에서 `search`, `model`, `agent`, `premium` 키만 넘긴다). `usage()`의 `scholar` 칸은 읽지 않는다. `funding.profile.lookup`(`facts`)에도 이 클라이언트를 넘긴다(`search_web`·`responses`·`remaining`·`calls`를 그대로 쓴다).
 

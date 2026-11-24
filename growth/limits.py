@@ -80,7 +80,7 @@ RIVAL_CAPS: dict[str, int] = {LINER_SEARCH: 4, LINER_PREMIUM: 2, DATAGOKR_FSC_CO
 MAX_RIVALS = 5
 PATENT_PAGES_PER_COMPANY = 30            # 특허 원문 확인 한도(회사 한 곳당)
 
-# 동시 요청 상한(설계 6.4 3겹, 팀원의 통합 분석 프로토타입(커밋 98d8c6c)의 값 그대로). 공공데이터포털 API 는 한 묶음으로 센다
+# 동시 요청 상한(설계 6.4 3겹, 팀원의 통합 분석 프로토타입(커밋 97c93ce)의 값 그대로). 공공데이터포털 API 는 한 묶음으로 센다
 CONCURRENCY: dict[str, int] = {"datagokr": 6, NAVER_NEWS: 3, OPENALEX: 3, LINER_SEARCH: 4, LINER_PREMIUM: 3,
                                LINER_SCHOLAR: 4, LINER_MODEL: 3, PATENTS_PAGE: 4}
 
