@@ -19,6 +19,11 @@ import { usePublicData } from "@/components/funding/Board";
 
 type Item = { key: string; node: ReactNode; text: string };
 
+/** 날짜(2026-11-22, 2026-10)는 줄 끝에서 하이픈 뒤로 쪼개지지 않게 묶는다(꼬리표 옆 좁은 값 칸, 휴대폰). 글자는 그대로다 */
+function KeepDates({ text }: { text: string }) {
+  return text.split(/(\d{4}-\d{2}(?:-\d{2})?)/).map((p, i) => (i % 2 ? <span key={i} className="whitespace-nowrap">{p}</span> : p));
+}
+
 /**
  * 회사 정보(QA 주석21·22): 이름표 열과 값 열을 고정하고, 출처·기준일은 값 바로 아래 같은 왼쪽 끝에 둔다.
  * 엇갈림은 이름표 옆에 "엇갈림" 한 번 + 두 값(둘째는 "다른 자료"), 공식 자료와 웹 조사 칸은 값 앞 이름으로 가른다.
@@ -36,25 +41,29 @@ function CompanyInfo({ rows }: { rows: NoteRow[] }) {
           <dd className="min-w-0 space-y-1.5 print:space-y-0.5">
             {r.pending && <p className="text-sub">확인 중</p>}
             {r.values.map((v, i) => (
-              <div key={i}>
-                <p className="flex flex-wrap items-baseline gap-x-2">
-                  {v.tag && <span className="meta min-w-[4.6em] font-semibold text-ink">{v.tag}</span>}
-                  {v.word === "unavailable" ? (
-                    <>
-                      <StatusWord w="unavailable" /> <span>{v.text}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="num font-medium">{v.text}</span> {/* "엇갈림"은 항목 이름 옆에 한 번만. 같은 줄의 따로 확인된 값(예: 공식 자료 업종)은 제 상태를 그대로 보인다 */}
-                      {!(r.conflict && v.word === "conflicting") && <StatusWord w={v.word} />}
-                    </>
-                  )}
-                </p>
-                {v.source && (
-                  <p data-src className="text-xs text-sub">
-                    {v.source}
+              // 꼬리표(공식 자료·웹 조사·다른 자료)가 붙은 값은 [꼬리표 | 값과 출처] 두 칸으로 놓는다. 출처 줄이 꼬리표 아래가 아니라
+              // 값 글 왼쪽 끝에서 시작한다(screens 8절 "값 바로 아래 같은 왼쪽 끝", N-14). 꼬리표 없는 값은 한 칸 그대로
+              <div key={i} className={v.tag ? "grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2" : undefined}>
+                {v.tag && <span className="meta min-w-[4.6em] font-semibold text-ink">{v.tag}</span>}
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-baseline gap-x-2">
+                    {v.word === "unavailable" ? (
+                      <>
+                        <StatusWord w="unavailable" /> <span>{v.text}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="num font-medium"><KeepDates text={v.text} /></span> {/* "엇갈림"은 항목 이름 옆에 한 번만. 같은 줄의 따로 확인된 값(예: 공식 자료 업종)은 제 상태를 그대로 보인다 */}
+                        {!(r.conflict && v.word === "conflicting") && <StatusWord w={v.word} />}
+                      </>
+                    )}
                   </p>
-                )}
+                  {v.source && (
+                    <p data-src className="text-xs text-sub">
+                      <KeepDates text={v.source} />
+                    </p>
+                  )}
+                </div>
               </div>
             ))}
           </dd>

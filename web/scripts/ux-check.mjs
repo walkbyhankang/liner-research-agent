@@ -41,6 +41,28 @@ const dueAlign = (pg) =>
         return Math.round(c.getBoundingClientRect().right - e.getBoundingClientRect().right);
       }),
   );
+// N-14: 노트 회사 정보의 값마다 출처 줄(data-src) 왼쪽 끝과 값 글 요소 자체(값 글 span.num, 미확보면 "미확보" 낱말)의 왼쪽 끝.
+// dd 왼쪽 끝이 아니라 값 글을 본다: "공식 자료"·"웹 조사"·"다른 자료" 꼬리표가 붙은 값은 값 글이 꼬리표만큼 오른쪽에서 시작한다
+const noteValueAlign = (pg) =>
+  pg.evaluate(() =>
+    [...document.querySelectorAll("[data-part=values] [data-row]")].flatMap((r) =>
+      [...r.querySelectorAll("dd [data-src]")].map((src) => {
+        let box = src;
+        while (box.parentElement && box.parentElement.tagName !== "DD") box = box.parentElement;
+        const val = [...box.querySelectorAll("span.num, .word")].find((e) => !e.closest("[data-src]"));
+        return {
+          row: r.querySelector("dt").firstChild.textContent.trim(),
+          tag: box.querySelector(".meta")?.textContent ?? null,
+          val: val ? Math.round(val.getBoundingClientRect().left) : null,
+          src: Math.round(src.getBoundingClientRect().left),
+        };
+      }),
+    ),
+  );
+const alignOk = (pairs) => pairs.length > 0 && pairs.every((p) => p.val !== null && Math.abs(p.val - p.src) <= 1);
+/** 꼬리표 쌍이 다 있는가: rows(줄 이름 앞부분)마다 "공식 자료"·"웹 조사" 두 값이 출처 줄과 함께 있다(정렬은 alignOk 가 본다) */
+const hasTagPairs = (pairs, rows) => rows.every((row) => ["공식 자료", "웹 조사"].every((t) => pairs.filter((p) => p.row.startsWith(row) && p.tag === t).length === 1));
+const alignNote = (pairs) => pairs.filter((p) => p.tag || p.val === null || Math.abs(p.val - p.src) > 1).map((p) => `${p.row}${p.tag ? `(${p.tag})` : ""} 값 ${p.val} 출처 ${p.src}`).join(", ");
 const results = [];
 const check = (id, ok, note = "") => {
   results.push({ id, ok: Boolean(ok), note });
@@ -166,6 +188,67 @@ const idbCount = (page, store) =>
       }),
     store,
   );
+/**
+ * 브라우저 저장소(IndexedDB growthnote)에 줄을 바로 쓴다. rows: [[저장소, 키, 값], ...] 를 한 쓰기 트랜잭션으로.
+ * 열기 실패·막힘(blocked)·트랜잭션 오류·중단이면 IndexedDB 오류 이름과 메시지로 거절한다. complete 만 기다리면
+ * Puppeteer 프로토콜 시간 제한(3분)까지 멈추고 까닭이 숨는다. 부르는 쪽은 거절 글을 점검 실패 사유로 남긴다
+ */
+const IDB_STORES = ["companies", "snapshots", "jobs", "edits", "saved", "checks", "rivalChecks", "briefs", "rivalChoices", "prep", "notes", "salesKeywords"];
+const idbPut = (page, rows) =>
+  page.evaluate(
+    (rows, stores) =>
+      new Promise((res, rej) => {
+        const fail = (where, e) => rej(new Error(`IndexedDB ${where}: ${e?.name ?? "알 수 없는 오류"}${e?.message ? ` ${e.message}` : ""}`));
+        let r;
+        try {
+          r = indexedDB.open("growthnote", 1);
+        } catch (e) {
+          return fail("열기", e);
+        }
+        r.onupgradeneeded = () => {
+          for (const s of stores) if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s);
+        };
+        r.onerror = () => fail("열기", r.error);
+        r.onblocked = () => fail("열기", { name: "BlockedError", message: "다른 연결이 옛 판을 쥐고 있어 열지 못했습니다" });
+        r.onsuccess = () => {
+          const db = r.result;
+          let tx;
+          try {
+            tx = db.transaction([...new Set(rows.map((x) => x[0]))], "readwrite");
+            for (const [s, k, v] of rows) tx.objectStore(s).put(v, k);
+          } catch (e) {
+            // 앞의 put 이 반쯤 남지 않게 트랜잭션을 되돌린다
+            try {
+              tx?.abort();
+            } catch {
+              /* 이미 끝난 트랜잭션 */
+            }
+            db.close();
+            return fail("쓰기", e);
+          }
+          tx.oncomplete = () => {
+            db.close();
+            res(rows.length);
+          };
+          tx.onerror = () => fail("쓰기", tx.error);
+          tx.onabort = () => {
+            db.close();
+            fail("쓰기 중단", tx.error);
+          };
+        };
+      }),
+    rows, IDB_STORES,
+  );
+/** idbPut 을 부르고, 거절되면 그 까닭을 점검 실패(id)로 남긴다. 성공하면 true */
+const seedIdb = async (page, rows, id) => {
+  try {
+    await idbPut(page, rows);
+    return true;
+  } catch (e) {
+    check(id, false, e.message.split("\n")[0]);
+    return false;
+  }
+};
 const idbGet = (page, store, key) =>
   page.evaluate(
     (store, key) =>
@@ -335,19 +418,10 @@ await run("start", async () => {
   await ctl({ health: "up", example: false });
   // 이어서 보기 5곳
   page = await open("/");
-  await page.evaluate(
-    () =>
-      new Promise((res) => {
-        const r = indexedDB.open("growthnote", 1);
-        r.onupgradeneeded = () => {
-          for (const s of ["companies", "snapshots", "jobs", "edits", "saved", "checks", "rivalChecks", "briefs", "rivalChoices", "prep", "notes", "salesKeywords"]) r.result.createObjectStore(s);
-        };
-        r.onsuccess = () => {
-          const tx = r.result.transaction("companies", "readwrite");
-          for (let i = 1; i <= 5; i++) tx.objectStore("companies").put({ name: `가짜회사${i}`, lastOpenedAt: `2026-11-2${i}T10:00:00+09:00`, analyzedAt: "2026-11-20T10:00:00+09:00", isExample: false }, `000000000000${i + 1}`.slice(-13));
-          tx.oncomplete = () => res(true);
-        };
-      }),
+  await seedIdb(
+    page,
+    [1, 2, 3, 4, 5].map((i) => ["companies", `000000000000${i + 1}`.slice(-13), { name: `가짜회사${i}`, lastOpenedAt: `2026-11-2${i}T10:00:00+09:00`, analyzedAt: "2026-11-20T10:00:00+09:00", isExample: false }]),
+    "S-06 (저장소 채우기)",
   );
   page = await open("/", { ctx: page.browserContext() });
   await waitText(page, "이어서 보기");
@@ -2003,19 +2077,24 @@ await run("main", async () => {
   check("N-12", btns.join() === "인쇄·PDF 저장,더 보기", btns.join());
   await globalChecks(n390, "노트 390");
   await sh(n390, "note-390");
-  // N-14(QA 주석21·22): 제목 "회사 정보", 이름표 열과 값 열이 고정(줄마다 값 왼쪽 끝이 같다), 출처·기준일은 값 아래 같은 왼쪽 끝,
-  // 공식 자료 칸과 웹 조사 칸은 값 앞 이름으로 가른다(매출 줄. 업종은 이 흐름에서 고친 값이라 이름이 없다)
-  {
-    const nv = await npr.evaluate(() => {
+  // N-14(QA 주석21·22): 제목 "회사 정보", 이름표 열과 값 열이 고정(줄마다 값 칸 왼쪽 끝이 같다), 출처·기준일은 값마다 그 값 글 바로 아래
+  // 같은 왼쪽 끝(꼬리표가 붙은 값은 꼬리표 다음 값 글 기준), 공식 자료 칸과 웹 조사 칸은 값 앞 이름으로 가른다
+  // (매출 줄. 업종은 이 흐름에서 고친 값이라 이름이 없다). 꼬리표 붙은 매출 두 값의 출처 줄을 반드시 견준다
+  for (const [w, pg] of [[1180, npr], [390, n390]]) {
+    const nv = await pg.evaluate(() => {
       const vals = document.querySelector("[data-part=values]");
       const rows = [...vals.querySelectorAll("[data-row]")];
       const ddL = [...new Set(rows.map((r) => Math.round(r.querySelector("dd").getBoundingClientRect().left)))];
-      const srcL = [...new Set([...vals.querySelectorAll("[data-src]")].map((s) => Math.round(s.getBoundingClientRect().left)))];
       const rev = rows.find((r) => r.querySelector("dt").textContent.startsWith("매출"));
-      return { h2: vals.querySelector("h2").textContent, ddL, srcL, tags: rev ? [...rev.querySelectorAll("dd .meta")].map((t) => t.textContent) : [], rows: rows.length };
+      return { h2: vals.querySelector("h2").textContent, ddL, tags: rev ? [...rev.querySelectorAll("dd .meta")].map((t) => t.textContent) : [], rows: rows.length };
     });
-    const old = (await text(npr, "[data-note]")).includes("회사 핵심 값");
-    check("N-14", nv.h2 === "회사 정보" && !old && nv.rows === 9 && nv.ddL.length === 1 && nv.srcL.length === 1 && Math.abs(nv.srcL[0] - nv.ddL[0]) <= 1 && nv.tags.join() === "공식 자료,웹 조사", JSON.stringify(nv));
+    const pairs = await noteValueAlign(pg);
+    const old = (await text(pg, "[data-note]")).includes("회사 핵심 값");
+    check(
+      `N-14 (${w})`,
+      nv.h2 === "회사 정보" && !old && nv.rows === 9 && nv.ddL.length === 1 && nv.tags.join() === "공식 자료,웹 조사" && hasTagPairs(pairs, ["매출"]) && alignOk(pairs),
+      `값 칸 ${nv.ddL.join("/")}, 출처 ${pairs.length}줄: ${alignNote(pairs) || "꼬리표 없음"}`,
+    );
   }
   // N-16(QA 주석23·4절): 담은 자금 후보는 공고 전체 상태(신청 검토 가능 → 확인 후 판단 → 대조 전 → 대상 아님)로 묶고, 공고마다
   // 제목·마감 → 판정 요약 → 들여 쓴 조건(미충족·확인 필요) → 근거 줄 순서. 제목 크기는 구역 > 상태 묶음 > 공고 > 조건 묶음
@@ -3041,21 +3120,7 @@ await run("deadline-basis", async () => {
   const list = (ends) => JSON.stringify([...Object.entries(ends).map(([id, end]) => fakeProgram(id, title(id), end)), ...programs]);
   // 담기를 브라우저 저장소에 바로 쓴다(담을 때 저장한 마감일 meta.end 를 지금 자료와 다르게 두려고)
   const putSaved = (pg, id, end) =>
-    pg.evaluate(
-      (cid, id, end, t) =>
-        new Promise((res) => {
-          const r = indexedDB.open("growthnote", 1);
-          r.onupgradeneeded = () => {
-            for (const s of ["companies", "snapshots", "jobs", "edits", "saved", "checks", "rivalChecks", "briefs", "rivalChoices", "prep", "notes", "salesKeywords"]) r.result.createObjectStore(s);
-          };
-          r.onsuccess = () => {
-            const tx = r.result.transaction("saved", "readwrite");
-            tx.objectStore("saved").put({ kind: "program", itemId: id, title: t, savedAt: "2026-11-20T10:00:00+09:00", meta: { end, agency: "가나다시청", url: `https://example.com/program/${id}` } }, [cid, "program", id]);
-            tx.oncomplete = () => res(true);
-          };
-        }),
-      CID, id, end, title(id),
-    );
+    seedIdb(pg, [["saved", [CID, "program", id], { kind: "program", itemId: id, title: title(id), savedAt: "2026-11-20T10:00:00+09:00", meta: { end, agency: "가나다시청", url: `https://example.com/program/${id}` } }]], "A-33 (저장소 채우기)");
   const seed = await open("/", { ctx });
   await seed.waitForSelector("#company-name");
   await putSaved(seed, P3, "2026-12-07"); // 담을 때 마감 15일 뒤(2026-11-22 기준)
@@ -3175,6 +3240,120 @@ await run("deadline-basis", async () => {
       order.join(">") === "대기>저장값>지금 자료" && savedAt >= 4000 && ovs.length === 1 && card.includes("D-5, 11.27 마감"),
       `${order.join(" → ")}, 저장값으로 바뀐 때 약 ${savedAt}ms, 개요 제목 위치 ${ovs.join("/")}, 심사 준비 ${card}`,
     );
+  }
+  await ctx.close();
+});
+
+// N-18: 담은 자금 후보가 많을 때(공고 13건, 네 묶음). 화면은 묶음을 건너 처음 5건 + "{n}개 더 보기", 펼치면 모두.
+// 인쇄는 펼침과 상관없이 묶음을 건너 10건 + "외 {n}개"(screens 8절 2층, 9절). 경계가 묶음 가운데에 오게 둔다:
+// 화면 5번째는 "확인 후 판단" 둘째 건, 인쇄 10번째는 "대조 전" 셋째 건. 묶음 안은 마감 가까운 순(마감 없음은 뒤)이라 담은 차례와 다르게 섞어 담는다.
+// 같은 상태에서 N-14(고친 값 없음: 업종·매출 둘 다 꼬리표)와 N-04·PR-02(11개 넘는 목록 "기관에 물을 질문" 18개)도 본다
+await run("note-many", async () => {
+  await reset({ scenario: "F-FULL" });
+  const ctx = await browser.createBrowserContext();
+  const ORDER = ["신청 검토 가능", "확인 후 판단", "대조 전", "대상 아님"];
+  const SPEC = [
+    ["대조 전", "2026-12-20"], ["확인 후 판단", null], ["신청 검토 가능", "2026-12-10"], ["대상 아님", "2026-12-12"], ["확인 후 판단", "2026-12-15"],
+    ["대조 전", "2026-11-30"], ["신청 검토 가능", "2026-12-01"], ["확인 후 판단", "2026-11-28"], ["대상 아님", "2026-12-04"], ["대조 전", "2026-12-08"],
+    ["신청 검토 가능", "2026-12-03"], ["확인 후 판단", "2026-12-02"], ["대조 전", "2026-12-05"],
+  ].map(([state, end], i) => ({ id: `PBLN_9000000000${String(i + 1).padStart(2, "0")}`, title: `가나다시 노트 목록 가짜 공고 ${i + 1}`, state, end }));
+  const ROWS = {
+    "신청 검토 가능": [["지역", "서울 소재 기업", "충족"], ["업력", "창업 7년 이내 기업", "충족"]],
+    "확인 후 판단": [["지역", "서울 소재 기업", "충족"], ["매출", "전년도 매출 10억 원 이상", "확인 필요"]],
+    "대상 아님": [["업종", "제조업을 영위하는 기업", "미충족"], ["지역", "서울 소재 기업", "충족"]],
+  };
+  const result = (x) => ({
+    program: { id: x.id, title: x.title, url: `https://example.com/program/${x.id}`, docUrl: "" },
+    extraction: { summary: "가짜 공고문 요약", notStated: [], doc: { kind: "pdf", pages: 4, chars: 4000, truncated: false }, model: "test", extractedAt: "2026-11-21T10:00:00+09:00", dropped: 0, cached: false },
+    match: {
+      overall: x.state, overallReason: "공고문 조건과 회사 값을 견준 가짜 문장입니다.", adjusted: false,
+      rows: ROWS[x.state].map(([field, requirement, verdict]) => ({ field, requirement, quote: requirement, verdict, reason: "가짜 근거" })),
+      questions: [`${x.title.slice(-2).trim()}번 공고 신청 서류 제출 방식`, `${x.title.slice(-2).trim()}번 공고 융자 한도`], documents: [], model: "test", costUsd: null, elapsedSec: null,
+    },
+  });
+  const seed = await open("/", { ctx });
+  await seed.waitForSelector("#company-name");
+  const seeded = await seedIdb(
+    seed,
+    SPEC.flatMap((x, i) => [
+      ["saved", [CID, "program", x.id], { kind: "program", itemId: x.id, title: x.title, savedAt: `2026-11-20T10:${String(i).padStart(2, "0")}:00+09:00`, meta: { end: x.end, agency: "가나다시청", url: `https://example.com/program/${x.id}` } }],
+      ...(x.state === "대조 전" ? [] : [["checks", [CID, x.id], { programId: x.id, result: result(x), error: null, ranAt: "2026-11-21T10:00:00+09:00", company: {} }]]),
+    ]),
+    "N-18 (저장소 채우기)",
+  );
+  await seed.close();
+  if (!seeded) return void (await ctx.close());
+  // 문서 규칙대로 기대 순서: 묶음 순서 → 묶음 안 마감 가까운 순(마감 없음은 뒤)
+  const expected = [...SPEC].sort((a, b) => ORDER.indexOf(a.state) - ORDER.indexOf(b.state) || (a.end ?? "9999-12-31").localeCompare(b.end ?? "9999-12-31"));
+  const heads = (list) => ORDER.filter((s) => list.some((x) => x.state === s)).map((s) => `${s} ${SPEC.filter((x) => x.state === s).length}건`);
+  const ids = (list) => list.map((x) => x.id).join();
+  const view = (pg) =>
+    pg.evaluate(() => {
+      const vis = (e) => e.getBoundingClientRect().height > 0;
+      const sec = document.querySelector("[data-part=programs]");
+      const ask = document.querySelector("[data-part=todo] [data-note-list]");
+      const askPrint = ask?.parentElement.querySelector("ul.print-only");
+      return {
+        head: sec.querySelector("h2").textContent.replace(/\s+/g, " ").trim(),
+        total: sec.querySelectorAll("[data-note-notice]").length,
+        shown: [...sec.querySelectorAll("[data-note-notice]")].filter(vis).map((a) => a.getAttribute("data-note-notice")).join(),
+        groups: [...sec.querySelectorAll("[data-notice-group]")].filter(vis).map((g) => g.querySelector("h3").textContent.replace(/\s+/g, " ").trim()),
+        more: [...sec.querySelectorAll("button")].filter(vis).map((b) => b.textContent.trim()),
+        rest: [...sec.querySelectorAll("p")].filter((p) => vis(p) && /^외 \d+개$/.test(p.textContent.trim())).map((p) => p.textContent.trim()),
+        ask: ask ? { label: ask.previousElementSibling?.textContent ?? "", n: [...ask.children].filter(vis).length, more: [...(ask.parentElement?.querySelectorAll("button") ?? [])].filter((b) => vis(b) && b.previousElementSibling === ask).map((b) => b.textContent.trim()) } : null,
+        askPrint: askPrint ? { n: [...askPrint.children].filter(vis).length, last: askPrint.lastElementChild?.textContent ?? "" } : null,
+      };
+    });
+  const shot = async (pg, sel, name) => {
+    if (!OUT) return;
+    mkdirSync(OUT, { recursive: true });
+    await (await pg.$(sel))?.screenshot({ path: `${OUT}/${name}.png` });
+  };
+  for (const w of [1280, 390]) {
+    const pg = await open(`/c/${CID}/note`, { ctx, width: w });
+    await pg.waitForFunction((n) => document.querySelectorAll("[data-part=programs] [data-note-notice]").length === n && document.querySelectorAll("[data-part=values] [data-row]").length === 9, { timeout: 10000 }, SPEC.length).catch(() => null);
+    await wait(500);
+    const a = await view(pg);
+    const a5 = expected.slice(0, 5);
+    check(
+      `N-18 (${w} 처음 5건)`,
+      a.head === `담은 자금 후보 ${SPEC.length}건` && a.total === SPEC.length && a.shown === ids(a5) && a.groups.join("|") === heads(a5).join("|") && a.more.join() === `${SPEC.length - 5}개 더 보기` && a.rest.length === 0,
+      `${a.shown.split(",").length}건 보임, 묶음 ${a.groups.join("/")}, 단추 ${a.more.join("/") || "없음"}`,
+    );
+    // N-04·PR-02(11개 넘는 목록): 기관에 물을 질문 18개 → 화면 5개 + "13개 더 보기", 인쇄 10개 + "외 8개"
+    check(`N-04 (${w} 18개 목록)`, a.ask?.label === "기관에 물을 질문" && a.ask.n === 5 && a.ask.more.join() === "13개 더 보기", JSON.stringify(a.ask));
+    // N-14: 고친 값이 없으면 업종·매출 두 줄 모두 "공식 자료"·"웹 조사" 꼬리표가 붙는다. 꼬리표 붙은 값마다 출처 줄이 값 글 왼쪽 끝에서 시작한다
+    const pairs = await noteValueAlign(pg);
+    check(`N-14 (${w} 꼬리표 줄)`, alignOk(pairs) && hasTagPairs(pairs, ["업종", "매출"]), alignNote(pairs) || "꼬리표 없음");
+    await globalChecks(pg, `노트 공고 ${SPEC.length}건 ${w}`);
+    await shot(pg, "[data-part=values]", `note-values-${w}`);
+    await shot(pg, "[data-part=programs]", `note-programs-${w}-before`);
+    // 인쇄(펼치기 전): 묶음을 건너 10건 + "외 3개". 셋째 묶음 머리 수는 묶음 전체 수(4건)
+    await pg.emulateMediaType("print");
+    const p1 = await view(pg);
+    const pairsPrint = await noteValueAlign(pg);
+    if (OUT) await pg.screenshot({ path: `${OUT}/note-print-${w}.png`, fullPage: true });
+    await pg.emulateMediaType("screen");
+    const a10 = expected.slice(0, 10);
+    const printOk = (p) => p.shown === ids(a10) && p.groups.join("|") === heads(a10).join("|") && p.more.length === 0 && p.rest.join() === `외 ${SPEC.length - 10}개`;
+    check(`N-18 (${w} 인쇄, 펼치기 전)`, printOk(p1), `${p1.shown.split(",").length}건, 묶음 ${p1.groups.join("/")}, ${p1.rest.join() || "외 없음"}`);
+    check(`PR-02 (${w} 18개 목록)`, p1.askPrint?.n === 11 && p1.askPrint.last === "외 8개", JSON.stringify(p1.askPrint));
+    check(`N-14 (${w} 인쇄 꼬리표 줄)`, alignOk(pairsPrint) && hasTagPairs(pairsPrint, ["업종", "매출"]), alignNote(pairsPrint) || "꼬리표 없음");
+    // 펼친 뒤: 화면은 13건 모두(네 묶음), 단추 없음. 인쇄는 그대로 10건 + "외 3개"
+    await click(pg, `${SPEC.length - 5}개 더 보기`, { exact: true, within: "[data-part=programs]" });
+    await click(pg, "13개 더 보기", { exact: true, within: "[data-part=todo]" });
+    const b = await view(pg);
+    check(
+      `N-18 (${w} 펼친 뒤)`,
+      b.shown === ids(expected) && b.groups.join("|") === heads(expected).join("|") && b.more.length === 0 && b.rest.length === 0 && b.ask?.n === 18,
+      `${b.shown.split(",").length}건 보임, 묶음 ${b.groups.join("/")}, 질문 ${b.ask?.n}개`,
+    );
+    await shot(pg, "[data-part=programs]", `note-programs-${w}-after`);
+    await pg.emulateMediaType("print");
+    const p2 = await view(pg);
+    await pg.emulateMediaType("screen");
+    check(`N-18 (${w} 인쇄, 펼친 뒤)`, printOk(p2) && p2.askPrint?.n === 11 && p2.askPrint.last === "외 8개", `${p2.shown.split(",").length}건, 묶음 ${p2.groups.join("/")}, ${p2.rest.join() || "외 없음"}`);
+    await pg.close();
   }
   await ctx.close();
 });

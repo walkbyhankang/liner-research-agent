@@ -126,6 +126,26 @@ tailscale serve --http=3100 off                          # 끄기
 - **요청 제한과 관계**: Serve는 접속자가 보낸 `x-forwarded-for`를 버리고 접속 기기의 tailnet 주소로 바꿔 넘깁니다(2026-11-23 확인, `docs/contract.md` 2.12). 그래서 접속 주소별 분당 6회 제한이 기기마다 적용됩니다.
 - **공개용 서버는 따로 띄우기를 권합니다**: 같은 폴더에서 개발하며 다시 빌드하면 떠 있는 화면 서버가 옛 화면 파일을 찾지 못해 화면이 깨집니다. 커밋된 코드만 둔 별도 워크트리에서 `scripts/run_local.sh`를 띄우고 Serve는 그 3100을 엽니다.
 
+### 터미널과 상관없이 계속 띄우기 (macOS launchd)
+
+제출 기간에는 공개용 워크트리의 두 서버를 macOS 사용자 LaunchAgent로 띄웁니다(관리자 권한 없음). 로그인하면 시작하고, 서버가 죽으면 launchd가 곧바로 다시 띄웁니다(`KeepAlive`, 띄우자마자 또 죽으면 15초 간격 `ThrottleInterval`).
+
+- 작업은 서버마다 하나입니다: `local.growthnote.api`(분석 서버 8000), `local.growthnote.web`(화면 3100). `run_local.sh`는 두 서버를 함께 기다려서 한쪽만 죽으면 끝나지 않고, 그러면 launchd가 알아채지 못하기 때문입니다.
+- 실행기 `~/Library/Application Support/growthnote/serve.sh api|web`와 `~/Library/LaunchAgents/local.growthnote.{api,web}.plist`는 저장소 밖에 둡니다. 키는 넣지 않습니다(분석 서버가 공개 폴더의 `.env`를 읽음). 실행기는 `run_local.sh`와 같은 명령을 `exec`로 띄우고, 화면은 공개 폴더 커밋이 마지막 빌드와 다르면 먼저 다시 빌드합니다(`package-lock.json`이 바뀌었으면 `npm ci`도).
+- 잠자기: 서버가 사는 동안 `caffeinate -is -w <서버 pid>`로 쉬는 중 잠들기를 막습니다(전원 연결 때는 시스템 잠자기도). 화면 잠금은 괜찮지만 덮개를 닫거나 로그아웃·재시동하면 멈춥니다(재시동 뒤에는 로그인해야 다시 뜸).
+- 로그: `~/Library/Logs/growthnote/{api,web}.log`. 시작할 때 이전 로그 하나(`.log.1`)만 남기고, 도는 동안 20MB를 넘으면 비웁니다.
+
+```bash
+U=gui/$(id -u)
+git -C <공개 폴더> checkout --detach <커밋>        # 새 커밋 반영(GitHub에서 받을 커밋이면 먼저 git fetch)
+launchctl kickstart -k $U/local.growthnote.api     # 분석 서버 다시 시작(1초 안팎, 돌던 분석 작업은 끊김)
+launchctl kickstart -k $U/local.growthnote.web     # 화면: 다시 빌드한 뒤 시작(빌드하는 동안 내려감)
+launchctl bootout $U/local.growthnote.web          # 멈추기(api 도 같게, plist 가 남아 있으면 다음 로그인 때 다시 뜸)
+launchctl bootstrap $U ~/Library/LaunchAgents/local.growthnote.web.plist   # 다시 켜기
+launchctl print $U/local.growthnote.web | grep -E 'state|pid =|runs|last exit'   # 상태
+tail -f ~/Library/Logs/growthnote/web.log          # 로그
+```
+
 ### `.env` 키
 
 | 키 | 필요 | 없으면 |
