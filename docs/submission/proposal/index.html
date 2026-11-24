@@ -85,11 +85,13 @@ b{font-weight:700}
 .stat .lb{font-size:10.8px;font-weight:700;margin-top:4px}
 .stat svg{display:block;margin-top:6px}
 .stat .ds{font-size:9.6px;color:var(--sub);line-height:1.42;margin-top:5px}
-.band{margin-top:7px;display:flex;align-items:center;gap:10px;background:#fcefd7;border-radius:12px;padding:8px 12px;border:1.4px solid #ecc983}
+.band{position:relative;margin-top:7px;display:flex;align-items:center;gap:10px;background:#fcefd7;border-radius:12px;padding:8px 12px;border:1.4px solid #ecc983}
 .band .pl{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--amber);color:var(--amber);display:flex;align-items:center;justify-content:center}
 .band .pl svg{width:13px;height:13px}
 .band .q{font-size:13px;font-weight:700;letter-spacing:-.02em;line-height:1.35}
 .band .q em{font-style:normal;color:var(--amber)}
+.band .asof{position:absolute;right:12px;bottom:5px;font-size:8.8px;color:#8a6a2a;font-weight:500}
+.asof2{text-align:right;font-size:8.8px;color:var(--mute);margin-top:4px}
 .band .src{margin-left:auto;font-size:9.4px;color:#7a5a20;text-align:right;line-height:1.4}
 
 /* ② 초록 판 */
@@ -264,11 +266,11 @@ b{font-weight:700}
       </div>
       <div>
         <div class="stats">
-          <div class="card stat"><div class="big">1,303<small>건</small></div><div class="lb">접수 중인 지원사업 공고</div><svg id="dots" width="166" height="50"></svg><div class="ds"><b style="color:var(--g)">■</b> 그중 금융 226건(융자 163·보증 47). 하나씩 열어 보기엔 너무 많습니다.</div></div>
+          <div class="card stat"><div class="big">1,303<small>건</small></div><div class="lb">접수 중인 지원사업 공고</div><svg id="dots" width="166" height="50"></svg><div class="ds">그중 <b style="color:var(--g)">■ 금융 지원</b>은 226건뿐인데, 우리 회사가 받을 수 있는지는 공고를 일일이 열어 봐야 알 수 있어 찾기 어렵습니다.</div></div>
           <div class="card stat"><div class="big">71<small>%</small></div><div class="lb">마감일이 없는 공고</div><svg id="donut" width="120" height="50"></svg><div class="ds">923건이 "예산 소진시까지"·"상시 접수"라서 언제까지 신청할 수 있는지 알기 어렵습니다.</div></div>
-          <div class="card stat"><div class="big">47<small>쪽</small></div><div class="lb">공고문 한 건, 41,165자</div><svg id="pages" width="120" height="50"></svg><div class="ds">업력·업종·한도 같은 세부 자격은 공고문 안에만 있습니다.</div></div>
+          <div class="card stat"><div class="big">47<small>쪽</small></div><div class="lb">공고문 한 건, 41,165자</div><svg id="pages" width="120" height="50"></svg><div class="ds">업력·업종·한도 같은 세부 자격이 공고문 안에만 있어서, 우리 회사가 해당되는지 확인하기 어렵습니다.</div></div>
         </div>
-        <div class="band"><span class="pl"><i data-lucide="plus"></i></span><div class="q">공고 목록만 봐서는 <em>우리 회사가 신청할 수 있는지</em> 알 수 없습니다.<br><span style="font-size:10.6px;font-weight:500;color:#5a4a2a">자격은 공고문을 직접 읽고 회사 자료와 맞춰 봐야 확인됩니다.</span></div></div>
+        <div class="band"><span class="pl"><i data-lucide="plus"></i></span><div class="q">공고 목록만 봐서는 <em>우리 회사가 신청할 수 있는지</em> 알 수 없습니다.<br><span style="font-size:10.6px;font-weight:500;color:#5a4a2a">자격은 공고문을 직접 읽고 회사 자료와 맞춰 봐야 확인됩니다.</span></div><span class="asof">* 2026.11.21. 기업마당 조회 기준</span></div>
       </div>
     </div>
   </section>
@@ -322,6 +324,7 @@ b{font-weight:700}
           <div class="rw"><span class="ic"><i data-lucide="split"></i></span><div><b>더 많은 지원 분야.</b> 같은 대조 방식을 기술·수출·인력 공고에 씁니다.</div></div>
           <div class="rw"><span class="ic"><i data-lucide="briefcase"></i></span><div><b>다른 직무.</b> 지원기관·액셀러레이터의 사전 검토, 여신·투자 담당의 현황 확인.</div></div>
           <div class="rw"><span class="ic"><i data-lucide="bell-ring"></i></span><div><b>다음 과제.</b> 새 공고 알림, 클라우드 배포와 사용자 인증.</div></div>
+          <div class="asof2">* 공고 수: 2026.11.21. 기업마당 조회 기준</div>
         </div>
       </div>
     </section>
