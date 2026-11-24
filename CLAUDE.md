@@ -17,7 +17,7 @@
 ## 구조 (이동·리팩터링은 명시적 지시가 있을 때만)
 - `web/` 성장노트 화면(Next.js) / `api/` FastAPI(`main.py` 공고문 대조·운용사 요약·상태·요청 제한, `analysis.py` 회사 분석 경로)
 - `growth/` 회사 분석 서버 패키지(단락 작업·합친 값·스냅샷·수집 모듈, `limits.py` 호출 상한, `contract.py` 계약 타입) / `funding/` 공고문 추출·대조, 운용사 요약, 회사 조회 엔진
-- 기존 엔진(flat): `config.py` 설정·키 / `liner_client.py` HTTP·한도·재시도 / `planner.py` / `sources.py` / `fetcher.py` 원문 확인(내부망 차단) / `categories.py` / `integrate.py` / `analysis.py` 정규화·마스킹 / `pipeline.py` / `run_probe.py` 기존 엔진 CLI
+- 기존 엔진(flat): `config.py` 설정·키 / `liner_client.py` HTTP·한도·재시도 / `planner.py` / `sources.py` / `fetcher.py` 원문 확인(내부망 차단) / `categories.py` / `integrate.py` / `analysis.py` 정규화·마스킹 / `pipeline.py`
 
 ## 보안
 - API 키·토큰을 소스, 로그, 결과 파일, 커밋에 넣거나 출력하지 않는다. `.env`는 커밋 금지(`.env.example`만 추적).

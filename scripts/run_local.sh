@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 성장노트(Next.js 화면 + FastAPI 분석 서버)를 띄운다.
-# 두 서버 모두 127.0.0.1 에만 연다(같은 컴퓨터에서만 접속). 터미널과 상관없이 계속 띄우는 방법은 docs/operations.md.
+# 두 서버 모두 127.0.0.1 에만 연다(같은 컴퓨터에서만 접속).
 #
 #   scripts/run_local.sh              성장노트(화면 + 분석 서버)
 #   scripts/run_local.sh growthnote   같음(옛 이름 fundingnote 도 받는다)

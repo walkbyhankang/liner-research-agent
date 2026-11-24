@@ -52,8 +52,8 @@
 ## 다시 만들기
 
 ```bash
-/Users/pynance/workspace/liner-research-agent/.venv/bin/python scripts/build_growth_fixtures.py
-/Users/pynance/workspace/liner-research-agent/.venv/bin/python -m pytest -q tests/test_growth_contract.py
+.venv/bin/python scripts/build_growth_fixtures.py
+.venv/bin/python -m pytest -q tests/test_growth_contract.py
 ```
 
 생성기는 만든 응답을 `growth/contract.py` 타입으로 검사하고, 맞지 않으면 파일을 쓰지 않는다. 손으로 고친 파일도 `tests/test_growth_contract.py` 가 같은 검사를 한다.

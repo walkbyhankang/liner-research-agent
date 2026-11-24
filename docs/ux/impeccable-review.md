@@ -132,7 +132,7 @@ P0(작업을 막는 것)은 없었다.
 
 ## 7. 전후 화면
 
-scratchpad(`/private/tmp/claude-501/-Users-pynance-workspace-liner-research-agent--claude-worktrees-funding-agent-hackathon/6bf40ad3-8437-41cd-b583-431f9fd85e57/scratchpad/shots/`) 아래. 저장소에는 넣지 않았다(제3자 기사 제목 포함).
+작업용 임시 폴더(scratchpad)의 `shots/` 아래. 저장소에는 넣지 않았다(제3자 기사 제목 포함).
 
 - 고치기 전: `shots/before/`, 고친 뒤: `shots/after/`
 - 파일 이름: `{start,company,funding,review,sales,note,browse}-{390,820,1180,1440}-{top,full}.png`(top = 첫 화면, full = 전체 쪽, browse = `/funding`)
