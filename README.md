@@ -90,6 +90,6 @@ npm --prefix web test
 
 - 설계: `docs/integration-design.md`, 화면 설계: `docs/ux/`, 서버·화면 데이터 계약: `docs/contract.md`
 - 실제 서버 검증 기록: `docs/verification.md`, 공고문 추출 모델 비교: `docs/notice-analysis-results.md`
-- 기존 결과물과 해커톤 기간 신규 개발 범위, 알려진 한계: `docs/scope-and-limits.md`
+- 해커톤 기간에 만든 순서와 알려진 한계: `docs/scope-and-limits.md`
 - 시연 서버 운영(macOS launchd): `docs/operations.md`
 - 제출 자료: `docs/submission/`
