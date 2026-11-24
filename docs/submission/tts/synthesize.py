@@ -27,6 +27,7 @@ import argparse
 import base64
 import csv
 import json
+import re
 import sys
 import wave
 from pathlib import Path
@@ -131,6 +132,18 @@ def default_voice(args, defaults):
     return defaults["voice"] if args.backend == "gemini" else defaults["cloud_voice"]
 
 
+def out_folder(args, voice):
+    # 어조를 바꿔 다시 만들 때 --tag로 폴더를 나눠 이전 결과를 덮어쓰지 않는다.
+    return OUT / args.backend / (f"{voice}-{args.tag}" if args.tag else voice)
+
+
+def tag_name(value):
+    # 폴더 이름 한 칸에만 붙는다. 경로 구분자나 ..로 결과 폴더 밖을 가리키지 못하게 한다.
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", value):
+        raise argparse.ArgumentTypeError("영문·숫자·_·-만 쓸 수 있습니다 (예: fast, fast-retry)")
+    return value
+
+
 def seconds(path):
     with wave.open(str(path), "rb") as w:
         return w.getnframes() / float(w.getframerate())
@@ -167,7 +180,7 @@ def cmd_lines(args, defaults, lines):
         audio = synth(line, voice, args, defaults)
         if audio is None:
             continue
-        path = OUT / args.backend / voice / f"{line['id']}.wav"
+        path = out_folder(args, voice) / f"{line['id']}.wav"
         sec = write(path, audio)
         mark = "넘침" if sec > line["max_seconds"] else "맞음"
         print(f"{line['id']}  {sec:5.1f}초 / 최대 {line['max_seconds']:5.1f}초  {mark}")
@@ -177,7 +190,7 @@ def cmd_lines(args, defaults, lines):
 
 def cmd_report(args, defaults, lines):
     voice = default_voice(args, defaults)
-    folder = OUT / args.backend / voice
+    folder = out_folder(args, voice)
     rows, over = [], []
     for line in lines:
         path = folder / f"{line['id']}.wav"
@@ -212,6 +225,7 @@ def main():
     p.add_argument("--only", help="lines에서 만들 줄 번호, 쉼표로 구분")
     p.add_argument("--rate", type=float, default=1.0, help="chirp의 speaking_rate (0.25~2.0)")
     p.add_argument("--comma-pause", action="store_true", help="chirp에서 쉼표마다 [pause short]를 넣음")
+    p.add_argument("--tag", type=tag_name, help="lines/report의 결과 폴더 이름 뒤에 붙일 꼬리표 (예: fast → <음성>-fast)")
     p.add_argument("--dry-run", action="store_true", help="API를 부르지 않고 보낼 내용만 출력")
     args = p.parse_args()
     defaults, lines = load()
